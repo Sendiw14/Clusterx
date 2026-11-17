@@ -86,6 +86,7 @@ CREATE TABLE workers (
     drain_requested_at      timestamptz,
     drain_deadline_at       timestamptz,
     deregistered_at         timestamptz,
+    version                 bigint NOT NULL DEFAULT 1 CHECK (version >= 1),  -- bumped on status/incarnation change, not on heartbeat
     UNIQUE (current_incarnation_id),
     CHECK ((status = 'draining') = (drain_requested_at IS NOT NULL AND drain_deadline_at IS NOT NULL)
            OR status = 'deregistered'),
@@ -134,6 +135,8 @@ CREATE TABLE jobs (
     result                jsonb CHECK (result IS NULL OR octet_length(result::text) <= 131072), -- 128 KiB
     error_code            text CHECK (length(error_code) <= 64),
     error_message         text CHECK (length(error_message) <= 2048),
+    failure_class         text CHECK (failure_class IN ('retryable_exhausted', 'permanent', 'timeout',
+                                                        'lease_expired', 'canceled_by_operator')),
     terminal_at           timestamptz,
     -- lineage / provenance
     retried_from_job_id   uuid REFERENCES jobs (id) ON DELETE SET NULL,
@@ -153,6 +156,9 @@ CREATE TABLE jobs (
     -- terminal <=> terminal_at
     CHECK ((status IN ('succeeded', 'failed', 'canceled')) = (terminal_at IS NOT NULL)),
     CHECK (status = 'succeeded' OR result IS NULL),
+    -- failure_class (CCR-M1 OQ-08): present exactly on failed/canceled jobs
+    CHECK ((status = 'canceled') = (failure_class IS NOT DISTINCT FROM 'canceled_by_operator')),
+    CHECK ((status = 'failed') = (failure_class IN ('retryable_exhausted', 'permanent', 'timeout', 'lease_expired'))),
     -- a cancel request only exists on running (pending ack) or canceled jobs
     CHECK (cancel_requested_at IS NULL OR status IN ('running', 'canceled')),
     CHECK (status <> 'succeeded' OR cancel_requested_at IS NULL),
@@ -205,6 +211,14 @@ CREATE INDEX jobs_created_idx ON jobs (created_at DESC, id DESC);
 CREATE INDEX jobs_terminal_idx ON jobs (terminal_at) WHERE terminal_at IS NOT NULL;  -- retention
 -- At most one manual-retry child per failed job (duplicate manual retry guard, ADR-0004).
 CREATE UNIQUE INDEX jobs_one_retry_child_idx ON jobs (retried_from_job_id) WHERE retried_from_job_id IS NOT NULL;
+
+-- Retention tombstones: lets GET /jobs/{id} answer 410 expired (not 404) after deletion (ADR-0004).
+CREATE TABLE job_tombstones (
+    job_id       uuid PRIMARY KEY,
+    terminal_at  timestamptz NOT NULL,
+    expired_at   timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX job_tombstones_expired_idx ON job_tombstones (expired_at);
 
 -- Per-job durable event log; version is monotonic per job and equals jobs.version after the change.
 CREATE TABLE job_events (

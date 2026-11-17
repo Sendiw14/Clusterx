@@ -189,7 +189,7 @@ func (s *Store) ReportSuccess(ctx context.Context, l Lease, result string) (Outc
 			return err
 		}
 		// Fence holds but cancel was committed first: this report is the cancellation acknowledgment.
-		err = tx.QueryRow(ctx, `UPDATE jobs j SET status = 'canceled', terminal_at = now(),
+		err = tx.QueryRow(ctx, `UPDATE jobs j SET status = 'canceled', terminal_at = now(), failure_class = 'canceled_by_operator',
 			current_attempt_id = NULL, lease_expires_at = NULL, hard_deadline_at = NULL, version = j.version + 1, updated_at = now()
 			FROM job_attempts a, workers w, worker_credentials c
 			WHERE `+fence+` AND j.cancel_requested_at IS NOT NULL
@@ -302,6 +302,7 @@ func (s *Store) RequestCancel(ctx context.Context, jobID, actor string) (CancelR
 		switch {
 		case status == "scheduled" || status == "queued" || status == "retry_wait":
 			if err := tx.QueryRow(ctx, `UPDATE jobs SET status = 'canceled', terminal_at = now(), cancel_requested_at = now(),
+				failure_class = 'canceled_by_operator',
 				cancel_requested_by = $2, version = version + 1, updated_at = now()
 				WHERE id = $1 AND status IN ('scheduled', 'queued', 'retry_wait') RETURNING version`, jobID, actor).Scan(&version); err != nil {
 				return err
@@ -370,9 +371,12 @@ func (s *Store) RecoverExpired(ctx context.Context, backoff time.Duration) (int,
 				terminal_at = CASE WHEN $3 IN ('failed', 'canceled') THEN now() END,
 				available_at = CASE WHEN $3 = 'retry_wait' THEN now() + $4::interval ELSE available_at END,
 				error_code = CASE WHEN $3 = 'failed' THEN 'attempts_exhausted' END,
+				failure_class = CASE WHEN $3 = 'canceled' THEN 'canceled_by_operator'
+				                     WHEN $3 = 'failed' AND $5 THEN 'timeout'
+				                     WHEN $3 = 'failed' THEN 'lease_expired' END,
 				current_attempt_id = NULL, lease_expires_at = NULL, hard_deadline_at = NULL,
 				version = version + 1, updated_at = now()
-				WHERE id = $1 AND status = 'running' AND current_attempt_id = $2 RETURNING version`, id, attempt, to, backoff).Scan(&version); err != nil {
+				WHERE id = $1 AND status = 'running' AND current_attempt_id = $2 RETURNING version`, id, attempt, to, backoff, deadline).Scan(&version); err != nil {
 				return err
 			}
 			_, err = tx.Exec(ctx, `INSERT INTO job_events (job_id, version, event_type, from_status, to_status, attempt_id, actor)

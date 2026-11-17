@@ -453,3 +453,34 @@ func isDenial(err error, reason string) bool {
 	var d *Denial
 	return errors.As(err, &d) && d.Reason == reason
 }
+
+// AC-05 (partial) + OQ-08: max_attempts=3 yields exactly 3 attempts, then failed with failure_class; no 4th claim.
+func TestBudgetExhaustedNoHiddenAttempt(t *testing.T) {
+	s := newStore(t, 100*time.Millisecond)
+	ctx := context.Background()
+	job, _ := s.Admit(ctx, handler, 3)
+	w := workers(t, s, 1)[0]
+	for i := 1; i <= 3; i++ {
+		ls, err := s.Claim(ctx, w, 1)
+		if err != nil || len(ls) != 1 || ls[0].Generation != int64(i) {
+			t.Fatalf("claim %d = %v, %v", i, ls, err)
+		}
+		time.Sleep(150 * time.Millisecond)
+		if n, err := s.RecoverExpired(ctx, 0); err != nil || n != 1 {
+			t.Fatalf("recover %d = %d, %v", i, n, err)
+		}
+		if _, err := s.PromoteDue(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if ls, err := s.Claim(ctx, w, 1); err != nil || len(ls) != 0 {
+		t.Fatalf("4th claim = %v, %v; want none", ls, err)
+	}
+	if st := q[string](t, `SELECT status || '/' || failure_class || '/' || attempts_used FROM jobs WHERE id = $1`, job); st != "failed/lease_expired/3" {
+		t.Fatalf("job = %s", st)
+	}
+	if n := q[int](t, `SELECT count(*) FROM job_attempts WHERE job_id = $1`, job); n != 3 {
+		t.Fatalf("%d attempts", n)
+	}
+	assertCoherent(t, job)
+}
