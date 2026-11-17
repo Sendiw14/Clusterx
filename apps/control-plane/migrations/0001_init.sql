@@ -1,10 +1,13 @@
--- CLUSTERX control plane — migration 0001 (DRAFT, M1, TASK-M1-BE-01)
+-- CLUSTERX control plane — migration 0001 (DRAFT, M1, TASK-M1-BE-01; amended in place by TASK-M1-BE-04
+-- because nothing is deployed yet — RV01-04/05/06/07, RV01-02 token authority view, GAP-SESS-01)
 -- Target: PostgreSQL 18.x (uses built-in uuidv7()).
 -- Source contract: docs/product/MASTER_PROMPT.md R2 §5–§7; ADR-0002/0003/0004.
 -- Forward-only, expand/contract (ADR-0004). Apply inside one transaction:
 --   psql -v ON_ERROR_STOP=1 --single-transaction -f 0001_init.sql
--- Least-privilege runtime role is created out of band (cluster-level object);
--- the runtime role gets SELECT/INSERT/UPDATE/DELETE on these tables only, no DDL.
+-- Least-privilege runtime role is created out of band (cluster-level object). It gets SELECT/INSERT/UPDATE
+-- on these tables and DELETE only on sessions/submission_idempotency; retention runs as a separate role with
+-- DELETE on jobs/audit_events/job_tombstones. Independently of grants, triggers below refuse to delete the
+-- history (attempts, events) of a retained job and audit rows younger than the 90-day floor (RV01-06).
 -- All timestamps are timestamptz (stored UTC). The DB clock (now()) is authoritative
 -- for every due/expiry comparison (ADR-0003).
 
@@ -27,9 +30,14 @@ CREATE TABLE sessions (
     user_id       uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     secret_hash   bytea NOT NULL UNIQUE CHECK (octet_length(secret_hash) = 32),  -- SHA-256
     created_at    timestamptz NOT NULL DEFAULT now(),
-    expires_at    timestamptz NOT NULL,
+    expires_at    timestamptz NOT NULL,                      -- absolute expiry
+    -- idle expiry (GAP-SESS-01): valid iff last_activity_at + idle_timeout_seconds > now(); Go bumps
+    -- last_activity_at at most once per 60 s per session on authenticated requests.
+    last_activity_at      timestamptz NOT NULL DEFAULT now(),
+    idle_timeout_seconds  integer NOT NULL DEFAULT 7200 CHECK (idle_timeout_seconds BETWEEN 60 AND 86400),
     revoked_at    timestamptz,
-    CHECK (expires_at > created_at)
+    CHECK (expires_at > created_at),
+    CHECK (last_activity_at >= created_at)
 );
 CREATE INDEX sessions_user_idx ON sessions (user_id);
 
@@ -180,6 +188,7 @@ CREATE TABLE job_attempts (
     error_code             text CHECK (length(error_code) <= 64),
     error_message          text CHECK (length(error_message) <= 2048),
     log_tail               text CHECK (octet_length(log_tail) <= 16384),  -- bounded; retention 7 d
+    result_sha256          bytea CHECK (octet_length(result_sha256) = 32), -- reported result (also when discarded by a cancel, RV01-07/08)
     started_at             timestamptz NOT NULL DEFAULT now(),
     finished_at            timestamptz,
     UNIQUE (job_id, attempt_number),
@@ -284,7 +293,10 @@ DECLARE
     probe jobs%ROWTYPE;
 BEGIN
     probe := NEW;
-    probe.retried_from_job_id := OLD.retried_from_job_id;
+    -- only the FK action (parent expired => NULL) may touch lineage; repointing is forbidden (RV01-06)
+    IF OLD.retried_from_job_id IS NOT NULL AND NEW.retried_from_job_id IS NULL THEN
+        probe.retried_from_job_id := OLD.retried_from_job_id;
+    END IF;
     IF OLD.status IN ('succeeded', 'failed', 'canceled') AND probe IS DISTINCT FROM OLD THEN
         RAISE EXCEPTION 'job % is terminal (%) and immutable', OLD.id, OLD.status
             USING ERRCODE = 'check_violation';
@@ -293,6 +305,77 @@ BEGIN
 END $$;
 CREATE TRIGGER jobs_terminal_immutable BEFORE UPDATE ON jobs
     FOR EACH ROW EXECUTE FUNCTION clusterx_forbid_terminal_job_update();
+
+-- Admission fields are immutable; the attempt budget only advances by one, on queued -> running (RV01-05).
+CREATE FUNCTION clusterx_guard_job_update() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF (NEW.namespace, NEW.handler_name, NEW.handler_version, NEW.payload, NEW.max_attempts,
+        NEW.timeout_seconds, NEW.created_by, NEW.created_at, NEW.run_after, NEW.priority)
+       IS DISTINCT FROM
+       (OLD.namespace, OLD.handler_name, OLD.handler_version, OLD.payload, OLD.max_attempts,
+        OLD.timeout_seconds, OLD.created_by, OLD.created_at, OLD.run_after, OLD.priority) THEN
+        RAISE EXCEPTION 'job % admission fields are immutable', OLD.id USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.attempts_used <> OLD.attempts_used
+       AND NOT (NEW.attempts_used = OLD.attempts_used + 1 AND OLD.status = 'queued' AND NEW.status = 'running'
+                AND NEW.lease_generation = OLD.lease_generation + 1) THEN
+        RAISE EXCEPTION 'job % attempt budget may only advance by one on claim', OLD.id USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.lease_generation <> OLD.lease_generation AND NEW.attempts_used = OLD.attempts_used THEN
+        RAISE EXCEPTION 'job % lease generation changes only with a claim', OLD.id USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER jobs_guard_update BEFORE UPDATE ON jobs
+    FOR EACH ROW EXECUTE FUNCTION clusterx_guard_job_update();
+
+-- An attempt can only be born as the current lease of a running job, numbered by the job's budget (RV01-05).
+-- Claim therefore updates the job first (current_attempt_id = new id; FK is deferred) and inserts the attempt second.
+CREATE FUNCTION clusterx_guard_attempt_insert() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+    j jobs%ROWTYPE;
+BEGIN
+    SELECT * INTO j FROM jobs WHERE id = NEW.job_id;
+    IF NEW.state <> 'active' OR j.status IS DISTINCT FROM 'running' OR j.current_attempt_id IS DISTINCT FROM NEW.id
+       OR NEW.attempt_number <> j.attempts_used OR NEW.lease_generation <> j.lease_generation
+       OR NEW.attempt_number > j.max_attempts THEN
+        RAISE EXCEPTION 'attempt % does not match the current lease of job %', NEW.id, NEW.job_id
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER job_attempts_guard_insert BEFORE INSERT ON job_attempts
+    FOR EACH ROW EXECUTE FUNCTION clusterx_guard_attempt_insert();
+
+-- History of a retained job cannot be deleted; only the FK cascade from DELETE jobs (retention) removes it.
+CREATE FUNCTION clusterx_forbid_history_delete() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM jobs WHERE id = OLD.job_id) THEN
+        RAISE EXCEPTION '% rows of retained job % cannot be deleted', TG_TABLE_NAME, OLD.job_id
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN OLD;
+END $$;
+CREATE TRIGGER job_attempts_no_delete BEFORE DELETE ON job_attempts
+    FOR EACH ROW EXECUTE FUNCTION clusterx_forbid_history_delete();
+CREATE TRIGGER job_events_no_delete BEFORE DELETE ON job_events
+    FOR EACH ROW EXECUTE FUNCTION clusterx_forbid_history_delete();
+
+-- Audit rows are deletable only past the 90-day retention floor (ADR-0004).
+CREATE FUNCTION clusterx_forbid_young_audit_delete() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF OLD.occurred_at > now() - interval '90 days' THEN
+        RAISE EXCEPTION 'audit event % is younger than the 90-day retention floor', OLD.id
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN OLD;
+END $$;
+CREATE TRIGGER audit_events_no_young_delete BEFORE DELETE ON audit_events
+    FOR EACH ROW EXECUTE FUNCTION clusterx_forbid_young_audit_delete();
 
 -- Finished attempts are immutable.
 CREATE FUNCTION clusterx_forbid_finished_attempt_update() RETURNS trigger
@@ -317,3 +400,21 @@ CREATE TRIGGER job_events_append_only BEFORE UPDATE ON job_events
     FOR EACH ROW EXECUTE FUNCTION clusterx_forbid_update();
 CREATE TRIGGER audit_events_append_only BEFORE UPDATE ON audit_events
     FOR EACH ROW EXECUTE FUNCTION clusterx_forbid_update();
+
+-- ---------------------------------------------------------------------------
+-- Effective API token authority (RV01-02): scopes ∩ owner's CURRENT role, evaluated on every request.
+-- A token never outranks its owner: demoting the owner strips write scopes at once; disabling the owner
+-- (or revoking/expiring the token) yields a non-'ok' status and the request is rejected with 401.
+-- ---------------------------------------------------------------------------
+CREATE VIEW api_token_authority AS
+SELECT t.id AS token_id,
+       t.secret_hash,
+       t.owner_user_id,
+       CASE WHEN t.role = 'operator' AND u.role = 'operator' THEN 'operator' ELSE 'viewer' END AS effective_role,
+       ARRAY(SELECT sc FROM unnest(t.scopes) sc
+             WHERE sc LIKE '%:read' OR (t.role = 'operator' AND u.role = 'operator')) AS effective_scopes,
+       CASE WHEN t.revoked_at IS NOT NULL THEN 'token_revoked'
+            WHEN t.expires_at IS NOT NULL AND t.expires_at <= now() THEN 'token_expired'
+            WHEN u.disabled_at IS NOT NULL THEN 'user_disabled'
+            ELSE 'ok' END AS status
+FROM api_tokens t JOIN users u ON u.id = t.owner_user_id;
