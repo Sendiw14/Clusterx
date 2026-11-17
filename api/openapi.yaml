@@ -3,7 +3,7 @@ openapi: 3.1.1
 # 3.1.x chosen per assumption A-03 until 3.2.1 generator compatibility is proven (M3).
 info:
   title: CLUSTERX Control Plane API
-  version: 1.0.0-draft.1
+  version: 1.0.0-draft.2
   summary: REST API of the CLUSTERX coordinator (/api/v1).
   description: |
     Source contract: docs/product/MASTER_PROMPT.md R2 §6. State semantics: docs/architecture/state-machine.md.
@@ -18,6 +18,11 @@ info:
     * Lists use opaque cursor pagination with stable sort `(created_at DESC, id DESC)` (jobs) or the
       per-resource key documented on the operation. Rows inserted after the first page was served
       and that sort before the cursor are not returned in that traversal (snapshot-less keyset).
+    * Expired by retention: an ID that existed but was deleted by retention answers **410** `expired`
+      (backed by job tombstones, ADR-0004); an ID that never existed answers 404.
+    * Mutation responses return the post-state resource; 409 `details` always carry the current
+      `{status, version}` so the UI can reconcile without another read.
+    * draft.2 (TASK-M1-BE-02) implements docs/coordination/CCR-M1-decisions.md: CCR-01/02/03/04/07, field additions.
 servers:
   - url: http://localhost:8080
     description: Local development coordinator
@@ -25,11 +30,13 @@ security:
   - serviceAssertion: []
   - apiToken: []
 tags:
-  - name: jobs
-  - name: workers
-  - name: metrics
-  - name: audit
-  - name: health
+  - { name: jobs, description: 'Job admission, inspection, cancel and manual retry; handler catalogue.' }
+  - { name: workers, description: 'Worker inventory and drain.' }
+  - { name: metrics, description: 'DB-derived counts and series; effective configuration.' }
+  - { name: audit, description: 'Privileged, security and diagnostic events.' }
+  - { name: credentials, description: 'API tokens and worker credentials (operator session only).' }
+  - { name: realtime, description: 'Best-effort WebSocket hints; snapshots are authoritative.' }
+  - { name: health, description: 'Liveness, readiness and Prometheus metrics.' }
 
 paths:
   /api/v1/jobs:
@@ -73,7 +80,7 @@ paths:
         '200':
           description: Idempotent replay — same scope, key and fingerprint; returns the original job.
           headers:
-            Idempotency-Replayed: { schema: { type: string, enum: ['true'] } }
+            Idempotent-Replayed: { schema: { type: string, enum: ['true'] } }
             X-Request-Id: { $ref: '#/components/headers/RequestId' }
           content:
             application/json:
@@ -113,10 +120,12 @@ paths:
         - name: created_before
           in: query
           schema: { type: string, format: date-time }
-        - name: unschedulable
+        - name: unschedulable_reason
           in: query
-          description: Only queued jobs that currently have an unschedulable reason.
-          schema: { type: boolean }
+          description: Repeatable. Only queued jobs whose derived unschedulable_reason is one of these.
+          schema: { type: array, items: { $ref: '#/components/schemas/UnschedulableReason' } }
+          style: form
+          explode: true
         - name: retried_from_job_id
           in: query
           schema: { type: string, format: uuid }
@@ -164,6 +173,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/JobNotFound' }
+        '410': { $ref: '#/components/responses/Expired' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/Unavailable' }
 
@@ -187,6 +197,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/JobNotFound' }
+        '410': { $ref: '#/components/responses/Expired' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/Unavailable' }
 
@@ -218,6 +229,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/JobNotFound' }
+        '410': { $ref: '#/components/responses/Expired' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/Unavailable' }
@@ -242,6 +254,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/JobNotFound' }
+        '410': { $ref: '#/components/responses/Expired' }
         '409': { $ref: '#/components/responses/JobTerminal' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/Unavailable' }
@@ -268,6 +281,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/JobNotFound' }
+        '410': { $ref: '#/components/responses/Expired' }
         '409':
           description: retry_not_allowed (status is not failed) or retry_already_exists (child exists).
           content:
@@ -275,9 +289,9 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
               examples:
                 notAllowed:
-                  value: { code: retry_not_allowed, message: "Only failed jobs can be retried.", details: { status: succeeded }, request_id: "req_01JD3V" }
+                  value: { code: retry_not_allowed, message: "Only failed jobs can be retried.", details: { status: succeeded, version: 6 }, request_id: "req_01JD3V" }
                 exists:
-                  value: { code: retry_already_exists, message: "This job was already retried.", details: { child_job_id: "0193a0f2-7c1e-7a10-8000-0000000000c1" }, request_id: "req_01JD3W" }
+                  value: { code: retry_already_exists, message: "This job was already retried.", details: { status: failed, version: 7, retried_as_job_id: "0193a0f2-7c1e-7a10-8000-0000000000c1" }, request_id: "req_01JD3W" }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/Unavailable' }
 
@@ -285,7 +299,10 @@ paths:
     get:
       tags: [workers]
       operationId: listWorkers
-      summary: Worker inventory (viewer+; workers:read). Sort (registered_at DESC, id DESC).
+      summary: Worker inventory (viewer+; workers:read). Sort (last_seen_at DESC, id DESC).
+      description: |
+        last_seen_at changes with every heartbeat, so a worker can move between pages during a
+        traversal; clients de-duplicate by id. The cursor encodes the (last_seen_at, id) of the last row.
       parameters:
         - name: status
           in: query
@@ -365,7 +382,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
-              example: { code: worker_deregistered, message: "Worker is deregistered.", request_id: "req_01JD40" }
+              example: { code: worker_deregistered, message: "Worker is deregistered.", details: { status: deregistered, version: 4 }, request_id: "req_01JD40" }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/Unavailable' }
@@ -429,10 +446,11 @@ paths:
         - name: category
           in: query
           schema: { type: string, enum: [privileged, security, diagnostic] }
-        - name: target_type
+        - name: subject_type
           in: query
+          description: Interim worker/job chronology (CCR-05/06 deferred to M6).
           schema: { type: string, enum: [job, worker, worker_credential, api_token, user, session] }
-        - name: target_id
+        - name: subject_id
           in: query
           schema: { type: string, format: uuid }
         - name: from
@@ -459,6 +477,229 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /api/v1/tokens:
+    get:
+      tags: [credentials]
+      operationId: listApiTokens
+      summary: List direct API tokens (operator via BFF session only; never via an API token). No secrets.
+      security: [ { serviceAssertion: [] } ]
+      parameters:
+        - name: include_revoked
+          in: query
+          schema: { type: boolean, default: false }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page sorted (created_at DESC, id DESC).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor, as_of]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/ApiToken' } }
+                  next_cursor: { type: [string, 'null'] }
+                  as_of: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/InvalidCursor' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    post:
+      tags: [credentials]
+      operationId: createApiToken
+      summary: Issue a token. The secret is returned ONCE in this 201 body and never again. Audited (token.create).
+      description: Rotation = create a new token, switch clients, then revoke the old one (no rotate endpoint).
+      security: [ { serviceAssertion: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApiTokenCreate' }
+            example: { name: "ci-submitter", role: operator, scopes: ["jobs:write", "jobs:read"], expires_in_days: 90 }
+      responses:
+        '201':
+          description: Created. Cache-Control no-store.
+          headers:
+            Cache-Control: { schema: { type: string, enum: [no-store] } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiTokenCreated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/tokens/{id}/revoke:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [credentials]
+      operationId: revokeApiToken
+      summary: Revoke immediately (next request using it gets 401 token_revoked). Idempotent. Audited (token.revoke).
+      security: [ { serviceAssertion: [] } ]
+      responses:
+        '200':
+          description: Revoked (or already revoked; revoked_at unchanged).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiToken' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such token.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: token_not_found, message: "Token not found.", request_id: "req_01JD50" }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /api/v1/worker-credentials:
+    get:
+      tags: [credentials]
+      operationId: listWorkerCredentials
+      summary: List worker credentials (operator via BFF session only). No secrets or hashes.
+      security: [ { serviceAssertion: [] } ]
+      parameters:
+        - name: include_revoked
+          in: query
+          schema: { type: boolean, default: false }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page sorted (created_at DESC, id DESC).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor, as_of]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/WorkerCredential' } }
+                  next_cursor: { type: [string, 'null'] }
+                  as_of: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/InvalidCursor' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    post:
+      tags: [credentials]
+      operationId: createWorkerCredential
+      summary: Issue a worker credential; secret returned ONCE in the 201 body. Audited (worker_credential.create).
+      security: [ { serviceAssertion: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkerCredentialCreate' }
+            example: { name: "worker-pool-a", expires_in_days: 180 }
+      responses:
+        '201':
+          description: Created. Cache-Control no-store.
+          headers:
+            Cache-Control: { schema: { type: string, enum: [no-store] } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkerCredentialCreated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /api/v1/worker-credentials/{id}/revoke:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [credentials]
+      operationId: revokeWorkerCredential
+      summary: |
+        Revoke. Every later Claim/RenewLease/Report from the bound worker is denied (credential_revoked);
+        its active attempts are recovered at lease expiry (ADR-0003). Idempotent. Audited (worker_credential.revoke).
+      security: [ { serviceAssertion: [] } ]
+      responses:
+        '200':
+          description: Revoked (or already revoked).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkerCredential' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such credential.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: worker_credential_not_found, message: "Worker credential not found.", request_id: "req_01JD51" }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /api/v1/handlers:
+    get:
+      tags: [jobs]
+      operationId: listHandlers
+      summary: Allowlisted handler catalogue with JSON Schema per version (viewer+; jobs:read). Unpaginated (bounded by the compiled registry).
+      responses:
+        '200':
+          description: Catalogue, sorted by name then version.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, as_of]
+                properties:
+                  items: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/Handler' } }
+                  as_of: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /api/v1/config:
+    get:
+      tags: [metrics]
+      operationId: getConfig
+      summary: Read-only effective limits and retention windows (viewer+; any read scope). Never contains secrets.
+      responses:
+        '200':
+          description: Effective configuration.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Config' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /api/v1/stream:
+    get:
+      tags: [realtime]
+      operationId: openStream
+      summary: WebSocket upgrade for best-effort change hints (viewer+; jobs:read). HTTP snapshots stay authoritative.
+      description: |
+        Reached only server-to-server: the browser connects to the BFF, which opens this upstream socket
+        with `Authorization: Bearer <service assertion>` (ADR-0006). Go verifies the assertion and session
+        at upgrade and re-checks the session at least every 30 s. Server→client JSON text frames follow
+        `StreamMessage`; the client sends nothing except optional `{"type":"ping"}`.
+        Close codes: 1000 normal · 1001 server shutdown · 1008 policy (origin) · 1012 restart ·
+        4401 session ended/revoked (re-auth) · 4403 forbidden · 4408 idle/pong timeout · 4429 too many streams (max 5 per session).
+        After any reconnect or `resync`, clients refetch snapshots; hints may be dropped, duplicated or reordered.
+      parameters:
+        - { name: Upgrade, in: header, required: true, schema: { type: string, enum: [websocket] } }
+      responses:
+        '101':
+          description: Switching protocols. Frames are StreamMessage JSON.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StreamMessage' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/Unavailable' }
 
@@ -564,8 +805,9 @@ components:
           type: string
           enum: [bad_request, invalid_cursor, unauthenticated, forbidden, job_not_found, worker_not_found,
                  job_terminal, idempotency_conflict, retry_not_allowed, retry_already_exists, worker_deregistered,
+                 expired, token_not_found, worker_credential_not_found,
                  payload_too_large, validation_failed, rate_limited, unavailable, internal]
-        message: { type: string, description: Human-readable, safe to display; never contains secrets or payload content. }
+        message: { type: string, description: 'Human-readable, safe to display; never contains secrets or payload content.' }
         details: { type: object, additionalProperties: true }
         request_id: { type: string }
 
@@ -587,12 +829,9 @@ components:
         max_attempts: { type: integer, minimum: 1, maximum: 5, default: 3, description: Includes the first run. }
         timeout_seconds: { type: integer, minimum: 1, maximum: 86400, default: 600 }
 
-    Unschedulable:
-      type: [object, 'null']
-      required: [reason, since]
-      properties:
-        reason: { type: string, enum: [no_capable_worker, capable_workers_offline, capable_workers_draining] }
-        since: { type: string, format: date-time }
+    UnschedulableReason:
+      type: string
+      enum: [no_capable_worker, capable_workers_offline, capable_workers_draining]
 
     JobSummary:
       type: object
@@ -611,7 +850,14 @@ components:
         terminal_at: { type: [string, 'null'], format: date-time }
         error_code: { type: [string, 'null'] }
         retried_from_job_id: { type: [string, 'null'], format: uuid }
-        unschedulable: { $ref: '#/components/schemas/Unschedulable' }
+        unschedulable_reason:
+          oneOf: [ { $ref: '#/components/schemas/UnschedulableReason' }, { type: 'null' } ]
+          description: Derived at read time for queued jobs; null otherwise. Not a state.
+        unschedulable_since: { type: [string, 'null'], format: date-time }
+        failure_class:
+          type: [string, 'null']
+          enum: [retryable_exhausted, permanent, timeout, lease_expired, canceled_by_operator, null]
+          description: Non-null exactly when status is failed or canceled (state-machine.md).
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         version: { type: integer, format: int64 }
@@ -632,14 +878,14 @@ components:
             lease_expires_at: { type: [string, 'null'], format: date-time }
             hard_deadline_at: { type: [string, 'null'], format: date-time }
             created_by: { type: string, description: 'Principal ref (user:<uuid> | token:<uuid>).' }
-            retry_child_job_id: { type: [string, 'null'], format: uuid }
+            retried_as_job_id: { type: [string, 'null'], format: uuid, description: 'Child created by manual retry, if any.' }
             masked_fields:
               type: array
               items: { type: string, enum: [payload, result, error_message] }
 
     Attempt:
       type: object
-      required: [id, job_id, attempt_number, lease_generation, worker_id, state, started_at, masked_fields]
+      required: [id, job_id, attempt_number, lease_generation, worker_id, state, started_at, log_truncated, log_expired, masked_fields]
       properties:
         id: { type: string, format: uuid }
         job_id: { type: string, format: uuid }
@@ -651,7 +897,10 @@ components:
         error_class: { type: [string, 'null'], enum: [retryable, permanent, null] }
         error_code: { type: [string, 'null'] }
         error_message: { type: [string, 'null'], x-clusterx-sensitive: true }
-        log_tail: { type: [string, 'null'], x-clusterx-sensitive: true, description: '<= 16 KiB; null after 7-day retention.' }
+        log_tail: { type: [string, 'null'], x-clusterx-sensitive: true, description: 'Last <= 16 KiB of handler log; null when masked or expired.' }
+        log_truncated: { type: boolean, description: Earlier output was dropped to fit 16 KiB. }
+        log_expired: { type: boolean, description: log_tail removed by 7-day retention (distinct from masked). }
+        lease_expires_at: { type: [string, 'null'], format: date-time, description: 'Current lease expiry while active (renewals create no events, OQ-09).' }
         started_at: { type: string, format: date-time }
         finished_at: { type: [string, 'null'], format: date-time }
         masked_fields: { type: array, items: { type: string, enum: [error_message, log_tail] } }
@@ -671,7 +920,7 @@ components:
         attempt_id: { type: [string, 'null'], format: uuid }
         actor: { type: string }
         occurred_at: { type: string, format: date-time }
-        data: { type: [object, 'null'], description: Server-generated, <= 4 KiB, contains no payload content. }
+        data: { type: [object, 'null'], description: 'Server-generated, <= 4 KiB, contains no payload content.' }
 
     WorkerStatus:
       type: string
@@ -679,12 +928,13 @@ components:
 
     Worker:
       type: object
-      required: [id, name, status, capacity, active_attempts, protocol_version, capabilities, registered_at, last_heartbeat_at, live, masked_fields]
+      required: [id, name, status, version, capacity, active_attempts, protocol_version, capabilities, registered_at, last_seen_at, live, masked_fields]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
         status: { $ref: '#/components/schemas/WorkerStatus' }
-        live: { type: boolean, description: last_heartbeat_at within liveness timeout (DB clock). }
+        live: { type: boolean, description: last_seen_at within liveness timeout (DB clock). }
+        version: { type: integer, format: int64, description: Bumped on status/incarnation change (not on heartbeat); reconciliation key for stream hints. }
         incarnation_id: { type: string, format: uuid }
         capacity: { type: integer }
         active_attempts: { type: integer }
@@ -698,7 +948,7 @@ components:
             required: [name, version]
             properties: { name: { type: string }, version: { type: integer } }
         registered_at: { type: string, format: date-time }
-        last_heartbeat_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time, description: Last heartbeat (DB column workers.last_heartbeat_at). }
         drain_requested_at: { type: [string, 'null'], format: date-time }
         drain_deadline_at: { type: [string, 'null'], format: date-time }
         credential_revoked: { type: boolean }
@@ -757,7 +1007,7 @@ components:
         step: { type: string }
         from: { type: string, format: date-time }
         to: { type: string, format: date-time }
-        as_of: { type: string, format: date-time, description: Freshness; buckets after as_of are absent, not zero. }
+        as_of: { type: string, format: date-time, description: 'Freshness; buckets after as_of are absent, not zero.' }
         points:
           type: array
           maxItems: 2016
@@ -775,12 +1025,162 @@ components:
         action: { type: string }
         outcome: { type: string, enum: [allowed, denied, rejected, error] }
         actor: { type: string }
-        target_type: { type: [string, 'null'] }
-        target_id: { type: [string, 'null'], format: uuid }
+        subject_type: { type: [string, 'null'] }
+        subject_id: { type: [string, 'null'], format: uuid }
         request_id: { type: [string, 'null'] }
         occurred_at: { type: string, format: date-time }
         details: { type: [object, 'null'], x-clusterx-sensitive: true }
         masked_fields: { type: array, items: { type: string, enum: [details] } }
+
+    ApiToken:
+      type: object
+      required: [id, name, role, scopes, prefix, owner_user_id, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        role: { type: string, enum: [operator, viewer] }
+        scopes: { type: array, items: { $ref: '#/components/schemas/Scope' } }
+        prefix: { type: string, description: 'Non-secret display prefix, e.g. cxt_ab12.' }
+        owner_user_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: [string, 'null'], format: date-time }
+        revoked_at: { type: [string, 'null'], format: date-time }
+        last_used_at: { type: [string, 'null'], format: date-time }
+    Scope:
+      type: string
+      enum: ['jobs:read', 'jobs:write', 'workers:read', 'workers:write', 'metrics:read', 'audit:read']
+    ApiTokenCreate:
+      type: object
+      required: [name, role, scopes]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        role: { type: string, enum: [operator, viewer], description: 'viewer tokens may only hold *:read scopes (else 422).' }
+        scopes: { type: array, minItems: 1, maxItems: 6, uniqueItems: true, items: { $ref: '#/components/schemas/Scope' } }
+        expires_in_days: { type: [integer, 'null'], minimum: 1, maximum: 365, default: 90 }
+    ApiTokenCreated:
+      allOf:
+        - $ref: '#/components/schemas/ApiToken'
+        - type: object
+          required: [secret]
+          properties:
+            secret: { type: string, description: 'cxt_<prefix>_<secret>. Shown once; only its SHA-256 is stored.' }
+    WorkerCredential:
+      type: object
+      required: [id, name, prefix, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        prefix: { type: string }
+        created_by: { type: [string, 'null'], format: uuid }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: [string, 'null'], format: date-time }
+        revoked_at: { type: [string, 'null'], format: date-time }
+        last_used_at: { type: [string, 'null'], format: date-time }
+        bound_worker_ids: { type: array, items: { type: string, format: uuid }, description: Workers registered with this credential. }
+    WorkerCredentialCreate:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        expires_in_days: { type: [integer, 'null'], minimum: 1, maximum: 730, default: 180 }
+    WorkerCredentialCreated:
+      allOf:
+        - $ref: '#/components/schemas/WorkerCredential'
+        - type: object
+          required: [secret]
+          properties:
+            secret: { type: string, description: 'cxw_<prefix>_<secret>. Shown once.' }
+    Handler:
+      type: object
+      required: [name, versions]
+      properties:
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        versions:
+          type: array
+          items:
+            type: object
+            required: [version, payload_schema, capable_workers, live_capable_workers]
+            properties:
+              version: { type: integer }
+              payload_schema: { type: object, description: JSON Schema (2020-12) the payload must satisfy. }
+              result_schema: { type: [object, 'null'] }
+              default_timeout_seconds: { type: integer }
+              capable_workers: { type: integer, description: Non-deregistered workers advertising this version. }
+              live_capable_workers: { type: integer, description: 'Of those, heartbeat within liveness timeout and active.' }
+    Config:
+      type: object
+      required: [api_version, limits, retention, timing]
+      properties:
+        api_version: { type: string, example: 1.0.0-draft.2 }
+        limits:
+          type: object
+          required: [payload_max_bytes, result_max_bytes, request_body_max_bytes, log_tail_max_bytes, max_attempts_min, max_attempts_max, max_attempts_default, timeout_seconds_max, priority_min, priority_max, page_size_max, page_size_default, jobs_list_window_max_days, run_after_max_days, timeseries_points_max, idempotency_ttl_hours]
+          properties:
+            payload_max_bytes: { type: integer, example: 65536 }
+            result_max_bytes: { type: integer, example: 131072 }
+            request_body_max_bytes: { type: integer, example: 81920 }
+            log_tail_max_bytes: { type: integer, example: 16384 }
+            max_attempts_min: { type: integer, example: 1 }
+            max_attempts_max: { type: integer, example: 5 }
+            max_attempts_default: { type: integer, example: 3 }
+            timeout_seconds_max: { type: integer, example: 86400 }
+            priority_min: { type: integer, example: 0 }
+            priority_max: { type: integer, example: 9 }
+            page_size_max: { type: integer, example: 200 }
+            page_size_default: { type: integer, example: 50 }
+            jobs_list_window_max_days: { type: integer, example: 31 }
+            run_after_max_days: { type: integer, example: 30 }
+            timeseries_points_max: { type: integer, example: 2016 }
+            idempotency_ttl_hours: { type: integer, example: 24 }
+        retention:
+          type: object
+          required: [attempt_logs_days, terminal_jobs_days, audit_days, tombstone_days]
+          properties:
+            attempt_logs_days: { type: integer, example: 7 }
+            terminal_jobs_days: { type: integer, example: 30 }
+            audit_days: { type: integer, example: 90 }
+            tombstone_days: { type: integer, example: 90 }
+        timing:
+          type: object
+          required: [heartbeat_interval_seconds, liveness_timeout_seconds, lease_ttl_seconds, cancel_grace_seconds, drain_grace_default_seconds]
+          properties:
+            heartbeat_interval_seconds: { type: integer, example: 10 }
+            liveness_timeout_seconds: { type: integer, example: 30 }
+            lease_ttl_seconds: { type: integer, example: 30 }
+            cancel_grace_seconds: { type: integer, example: 15 }
+            drain_grace_default_seconds: { type: integer, example: 60 }
+    StreamMessage:
+      oneOf:
+        - type: object
+          title: hello
+          required: [type, server_time, session_expires_at]
+          properties:
+            type: { const: hello }
+            server_time: { type: string, format: date-time }
+            session_expires_at: { type: string, format: date-time }
+        - type: object
+          title: hint
+          required: [type, entity, id, version]
+          properties:
+            type: { const: hint }
+            entity: { type: string, enum: [job, worker, metrics] }
+            id: { type: [string, 'null'], format: uuid, description: Null for entity=metrics. }
+            version: { type: integer, format: int64, description: Post-change version; refetch if greater than the snapshot's. 0 for metrics. }
+        - type: object
+          title: resync
+          required: [type, reason]
+          properties:
+            type: { const: resync }
+            reason: { type: string, enum: [buffer_overflow, server_restart, gap_detected] }
+        - type: object
+          title: auth_expiring
+          required: [type, expires_at]
+          properties:
+            type: { const: auth_expiring }
+            expires_at: { type: string, format: date-time, description: Sent 60 s before the session ends; socket closes 4401 at expiry. }
 
   examples:
     JobQueued:
@@ -798,7 +1198,9 @@ components:
         terminal_at: null
         error_code: null
         retried_from_job_id: null
-        unschedulable: null
+        unschedulable_reason: null
+        unschedulable_since: null
+        failure_class: null
         created_at: '2026-11-17T10:00:00Z'
         updated_at: '2026-11-17T10:00:00Z'
         version: 1
@@ -811,7 +1213,7 @@ components:
         lease_expires_at: null
         hard_deadline_at: null
         created_by: 'user:0193a0f2-0000-7000-8000-000000000001'
-        retry_child_job_id: null
+        retried_as_job_id: null
         masked_fields: []
     JobSucceeded:
       value:
@@ -828,7 +1230,9 @@ components:
         terminal_at: '2026-11-17T10:00:09Z'
         error_code: null
         retried_from_job_id: null
-        unschedulable: null
+        unschedulable_reason: null
+        unschedulable_since: null
+        failure_class: null
         created_at: '2026-11-17T10:00:00Z'
         updated_at: '2026-11-17T10:00:09Z'
         version: 6
@@ -841,7 +1245,7 @@ components:
         lease_expires_at: null
         hard_deadline_at: null
         created_by: 'user:0193a0f2-0000-7000-8000-000000000001'
-        retry_child_job_id: null
+        retried_as_job_id: null
         masked_fields: []
     JobSucceededViewer:
       summary: Same job as seen by a viewer — sensitive fields null and listed.
@@ -859,7 +1263,9 @@ components:
         terminal_at: '2026-11-17T10:00:09Z'
         error_code: null
         retried_from_job_id: null
-        unschedulable: null
+        unschedulable_reason: null
+        unschedulable_since: null
+        failure_class: null
         created_at: '2026-11-17T10:00:00Z'
         updated_at: '2026-11-17T10:00:09Z'
         version: 6
@@ -872,7 +1278,7 @@ components:
         lease_expires_at: null
         hard_deadline_at: null
         created_by: 'user:0193a0f2-0000-7000-8000-000000000001'
-        retry_child_job_id: null
+        retried_as_job_id: null
         masked_fields: [payload, result, error_message]
 
   responses:
@@ -889,7 +1295,11 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
           example: { code: invalid_cursor, message: "Cursor does not match the current filters.", request_id: "req_01JD3B" }
     Unauthenticated:
-      description: Missing, expired, revoked or invalid credentials / service assertion / session.
+      description: |
+        Missing, expired, revoked or invalid credentials. `details.reason` tells the BFF what to do (ADR-0006):
+        session_expired | session_revoked | user_disabled ⇒ end the browser session (re-login);
+        assertion_invalid | assertion_expired ⇒ BFF fault, retry once with a fresh assertion, else surface as 502 — never a login loop;
+        token_invalid | token_revoked | token_expired ⇒ direct API token problem.
       headers:
         WWW-Authenticate: { schema: { type: string } }
       content:
@@ -902,6 +1312,12 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
           example: { code: forbidden, message: "Your role does not allow this action.", details: { required: operator, role: viewer }, request_id: "req_01JD3D" }
+    Expired:
+      description: The resource existed but was deleted by retention (ADR-0004). Distinct from 404.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: expired, message: "This job's data has expired.", details: { terminal_at: '2026-10-01T09:00:00Z', expired_at: '2026-10-31T09:05:00Z', retention_days: 30 }, request_id: "req_01JD3M" }
     JobNotFound:
       description: No such job (or deleted by retention). Same response for nonexistent and inaccessible IDs.
       content:
@@ -919,7 +1335,7 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
-          example: { code: job_terminal, message: "Job already finished.", details: { status: succeeded, terminal_at: '2026-11-17T10:00:09Z' }, request_id: "req_01JD3G" }
+          example: { code: job_terminal, message: "Job already finished.", details: { status: succeeded, version: 6, terminal_at: '2026-11-17T10:00:09Z' }, request_id: "req_01JD3G" }
     IdempotencyConflict:
       description: Same Idempotency-Key in scope with a different request fingerprint (within 24h).
       content:
