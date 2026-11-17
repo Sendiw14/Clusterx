@@ -27,3 +27,13 @@ Open questions answered by integrator:
 - OQ-12: see replay signal above.
 
 Owner / later milestone: OQ-01, OQ-02 (→ ADR-0006), OQ-03 (viewer reads `/audit` with actor/detail masking — proposed, needs owner nod), OQ-05/06 (budgets freeze after baseline, NFR-PERF-02), OQ-11 (local preferences for 1.0 — proposed yes), OQ-13 (typeface licensing — owner, M2).
+
+## Round 2 (after HANDOFF-M1-BE-02)
+
+| CCR | Decision | Contract |
+|---|---|---|
+| CCR-10 BFF session lifecycle | **ACCEPT** (§4/§7 server-held session; Go owns `users`/`sessions`) | `POST /api/v1/sessions` (BFF-only, after OAuth callback; assertion-authenticated; returns session id + role + expiry), `DELETE /api/v1/sessions/current`, `GET /api/v1/me`. Not callable with API tokens. Per ADR-0006. |
+
+Integrator re-verification 2026-11-17 on `m1/backend@ee1fa3d`: fresh PG 18.7 cluster, `psql -v ON_ERROR_STOP=1 --single-transaction -f 0001_init.sql` exit 0; `go test -race -count=3 ./poc/...` exit 0 (`ok … 6.031s`).
+
+Owner pending: OQ-03 (viewer `/audit` read), session lifetimes idle 2 h / absolute 12 h.
