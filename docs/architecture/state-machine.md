@@ -34,19 +34,26 @@ Orthogonal fields (not states): `cancel_requested_at`, `available_at`, `current_
 2. Every allowed transition is a CAS: `UPDATE jobs ... WHERE id=$1 AND status IN (allowed) AND <fence> RETURNING version`.
    Zero rows ⇒ the transition is denied; the caller re-reads the row only to pick the error code.
 3. Terminal rows are never updated (DB trigger `jobs_terminal_immutable`). Finished attempts are never updated.
-4. All time comparisons use the DB clock `now()`.
+4. All time comparisons use the DB clock. Worker mutations use `clock_timestamp()` read **after** the row locks
+   below are held; scheduler loops use `now()` of their own short transaction (ADR-0003, RV01-04).
 
 ### Fence predicate `F(attempt)` (ADR-0003)
 
-A worker mutation for (`job_id`, `attempt_id`, `lease_generation`, `worker_id`, `incarnation_id`) is authorized iff, in the same statement:
+Lock order for every worker mutation (RenewLease, ReportResult, ReportFailure): `workers` + `worker_credentials`
+rows `FOR SHARE`, then the `jobs` row `FOR UPDATE`, then the CAS. A worker mutation for (`job_id`, `attempt_id`,
+`lease_generation`, `worker_id`, `incarnation_id`) is authorized iff, in the CAS statement:
 
 - `jobs.status = 'running'` and `jobs.current_attempt_id = attempt_id` and `jobs.lease_generation = lease_generation`
-- `jobs.lease_expires_at > now()` and `jobs.hard_deadline_at > now()`
+- `jobs.lease_expires_at > clock_timestamp()` and `jobs.hard_deadline_at > clock_timestamp()`
 - `job_attempts.state = 'active'`, `job_attempts.worker_id = worker_id`, `job_attempts.worker_incarnation_id = incarnation_id`
 - `workers.current_incarnation_id = incarnation_id` and `workers.status <> 'deregistered'`
-- the worker's `worker_credentials` row has `revoked_at IS NULL` and (`expires_at IS NULL OR expires_at > now()`)
+- the worker's `worker_credentials` row has `revoked_at IS NULL` and (`expires_at IS NULL OR expires_at > clock_timestamp()`)
 
-The first failing clause (checked in the order above after a 0-row CAS) selects the denial code.
+After a 0-row CAS the denial code is chosen in this order: (terminal job) `stale_attempt` if the attempt is not
+the caller's, `credential_revoked`, idempotent reply or `result_mismatch` or `job_terminal`; (non-terminal)
+`stale_attempt`, `deadline_exceeded`, `lease_expired`, `incarnation_mismatch`, `worker_deregistered`,
+`credential_revoked`. Note `lease_expires_at <= hard_deadline_at` is a CHECK, so the deadline clause is
+defense in depth (it cannot be the only failing clause).
 
 ## Event × state table
 
@@ -60,7 +67,7 @@ REST codes are `error.code` values (HTTP status in brackets); worker codes are t
 | E2 Due promotion (scheduler) | → `queued` if `available_at <= now()`, else no-op | = | = | → `queued` if `available_at <= now()`, else no-op | = | = | = |
 | E3 Claim (worker) | ✗ not eligible (not returned) | → `running` (+attempt, `lease_generation+1`, `attempts_used+1`) if F-worker\* ok and capability match and `attempts_used < max_attempts` | ✗ not eligible (skipped) | ✗ not eligible | ✗ | ✗ | ✗ |
 | E4 RenewLease (worker) | ✗ `stale_attempt` [FAILED_PRECONDITION] | ✗ `stale_attempt` | extend lease if F ok: `lease_expires_at = LEAST(now()+lease, hard_deadline_at, cancel_requested_at+cancel_grace)`; no event, no version bump. ✗ per F order: `stale_attempt`, `lease_expired`, `deadline_exceeded`, `incarnation_mismatch`, `worker_deregistered`, `credential_revoked` | ✗ `stale_attempt` | ✗ `job_terminal` | ✗ `job_terminal` | ✗ `job_terminal` |
-| E5 ReportSuccess (worker) | ✗ `stale_attempt` | ✗ `stale_attempt` | if F ok and `cancel_requested_at IS NULL` → `succeeded`; if F ok and cancel requested → `canceled` (success denied, reply `cancel_requested`, see ADR-0002); else ✗ F code | ✗ `stale_attempt` | duplicate from same attempt: = (reply `ALREADY_FINAL`, idempotent); other: ✗ `job_terminal` | ✗ `job_terminal` | ✗ `job_terminal` |
+| E5 ReportSuccess (worker) | ✗ `stale_attempt` | ✗ `stale_attempt` | if F ok and `cancel_requested_at IS NULL` → `succeeded`, reply **OK `OUTCOME_SUCCEEDED`**; if F ok and cancel requested → `canceled` (success not committed; reply **OK `OUTCOME_CANCELED`**; event `data.worker_reported="success"`; ADR-0002); else ✗ F code | ✗ `stale_attempt` | same attempt + worker + incarnation + same result hash: = OK `OUTCOME_SUCCEEDED` `already_final=true`; same attempt, different result: ✗ `result_mismatch`; other caller: ✗ `stale_attempt`; other attempt of the caller: ✗ `job_terminal` | ✗ `job_terminal` (`stale_attempt` if not the caller's attempt) | attempt finalized `canceled` by this caller's report: = OK `OUTCOME_CANCELED` `already_final=true`; otherwise ✗ `job_terminal` (`stale_attempt` if not the caller's attempt) |
 | E6 ReportFailure retryable (worker) | ✗ `stale_attempt` | ✗ `stale_attempt` | if F ok: cancel requested → `canceled`; else `attempts_used < max_attempts` → `retry_wait` (`available_at = now()+backoff`); else → `failed` (`attempts_exhausted`) | ✗ `stale_attempt` | ✗ `job_terminal` | duplicate same attempt: =; else ✗ `job_terminal` | ✗ `job_terminal` |
 | E7 ReportFailure permanent (worker) | ✗ `stale_attempt` | ✗ `stale_attempt` | if F ok: cancel requested → `canceled`; else → `failed` | ✗ `stale_attempt` | ✗ `job_terminal` | duplicate: =; else ✗ `job_terminal` | ✗ `job_terminal` |
 | E8 Lease expiry / deadline (scheduler) | — | — | if `lease_expires_at <= now()` or `hard_deadline_at <= now()`: attempt → `lease_expired`/`deadline_exceeded`; job → `canceled` if cancel requested, else `retry_wait` if `attempts_used < max_attempts`, else `failed` | — | — | — | — |
@@ -100,7 +107,8 @@ matches 0 rows. Proven by `apps/control-plane/poc` `TestAC06*`.
 | `stale_attempt` | FAILED_PRECONDITION | attempt/generation is not current; stop, discard result |
 | `lease_expired` | FAILED_PRECONDITION | lease ran out; stop, result discarded |
 | `deadline_exceeded` | FAILED_PRECONDITION | hard deadline passed; stop |
-| `cancel_requested` | FAILED_PRECONDITION (on success) / OK flag (on renew/poll) | stop cooperatively; job finalized `canceled` |
+| `cancel_requested` | **never an error** — OK flag on RenewLease/PollCancellation; a report after a committed cancel gets OK `OUTCOME_CANCELED` | stop cooperatively; job finalized `canceled` |
+| `result_mismatch` | FAILED_PRECONDITION | retry of a committed success carried a different result; security audit row |
 | `job_terminal` | FAILED_PRECONDITION | job already final; discard |
 | `incarnation_mismatch` | FAILED_PRECONDITION | process superseded; re-register |
 | `worker_draining` | FAILED_PRECONDITION | no new claims; renewals denied after drain deadline |
@@ -154,7 +162,8 @@ appended to the **child** job; the terminal parent is not modified).
 
 ## Unschedulable (derived, not a state)
 
-Computed on read for `queued` jobs; returned as `unschedulable: {reason, since}` or `null`:
+Computed on read for `queued` jobs; returned as flat fields `unschedulable_reason` (enum below or `null`) and
+`unschedulable_since` (or `null`):
 
 | reason | rule |
 |---|---|

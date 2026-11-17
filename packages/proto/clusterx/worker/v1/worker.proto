@@ -15,10 +15,15 @@
 //  - Versioning: package suffix v1 is the wire major version. `protocol_version` in Register is the
 //    minor revision; the coordinator accepts [min_supported, current] and rejects others with
 //    FAILED_PRECONDITION/protocol_unsupported. Fields are only added, never renumbered/reused.
-//  - Idempotency: ReportResult/ReportFailure are safe to retry with the same (attempt_id,
-//    lease_generation); a duplicate of the already-committed outcome returns OK with
-//    already_final=true. A worker that cannot reach the coordinator MUST NOT assume its lease is
-//    still authoritative after lease_ttl elapses (measured on its own monotonic clock).
+//  - Replies (RV01-03, canonical): a report whose fence holds returns OK with the committed Outcome —
+//    OUTCOME_SUCCEEDED, or OUTCOME_CANCELED when a cancel request committed first (the success is then
+//    NOT committed; the worker must treat its side effects as having happened for a canceled job).
+//    Retrying the same report (same attempt_id, lease_generation, worker identity and identical result
+//    bytes) after a lost reply returns OK with the SAME Outcome and already_final=true. A retry with a
+//    different result => FAILED_PRECONDITION/result_mismatch; another worker's attempt =>
+//    FAILED_PRECONDITION/stale_attempt. `cancel_requested` is never an error reason on reports.
+//    A worker that cannot reach the coordinator MUST NOT assume its lease is still authoritative
+//    after lease_ttl elapses (measured on its own monotonic clock).
 syntax = "proto3";
 
 package clusterx.worker.v1;
@@ -149,7 +154,7 @@ message ReportResultRequest {
 
 message ReportResultResponse {
   Outcome outcome = 1;
-  bool already_final = 2;  // idempotent duplicate of the committed outcome
+  bool already_final = 2;  // same-attempt retry; outcome repeats the committed one (incl. OUTCOME_CANCELED)
 }
 
 enum Outcome {
@@ -157,7 +162,7 @@ enum Outcome {
   OUTCOME_SUCCEEDED = 1;
   OUTCOME_RETRY_SCHEDULED = 2;
   OUTCOME_FAILED = 3;
-  OUTCOME_CANCELED = 4;    // cancel request committed before this report
+  OUTCOME_CANCELED = 4;    // cancel request committed before this report; reported success was not committed
 }
 
 enum ErrorClass {
