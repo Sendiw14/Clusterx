@@ -21,6 +21,7 @@ type Store struct {
 	Pool        *pgxpool.Pool
 	LeaseTTL    time.Duration
 	CancelGrace time.Duration
+	Timeout     time.Duration // attempt timeout for Admit; 0 = 600 s
 	// Failpoint, when set, is called at named points inside transactions; a non-nil error aborts the tx.
 	Failpoint func(name string) error
 }
@@ -68,8 +69,12 @@ func (s *Store) NewWorker(ctx context.Context, handler string, capacity int) (Wo
 func (s *Store) Admit(ctx context.Context, handler string, maxAttempts int) (string, error) {
 	var id string
 	err := inTx(ctx, s.Pool, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, `INSERT INTO jobs (handler_name, handler_version, payload, status, available_at, max_attempts, created_by)
-			VALUES ($1, 1, '{}', 'queued', now(), $2, 'system') RETURNING id`, handler, maxAttempts).Scan(&id); err != nil {
+		timeout := 600
+		if s.Timeout > 0 {
+			timeout = int(s.Timeout / time.Second)
+		}
+		if err := tx.QueryRow(ctx, `INSERT INTO jobs (handler_name, handler_version, payload, status, available_at, max_attempts, timeout_seconds, created_by)
+			VALUES ($1, 1, '{}', 'queued', now(), $2, $3, 'system') RETURNING id`, handler, maxAttempts, timeout).Scan(&id); err != nil {
 			return err
 		}
 		if err := s.fail("admit.after_job_insert"); err != nil {
@@ -93,7 +98,7 @@ func (s *Store) Claim(ctx context.Context, w Worker, max int) ([]Lease, error) {
 			FROM workers w JOIN worker_credentials c ON c.id = w.credential_id
 			WHERE w.id = $1 AND w.current_incarnation_id = $2 AND w.status = 'active'
 			  AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at > now())
-			FOR UPDATE OF w`, w.ID, w.Incarnation).Scan(&free)
+			FOR UPDATE OF w FOR SHARE OF c`, w.ID, w.Incarnation).Scan(&free)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return &Denial{"worker_not_authorized"}
 		} else if err != nil {
@@ -120,26 +125,28 @@ func (s *Store) Claim(ctx context.Context, w Worker, max int) ([]Lease, error) {
 		}
 		for _, id := range ids {
 			l := Lease{Worker: w, JobID: id}
-			if err := tx.QueryRow(ctx, `INSERT INTO job_attempts (job_id, attempt_number, lease_generation, worker_id, worker_incarnation_id)
-				SELECT id, attempts_used + 1, lease_generation + 1, $2, $3 FROM jobs WHERE id = $1
-				RETURNING id, lease_generation`, id, w.ID, w.Incarnation).Scan(&l.AttemptID, &l.Generation); err != nil {
-				return err
-			}
-			if err := s.fail("claim.after_attempt_insert"); err != nil {
-				return err
-			}
+			// Job first (deferred FK), then the attempt: the attempt-insert trigger checks it is the job's current lease.
 			var version int64
+			var number int
 			err := tx.QueryRow(ctx, `UPDATE jobs SET status = 'running', attempts_used = attempts_used + 1,
-				lease_generation = lease_generation + 1, current_attempt_id = $2,
+				lease_generation = lease_generation + 1, current_attempt_id = uuidv7(),
 				hard_deadline_at = now() + make_interval(secs => timeout_seconds),
-				lease_expires_at = LEAST(now() + $3::interval, now() + make_interval(secs => timeout_seconds)),
+				lease_expires_at = LEAST(now() + $2::interval, now() + make_interval(secs => timeout_seconds)),
 				version = version + 1, updated_at = now()
 				WHERE id = $1 AND status = 'queued' AND attempts_used < max_attempts
-				RETURNING version`, id, l.AttemptID, s.LeaseTTL).Scan(&version)
+				RETURNING current_attempt_id, attempts_used, lease_generation, version`, id, s.LeaseTTL).
+				Scan(&l.AttemptID, &number, &l.Generation, &version)
 			if err != nil { // 0 rows is impossible under the row lock; treat as abort, never partial
 				return fmt.Errorf("claim CAS on %s: %w", id, err)
 			}
 			if err := s.fail("claim.after_job_update"); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO job_attempts (id, job_id, attempt_number, lease_generation, worker_id, worker_incarnation_id)
+				VALUES ($1, $2, $3, $4, $5, $6)`, l.AttemptID, id, number, l.Generation, w.ID, w.Incarnation); err != nil {
+				return err
+			}
+			if err := s.fail("claim.after_attempt_insert"); err != nil {
 				return err
 			}
 			if _, err := tx.Exec(ctx, `INSERT INTO job_events (job_id, version, event_type, from_status, to_status, attempt_id, actor)
@@ -160,21 +167,47 @@ const (
 	Canceled  Outcome = "canceled"
 )
 
+// Reply is the canonical worker reply (RV01-03): OK + outcome; AlreadyFinal for a same-attempt retry.
+type Reply struct {
+	Outcome      Outcome
+	AlreadyFinal bool
+}
+
 // fence is the ADR-0003 predicate, evaluated inside the CAS statement. $1 job, $2 attempt, $3 generation, $4 worker, $5 incarnation.
+// Time uses clock_timestamp() so a report that waited on the job row lock is judged at re-check time, not at
+// transaction start (RV01-04). Worker and credential rows are share-locked beforehand by lockIdentity.
 const fence = `j.id = $1 AND j.status = 'running' AND j.current_attempt_id = $2 AND j.lease_generation = $3
-	AND j.lease_expires_at > now() AND j.hard_deadline_at > now()
+	AND j.lease_expires_at > clock_timestamp() AND j.hard_deadline_at > clock_timestamp()
 	AND a.id = $2 AND a.job_id = j.id AND a.state = 'active' AND a.worker_id = $4 AND a.worker_incarnation_id = $5
 	AND w.id = $4 AND w.current_incarnation_id = $5 AND w.status <> 'deregistered'
-	AND c.id = w.credential_id AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at > now())`
+	AND c.id = w.credential_id AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at > clock_timestamp())`
+
+// lockForReport takes, in a fixed order, a share lock on the worker and credential rows and then the job row
+// lock, before the fence is evaluated (RV01-04). A revocation, re-registration or deregistration therefore either
+// committed before (and is seen by the fence) or waits until this report commits; and clock_timestamp() in the
+// fence is read after any wait for the job row. (A waiter whose locker did not modify the row gets no EPQ
+// re-check, so locking first is what makes the time check current.)
+func lockForReport(ctx context.Context, tx pgx.Tx, workerID, jobID string) error {
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM workers w JOIN worker_credentials c ON c.id = w.credential_id
+		WHERE w.id = $1 FOR SHARE OF w, c`, workerID); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `SELECT 1 FROM jobs WHERE id = $1 FOR UPDATE`, jobID)
+	return err
+}
 
 // ReportSuccess commits success iff the fence holds and no cancel request is committed. If the fence holds but a
-// cancel request won the commit race, the attempt is finalized as canceled instead (ADR-0002). Otherwise it is
-// denied with no job/attempt/event change and one diagnostic audit row.
-func (s *Store) ReportSuccess(ctx context.Context, l Lease, result string) (Outcome, error) {
-	var out Outcome
+// cancel request won the commit race, the attempt is finalized as canceled instead and the reply is OK/Canceled
+// (ADR-0002). A same-attempt retry of a committed outcome replies with that outcome and AlreadyFinal. Anything
+// else is denied with no job/attempt/event change and one diagnostic audit row.
+func (s *Store) ReportSuccess(ctx context.Context, l Lease, result string) (Reply, error) {
+	var rep Reply
 	var denial *Denial
 	args := []any{l.JobID, l.AttemptID, l.Generation, l.ID, l.Incarnation}
 	err := inTx(ctx, s.Pool, func(tx pgx.Tx) error {
+		if err := lockForReport(ctx, tx, l.ID, l.JobID); err != nil {
+			return err
+		}
 		var version int64
 		err := tx.QueryRow(ctx, `UPDATE jobs j SET status = 'succeeded', result = $6::jsonb, terminal_at = now(),
 			current_attempt_id = NULL, lease_expires_at = NULL, hard_deadline_at = NULL, version = j.version + 1, updated_at = now()
@@ -182,8 +215,8 @@ func (s *Store) ReportSuccess(ctx context.Context, l Lease, result string) (Outc
 			WHERE `+fence+` AND j.cancel_requested_at IS NULL
 			RETURNING j.version`, append(args, result)...).Scan(&version)
 		if err == nil {
-			out = Succeeded
-			return s.finish(ctx, tx, l, version, "succeeded", "succeeded")
+			rep = Reply{Outcome: Succeeded}
+			return s.finish(ctx, tx, l, version, "succeeded", "succeeded", result, nil)
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
@@ -195,38 +228,55 @@ func (s *Store) ReportSuccess(ctx context.Context, l Lease, result string) (Outc
 			WHERE `+fence+` AND j.cancel_requested_at IS NOT NULL
 			RETURNING j.version`, args...).Scan(&version)
 		if err == nil {
-			out = Canceled
-			return s.finish(ctx, tx, l, version, "canceled", "canceled")
+			rep = Reply{Outcome: Canceled}
+			// The handler finished and its side effects happened; keep that visible without keeping the result (RV01-08).
+			return s.finish(ctx, tx, l, version, "canceled", "canceled", result, map[string]any{"worker_reported": "success"})
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		reason, err := s.classify(ctx, tx, l)
+		reason, idem, err := s.classify(ctx, tx, l, result)
 		if err != nil {
 			return err
 		}
-		if reason == "" { // idempotent duplicate of the committed success
-			out = Succeeded
+		if reason == "" {
+			rep = Reply{Outcome: idem, AlreadyFinal: true}
 			return nil
 		}
 		denial = &Denial{reason}
 		_, err = tx.Exec(ctx, `INSERT INTO audit_events (category, action, outcome, actor, target_type, target_id, details)
-			VALUES ('diagnostic', 'worker.report_success', 'rejected', 'worker:' || $1, 'job', $2,
+			VALUES ($6, 'worker.report_success', 'rejected', 'worker:' || $1, 'job', $2,
 			        jsonb_build_object('reason', $3::text, 'attempt_id', $4::text, 'lease_generation', $5::bigint))`,
-			l.ID, l.JobID, reason, l.AttemptID, l.Generation)
+			l.ID, l.JobID, reason, l.AttemptID, l.Generation, auditCategory(reason))
 		return err
 	})
 	if err != nil {
-		return "", err
+		return Reply{}, err
 	}
 	if denial != nil {
-		return "", denial
+		return Reply{}, denial
 	}
-	return out, nil
+	return rep, nil
 }
 
-func (s *Store) finish(ctx context.Context, tx pgx.Tx, l Lease, version int64, attemptState, event string) error {
-	tag, err := tx.Exec(ctx, `UPDATE job_attempts SET state = $2, finished_at = now() WHERE id = $1 AND state = 'active'`, l.AttemptID, attemptState)
+func jsonOrNull(m map[string]any) any {
+	if m == nil {
+		return nil // SQL NULL, not JSON null
+	}
+	return m
+}
+
+func auditCategory(reason string) string {
+	switch reason {
+	case "credential_revoked", "incarnation_mismatch", "worker_deregistered", "result_mismatch":
+		return "security"
+	}
+	return "diagnostic"
+}
+
+func (s *Store) finish(ctx context.Context, tx pgx.Tx, l Lease, version int64, attemptState, event, result string, data map[string]any) error {
+	tag, err := tx.Exec(ctx, `UPDATE job_attempts SET state = $2, finished_at = now(), result_sha256 = sha256(convert_to($3, 'UTF8'))
+		WHERE id = $1 AND state = 'active'`, l.AttemptID, attemptState, result)
 	if err != nil {
 		return err
 	}
@@ -236,48 +286,59 @@ func (s *Store) finish(ctx context.Context, tx pgx.Tx, l Lease, version int64, a
 	if err := s.fail("report.before_event"); err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO job_events (job_id, version, event_type, from_status, to_status, attempt_id, actor)
-		VALUES ($1, $2, $3, 'running', $4, $5, 'worker:' || $6)`, l.JobID, version, event, attemptState, l.AttemptID, l.ID)
+	_, err = tx.Exec(ctx, `INSERT INTO job_events (job_id, version, event_type, from_status, to_status, attempt_id, actor, data)
+		VALUES ($1, $2, $3, 'running', $4, $5, 'worker:' || $6, $7)`, l.JobID, version, event, attemptState, l.AttemptID, l.ID, jsonOrNull(data))
 	return err
 }
 
-// classify picks the denial code after a 0-row CAS (state-machine.md order). "" means idempotent duplicate.
-func (s *Store) classify(ctx context.Context, tx pgx.Tx, l Lease) (string, error) {
+// classify picks the denial code after a 0-row CAS (state-machine.md order). reason "" means a same-attempt
+// retry of the committed outcome, returned as idem.
+func (s *Store) classify(ctx context.Context, tx pgx.Tx, l Lease, result string) (string, Outcome, error) {
 	var status, attemptState string
 	var cur *string
 	var gen int64
-	var leaseOK, deadlineOK, incOK, deregistered, credOK bool
+	var leaseOK, deadlineOK, owner, incOK, deregistered, credOK, sameResult bool
 	err := tx.QueryRow(ctx, `SELECT j.status, j.current_attempt_id::text, j.lease_generation,
-			coalesce(j.lease_expires_at > now(), false), coalesce(j.hard_deadline_at > now(), false),
-			a.state, (a.worker_id = $3 AND a.worker_incarnation_id = $4 AND w.current_incarnation_id = $4),
-			w.status = 'deregistered', (c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at > now()))
+			coalesce(j.lease_expires_at > clock_timestamp(), false), coalesce(j.hard_deadline_at > clock_timestamp(), false),
+			a.state, (a.worker_id = $3 AND a.worker_incarnation_id = $4), (w.current_incarnation_id = $4),
+			w.status = 'deregistered', (c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at > clock_timestamp())),
+			coalesce(a.result_sha256 = sha256(convert_to($5, 'UTF8')), false)
 		FROM jobs j JOIN job_attempts a ON a.id = $2 AND a.job_id = j.id
 		JOIN workers w ON w.id = $3 JOIN worker_credentials c ON c.id = w.credential_id
-		WHERE j.id = $1`, l.JobID, l.AttemptID, l.ID, l.Incarnation).
-		Scan(&status, &cur, &gen, &leaseOK, &deadlineOK, &attemptState, &incOK, &deregistered, &credOK)
+		WHERE j.id = $1`, l.JobID, l.AttemptID, l.ID, l.Incarnation, result).
+		Scan(&status, &cur, &gen, &leaseOK, &deadlineOK, &attemptState, &owner, &incOK, &deregistered, &credOK, &sameResult)
+	terminal := status == "succeeded" || status == "failed" || status == "canceled"
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		return "stale_attempt", nil
+		return "stale_attempt", "", nil
 	case err != nil:
-		return "", err
+		return "", "", err
+	case terminal && !owner: // someone else's attempt (RV01-07)
+		return "stale_attempt", "", nil
+	case terminal && !credOK:
+		return "credential_revoked", "", nil
+	case status == "succeeded" && attemptState == "succeeded" && sameResult:
+		return "", Succeeded, nil
 	case status == "succeeded" && attemptState == "succeeded":
-		return "", nil
-	case status == "succeeded" || status == "failed" || status == "canceled":
-		return "job_terminal", nil
+		return "result_mismatch", "", nil
+	case status == "canceled" && attemptState == "canceled":
+		return "", Canceled, nil
+	case terminal:
+		return "job_terminal", "", nil
 	case status != "running" || cur == nil || *cur != l.AttemptID || gen != l.Generation:
-		return "stale_attempt", nil
-	case !leaseOK:
-		return "lease_expired", nil
+		return "stale_attempt", "", nil
 	case !deadlineOK:
-		return "deadline_exceeded", nil
-	case !incOK:
-		return "incarnation_mismatch", nil
+		return "deadline_exceeded", "", nil
+	case !leaseOK:
+		return "lease_expired", "", nil
+	case !owner || !incOK:
+		return "incarnation_mismatch", "", nil
 	case deregistered:
-		return "worker_deregistered", nil
+		return "worker_deregistered", "", nil
 	case !credOK:
-		return "credential_revoked", nil
+		return "credential_revoked", "", nil
 	}
-	return "stale_attempt", nil
+	return "stale_attempt", "", nil
 }
 
 // CancelResult mirrors the REST contract: HTTP 200 canceled / 202 requested / 409 job_terminal.

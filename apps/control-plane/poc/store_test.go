@@ -61,8 +61,8 @@ func newStore(t *testing.T, lease time.Duration) *Store {
 	if pool == nil {
 		t.Skip("CLUSTERX_PG_ADMIN_DSN not set")
 	}
-	_, err := pool.Exec(context.Background(), `TRUNCATE jobs, job_attempts, job_events, audit_events,
-		submission_idempotency, worker_capabilities, workers, worker_credentials CASCADE`)
+	_, err := pool.Exec(context.Background(), `TRUNCATE jobs, job_attempts, job_events, audit_events, job_tombstones,
+		submission_idempotency, worker_capabilities, workers, worker_credentials, api_tokens, sessions, users CASCADE`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,8 +294,8 @@ func TestAC02_SchemaRejectsSecondActiveAttempt(t *testing.T) {
 	}
 	_, err := pool.Exec(ctx, `INSERT INTO job_attempts (job_id, attempt_number, lease_generation, worker_id, worker_incarnation_id)
 		VALUES ($1, 2, 2, $2, $3)`, job, ws[1].ID, ws[1].Incarnation)
-	if err == nil || !strings.Contains(err.Error(), "job_attempts_one_active_per_job") {
-		t.Fatalf("second active attempt err = %v, want unique violation", err)
+	if err == nil || !(strings.Contains(err.Error(), "job_attempts_one_active_per_job") || strings.Contains(err.Error(), "does not match the current lease")) {
+		t.Fatalf("second active attempt err = %v, want rejection", err)
 	}
 }
 
@@ -328,14 +328,14 @@ func TestAC03_StaleSuccessRejectedAfterExpiryAndReclaim(t *testing.T) {
 	if err != nil || len(lb) != 1 || lb[0].Generation != 2 {
 		t.Fatalf("B claim = %v, %v", lb, err)
 	}
-	if out, err := s.ReportSuccess(ctx, lb[0], `{"by":"B"}`); err != nil || out != Succeeded {
+	if out, err := s.ReportSuccess(ctx, lb[0], `{"by":"B"}`); err != nil || out != (Reply{Outcome: Succeeded}) {
 		t.Fatalf("B success = %v, %v", out, err)
 	}
 	if _, err := s.ReportSuccess(ctx, la[0], `{"by":"A"}`); !isDenial(err, "job_terminal") {
 		t.Fatalf("A after B: %v, want job_terminal", err)
 	}
 	// Duplicate of B's committed success is idempotent and changes nothing.
-	if out, err := s.ReportSuccess(ctx, lb[0], `{"by":"B"}`); err != nil || out != Succeeded {
+	if out, err := s.ReportSuccess(ctx, lb[0], `{"by":"B"}`); err != nil || out != (Reply{Outcome: Succeeded, AlreadyFinal: true}) {
 		t.Fatalf("B duplicate = %v, %v", out, err)
 	}
 
@@ -367,11 +367,16 @@ func TestAC06_CancelThenSuccess(t *testing.T) {
 	if r, err := s.RequestCancel(ctx, job, "user:op"); err != nil || r.HTTP != 202 {
 		t.Fatalf("cancel = %+v, %v", r, err)
 	}
-	if out, err := s.ReportSuccess(ctx, l[0], `{}`); err != nil || out != Canceled {
-		t.Fatalf("success after cancel = %v, %v; want canceled", out, err)
+	if out, err := s.ReportSuccess(ctx, l[0], `{}`); err != nil || out != (Reply{Outcome: Canceled}) {
+		t.Fatalf("success after cancel = %v, %v; want OK/canceled", out, err)
 	}
-	if _, err := s.ReportSuccess(ctx, l[0], `{}`); !isDenial(err, "job_terminal") {
-		t.Fatalf("late success = %v", err)
+	// RV01-03: a retry of that report (reply lost) gets the same outcome, flagged already_final.
+	if out, err := s.ReportSuccess(ctx, l[0], `{}`); err != nil || out != (Reply{Outcome: Canceled, AlreadyFinal: true}) {
+		t.Fatalf("retried success after cancel = %v, %v; want OK/canceled/already_final", out, err)
+	}
+	// RV01-08: the discarded success is visible on the canceled event, without its content.
+	if d := q[string](t, `SELECT data::text FROM job_events WHERE job_id = $1 AND event_type = 'canceled'`, job); d != `{"worker_reported": "success"}` {
+		t.Fatalf("canceled event data = %s", d)
 	}
 	if r, _ := s.RequestCancel(ctx, job, "user:op"); r.HTTP != 200 {
 		t.Fatalf("repeat cancel = %+v, want 200 no-op", r)
@@ -391,7 +396,7 @@ func TestAC06_SuccessThenCancel(t *testing.T) {
 	ctx := context.Background()
 	job, _ := s.Admit(ctx, handler, 3)
 	l, _ := s.Claim(ctx, workers(t, s, 1)[0], 1)
-	if out, err := s.ReportSuccess(ctx, l[0], `{"v":1}`); err != nil || out != Succeeded {
+	if out, err := s.ReportSuccess(ctx, l[0], `{"v":1}`); err != nil || out.Outcome != Succeeded {
 		t.Fatal(out, err)
 	}
 	if r, err := s.RequestCancel(ctx, job, "user:op"); err != nil || r.HTTP != 409 || r.Status != "succeeded" {
@@ -420,7 +425,7 @@ func TestAC06_ConcurrentCancelVsSuccess(t *testing.T) {
 			t.Fatal(l, err)
 		}
 		var cr CancelResult
-		var out Outcome
+		var out Reply
 		var cerr, serr error
 		var wg sync.WaitGroup
 		start := make(chan struct{})
@@ -434,9 +439,9 @@ func TestAC06_ConcurrentCancelVsSuccess(t *testing.T) {
 		}
 		final := q[string](t, `SELECT status FROM jobs WHERE id = $1`, job)
 		switch {
-		case cr.HTTP == 409 && out == Succeeded && final == "succeeded":
+		case cr.HTTP == 409 && out.Outcome == Succeeded && final == "succeeded":
 			tally["success-first"]++
-		case cr.HTTP == 202 && out == Canceled && final == "canceled":
+		case cr.HTTP == 202 && out.Outcome == Canceled && final == "canceled":
 			tally["cancel-first"]++
 		default:
 			t.Fatalf("iter %d: inconsistent cancel=%+v success=%v final=%s", i, cr, out, final)
