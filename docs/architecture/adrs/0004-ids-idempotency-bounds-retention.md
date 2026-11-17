@@ -52,6 +52,12 @@ Terminal immutability forbids UPDATE, not DELETE. Retention is a separate lifecy
 | audit_events | 90 d | batch delete |
 | idempotency | 24 h | batch delete |
 | sessions | expiry + 7 d | batch delete |
+DB guards (TASK-M1-BE-04, RV01-06):
+- Attempts and events of a job that still exists cannot be deleted. Only the FK cascade from `DELETE jobs`
+  can remove them.
+- Audit rows younger than 90 d cannot be deleted.
+- Lineage on a terminal job can only be nulled by the FK action, never repointed.
+
 Retention writes `job_tombstones(job_id, terminal_at, expired_at)` in the same transaction as the DELETE;
 tombstoned IDs answer **410 `expired`** (CCR-M1), unknown IDs 404. Tombstones are kept 90 d, after which
 the ID answers 404. Figures are not legal advice (§6). Backups: 14 d.
