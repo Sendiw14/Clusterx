@@ -1,6 +1,8 @@
 # ADR-0006 — BFF session contract (assertions, CSRF, auth outcomes, expiry)
 
-- Status: **Proposed** (TASK-M1-BE-02, 2026-11-17). Implements CCR-09 from `docs/coordination/CCR-M1-decisions.md`.
+- Status: **Proposed** (TASK-M1-BE-02, 2026-11-17); §5 **accepted by integrator** as CCR-10 (Round 2) and specified in
+  OpenAPI `1.0.0-draft.3` (TASK-M1-BE-03). Whole ADR still awaits RV-01 review and owner nod on lifetimes.
+  Implements CCR-09 from `docs/coordination/CCR-M1-decisions.md`.
   Answers frontend OQ-02 and gives a security opinion on OQ-01. Review: TASK-M1-RV-01 (auth).
 - Requirements: FR-SEC-01, FR-SEC-02, FR-SEC-06, FR-SEC-07, FR-WEB-09, FR-RT-01; AC-13, AC-16. Master §4, §7.
 - Builds on ADR-0005. Owner: backend (contract); implementer: frontend lane (Next.js BFF).
@@ -66,10 +68,13 @@ BFF → Go `/api/v1/stream` with `Authorization: Bearer <assertion>`. Go re-vali
 on logout closes with 4401; the BFF relays close codes unchanged. Messages are hints only (OpenAPI
 `StreamMessage`); after reconnect or `resync` the UI refetches snapshots (FR-RT-01, AC-16).
 
-## 5. Open item — CCR-10 (proposal, NOT added to OpenAPI)
+## 5. Session lifecycle — CCR-10 (accepted, OpenAPI draft.3)
 
-Go owns `users` and `sessions`, so the BFF needs three server-to-server operations that §6 and CCR-M1 do
-not list. Proposed, pending integrator decision:
+Go owns `users` and `sessions`, so the BFF uses three server-to-server operations. API tokens get 403
+`credential_not_allowed` on all three. Login failures for an authenticated GitHub identity return 403 with
+`not_allowlisted` or `user_disabled`.
+Idle timeout: draft.3 returns `idle_timeout_seconds`/`idle_expires_at`, but enforcement stays in the BFF until a
+`sessions.last_activity_at` column is added (deferred DDL).
 
 | Proposed op | Auth | Purpose |
 |---|---|---|
@@ -77,9 +82,8 @@ not list. Proposed, pending integrator decision:
 | `DELETE /api/v1/sessions/current` | normal assertion | logout → revoke `sid` |
 | `GET /api/v1/me` | normal assertion | effective role + session expiry (used by `/bff/session` and after a 403) |
 
-Until CCR-10 is decided, the BFF cannot complete a real login against Go (M6 dependency). Alternative
-if rejected: BFF-owned session store with Go trusting `sid` only for audit. That loses Go-side immediate
-revocation, so this ADR recommends against it.
+Rejected alternative: a BFF-owned session store with Go trusting `sid` only for audit. It would lose Go-side
+immediate revocation.
 
 ## 6. OQ-01 security opinion (new-job draft in `sessionStorage`)
 

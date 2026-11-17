@@ -10,6 +10,7 @@ Enforced in Go on **every** request (direct API and BFF alike). The BFF/UI may h
 | Human via BFF | Service assertion (ADR-0005) + DB re-check of user/session | `users.role` (DB wins over assertion) |
 | Direct API token | `cxt_` bearer, SHA-256 lookup | `api_tokens.role` ∩ `api_tokens.scopes` |
 | Worker | `cxw_` bearer on gRPC only | worker credential; **no REST access** |
+| BFF at login | login assertion (`purpose=login`, `sub=github:<id>`, no `sid`) | valid only for `POST /api/v1/sessions` (ADR-0006 §5) |
 | Metrics scraper | static scrape token, internal listener | `/metrics` only |
 | Anonymous | none | `/health/live`, `/health/ready` only |
 | Demo visitor | none | **no control-plane access at all** (fixtures in web app) |
@@ -36,6 +37,9 @@ A viewer token can only hold `*:read` scopes (issuance rejects otherwise).
 | `GET /api/v1/audit` | ✓ (all categories) | ✓ `privileged` only, `details` masked | `audit:read` | ✗ 401 | no |
 | `GET /health/live`, `/health/ready` | ✓ | ✓ | none | ✓ (status only) | no |
 | `GET /metrics` | scrape token only | ✗ | — | ✗ 401 | no |
+| `POST /api/v1/sessions` | BFF login assertion only (allowlisted GitHub id; role from DB) | same | **none** (API token ⇒ 403 `credential_not_allowed`) | ✗ 401 | security `session.create` |
+| `DELETE /api/v1/sessions/current` | ✓ (own session) | ✓ (own session) | **none** (⇒ 403) | ✗ 401 | security `session.revoke` |
+| `GET /api/v1/me` | ✓ | ✓ | **none** (⇒ 403) | ✗ 401 | no |
 | `GET /api/v1/tokens` | ✓ | ✗ 403 | **none** (BFF session only; any API token ⇒ 403) | ✗ 401 | no |
 | `POST /api/v1/tokens` | ✓ | ✗ 403 | **none** (session only) | ✗ 401 | **yes** `token.create` |
 | `POST /api/v1/tokens/{id}/revoke` | ✓ | ✗ 403 | **none** (session only) | ✗ 401 | **yes** `token.revoke` |
