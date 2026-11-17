@@ -19,7 +19,13 @@
 3. **Direct API clients**: `Authorization: Bearer cxt_<prefix>_<secret>`; Go hashes (SHA-256 of a
    256-bit random secret) and looks up `api_tokens`; checks revoked/expired, role and scopes
    (`jobs:read`, `jobs:write`, `workers:read`, `workers:write`, `metrics:read`, `audit:read`).
-   Effective permission = role ∩ scopes. `last_used_at` updated asynchronously. Token issuance/revocation
+   **Effective authority = token scopes ∩ the scopes allowed by the OWNER'S CURRENT role, evaluated on
+   every request (amended TASK-M1-BE-04, RV01-02).** A token never outranks its owner. If the owner is
+   demoted to viewer, the token immediately loses every non-`*:read` scope (403 on mutations). If the owner
+   has `disabled_at` set, the token gets 401 `user_disabled`. A revoked or expired token gets 401
+   `token_revoked` / `token_expired`. The authority is read from view `api_token_authority` (migration
+   0001; `TestRV0102_TokenAuthorityFollowsOwner`) with no cache for mutations and at most 5 s for reads.
+   Owners cannot be deleted while tokens exist (FK RESTRICT). `last_used_at` is updated asynchronously. Token issuance/revocation
    is an operator console action via the BFF (`/api/v1/tokens`, CCR-01); API tokens can never manage tokens.
 4. **Workers → Go (gRPC)**: TLS when non-loopback; metadata `authorization: Bearer cxw_<prefix>_<secret>`
    checked against `worker_credentials` on **every** RPC (no cache for Claim/Renew/Report). Credential

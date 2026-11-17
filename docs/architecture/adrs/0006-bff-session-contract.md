@@ -1,7 +1,8 @@
 # ADR-0006 — BFF session contract (assertions, CSRF, auth outcomes, expiry)
 
 - Status: **Proposed** (TASK-M1-BE-02, 2026-11-17); §5 **accepted by integrator** as CCR-10 (Round 2) and specified in
-  OpenAPI `1.0.0-draft.3` (TASK-M1-BE-03). Whole ADR still awaits RV-01 review and owner nod on lifetimes.
+  OpenAPI `1.0.0-draft.3` (TASK-M1-BE-03). Amended TASK-M1-BE-04 for RV01-11/12/13 and FE gaps SESS-01,
+  BFF-01, BFF-02 (OpenAPI draft.4). Fixes pending RV-01 re-review; owner nod on lifetimes still pending.
   Implements CCR-09 from `docs/coordination/CCR-M1-decisions.md`.
   Answers frontend OQ-02 and gives a security opinion on OQ-01. Review: TASK-M1-RV-01 (auth).
 - Requirements: FR-SEC-01, FR-SEC-02, FR-SEC-06, FR-SEC-07, FR-WEB-09, FR-RT-01; AC-13, AC-16. Master §4, §7.
@@ -16,11 +17,11 @@ JWS compact, header `{alg: "EdDSA", typ: "clusterx-assertion+jwt", kid}`. Claims
 | `iss` | `clusterx-bff` | exact |
 | `aud` | `clusterx-control-plane` | exact |
 | `sub` | `user:<uuid>` | user exists, `disabled_at IS NULL` |
-| `sid` | session UUID | session exists, not revoked, not expired (DB) |
+| `sid` | session UUID | session exists, not revoked, not past `expires_at`, not idle-expired, and **`sessions.user_id` = `sub`** (RV01-11) |
 | `role` | `operator` \| `viewer` | **hint only**. Go uses `users.role`; a mismatch is logged as security event |
 | `iat`, `nbf` | now | ±5 s skew |
 | `exp` | ≤ `iat + 60 s` | reject if past (±5 s) |
-| `jti` | random 128-bit | mutations: single-use within 120 s (in-memory replay cache; single coordinator, ADR-0001) |
+| `jti` | random 128-bit | mutations: single-use within 120 s (in-memory replay cache; single coordinator, ADR-0001). **Residual (RV01-12):** the cache is lost on coordinator restart, so a captured mutation assertion can be replayed once more until its `exp` (≤ 65 s incl. skew). Reads and WebSocket upgrades are never single-use and can be replayed until `exp`. Accepted for 1.0 because assertions only travel BFF→Go over TLS; recorded in trust-boundaries B2 |
 | `rid` | request id | echoed as `X-Request-Id` |
 
 A new assertion is minted for every upstream request (or WebSocket upgrade); the BFF never forwards the
@@ -33,7 +34,8 @@ Go answers 401 `unauthenticated` with a machine-readable `details.reason`. The B
 
 | `details.reason` | Meaning | BFF action | Browser sees |
 |---|---|---|---|
-| `session_expired`, `session_revoked`, `user_disabled` | The human session ended in the authoritative store | destroy BFF session, clear cookie | 401 `session_expired` → `/login?next=` (clamped same-origin path) |
+| `session_expired` (`details.expiry` = `idle` \| `absolute`), `session_revoked` | The human session ended in the authoritative store | destroy BFF session, clear cookie | 401 `session_expired` → `/login?reason=session_expired&next=` (clamped same-origin path) |
+| `user_disabled` | The account was disabled | destroy BFF session, clear cookie | `/login?error=user_disabled` (no-entitlement panel, not a plain re-login prompt — re-login would 403) |
 | `assertion_expired` | Clock skew or slow request | retry **once** with a fresh assertion | transparent; if it repeats → 502 `upstream_auth` |
 | `assertion_invalid` | Bad signature / `kid` / `aud` / `iss` / replayed `jti` — a BFF or config fault, not the user's | **do not** end the session; log with request id | 502 `upstream_auth` (S-ERR with request_id); never a login redirect |
 | `token_*` | Direct API token problems | n/a (BFF never uses API tokens) | — |
@@ -47,8 +49,10 @@ error.
 
 - Cookie `__Host-clusterx_session`: `Secure; HttpOnly; SameSite=Lax; Path=/`; value = opaque 256-bit session
   secret (Go stores only its SHA-256 in `sessions.secret_hash`). Regenerated at login (fixation defense).
-- Session lifetime (proposed, owner may tune): idle 2 h, absolute 12 h. `expires_at` is absolute; idle
-  timeout is enforced by the BFF and reflected by revoking the session row.
+- Session lifetime (proposed, owner may tune): idle 2 h, absolute 12 h. **Go enforces both (GAP-SESS-01):**
+  a session is valid iff `revoked_at IS NULL AND expires_at > now() AND last_activity_at +
+  idle_timeout_seconds > now()`. Go bumps `last_activity_at` at most once per 60 s per session on
+  authenticated requests (a hint-only stream does not count as activity). The BFF keeps no timers.
 - **CSRF:** every mutating BFF route (POST/PUT/PATCH/DELETE) requires both
   (a) `Origin` header exactly equal to the configured app origin (missing Origin ⇒ reject), and
   (b) header `X-CSRF-Token` equal to `HMAC-SHA256(csrf_key, sid)` (base64url), obtained from the session-info route.
@@ -60,21 +64,42 @@ error.
   signed out.
 - Session-expiry surfacing: `/bff/session` gives both expiries; the stream sends `auth_expiring` 60 s before
   expiry and closes 4401 at expiry; any BFF route after expiry returns 401 `session_expired`.
+- **Login outcomes (closed set, GAP-BFF-01).** `/login?error=` ∈ {`auth_error` (OAuth denied/state mismatch),
+  `no_entitlement` (Go 403 `not_allowlisted`), `user_disabled` (Go 403/401 `user_disabled`),
+  `provider_unavailable` (GitHub unreachable), `upstream_auth` (Go `assertion_*` or `credential_not_allowed`)};
+  `/login?reason=` ∈ {`signed_out`, `session_expired`}. Any other value renders nothing.
+- **Proxy envelope (GAP-BFF-02).** For `/api/v1` calls the BFF passes Go's status code, body and these headers
+  through unchanged: `Content-Type`, `X-Request-Id`, `Retry-After`, `Idempotent-Replayed`, `Location`, `ETag`,
+  `Cache-Control`, `Date`. It never rewrites Go error bodies. BFF-owned failures use the same
+  `{code, message, details?, request_id}` envelope: `session_expired` (401), `csrf_failed` (403),
+  `upstream_auth` (502), `upstream_unavailable` (503, Go unreachable).
 
 ## 4. WebSocket
 
 Browser → BFF `/bff/stream` (Origin allowlist + session cookie; BFF max 5 sockets per session).
-BFF → Go `/api/v1/stream` with `Authorization: Bearer <assertion>`. Go re-validates `sid` every ≤ 30 s and
-on logout closes with 4401; the BFF relays close codes unchanged. Messages are hints only (OpenAPI
+BFF → Go `/api/v1/stream` with `Authorization: Bearer <assertion>`. Go re-validates `sid` (and the
+`sid`↔`sub` binding) every ≤ 30 s and on logout closes with 4401; the BFF relays close codes unchanged.
+**Streams opened with an API token** (direct clients) are re-validated on the same ≤ 30 s cadence against
+`api_token_authority` (RV01-13). They close 4401 when the token is revoked or expired or its owner is
+disabled, and 4403 when the effective scopes no longer include `jobs:read`. Messages are hints only (OpenAPI
 `StreamMessage`); after reconnect or `resync` the UI refetches snapshots (FR-RT-01, AC-16).
 
 ## 5. Session lifecycle — CCR-10 (accepted, OpenAPI draft.3)
 
 Go owns `users` and `sessions`, so the BFF uses three server-to-server operations. API tokens get 403
 `credential_not_allowed` on all three. Login failures for an authenticated GitHub identity return 403 with
-`not_allowlisted` or `user_disabled`.
-Idle timeout: draft.3 returns `idle_timeout_seconds`/`idle_expires_at`, but enforcement stays in the BFF until a
-`sessions.last_activity_at` column is added (deferred DDL).
+`not_allowlisted` or `user_disabled`. Idle timeout is enforced by Go (§3).
+
+**Key-compromise bound (RV01-11, corrected).** For normal requests Go requires `sessions.user_id = sub`, so a
+stolen BFF key cannot use one user's live session as another user. **However, `POST /api/v1/sessions`
+trusts the login assertion's `sub=github:<id>`. Whoever holds the BFF signing key can mint a session for
+any allowlisted user, which is full impersonation.** Go does not re-verify the GitHub OAuth exchange in 1.0.
+Mitigations:
+- The key lives only on the BFF host and is rotated by `kid`.
+- Every `session.create` is a `security` audit event carrying the BFF `kid` and request id.
+- Bursts of logins are alertable (M8).
+
+Verifying the OAuth code exchange in Go is a possible post-1.0 hardening.
 
 | Proposed op | Auth | Purpose |
 |---|---|---|
@@ -92,7 +117,7 @@ Acceptable: per-tab, cleared on submit success and on logout. Payloads must not 
 submit as the user. Do **not** use `localStorage`.
 
 ## Consequences
-- The BFF signing key is the main impersonation risk. Go's DB re-check of `sid`/user/role bounds what a
-  stolen key can do to allowlisted users with live sessions.
+- The BFF signing key is the main impersonation risk. With it an attacker can impersonate any allowlisted
+  user (via `POST /api/v1/sessions`). The `sid`↔`sub` binding only stops cross-user reuse of existing sessions.
 - Per-request DB session checks cost about one indexed lookup per API call. That is acceptable at 1.0 scale
   and should be re-measured in the AC-19 benchmark.

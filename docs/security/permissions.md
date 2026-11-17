@@ -8,7 +8,7 @@ Enforced in Go on **every** request (direct API and BFF alike). The BFF/UI may h
 | Principal | How authenticated | Role source |
 |---|---|---|
 | Human via BFF | Service assertion (ADR-0005) + DB re-check of user/session | `users.role` (DB wins over assertion) |
-| Direct API token | `cxt_` bearer, SHA-256 lookup | `api_tokens.role` ∩ `api_tokens.scopes` |
+| Direct API token | `cxt_` bearer, SHA-256 lookup | `api_tokens.scopes` ∩ owner's **current** `users.role` (view `api_token_authority`); owner disabled ⇒ 401 `user_disabled` (RV01-02) |
 | Worker | `cxw_` bearer on gRPC only | worker credential; **no REST access** |
 | BFF at login | login assertion (`purpose=login`, `sub=github:<id>`, no `sid`) | valid only for `POST /api/v1/sessions` (ADR-0006 §5) |
 | Metrics scraper | static scrape token, internal listener | `/metrics` only |

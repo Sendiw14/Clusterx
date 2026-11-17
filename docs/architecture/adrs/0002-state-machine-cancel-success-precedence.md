@@ -14,11 +14,15 @@
 3. **Commit order decides cancel vs success.** Both statements target the same `jobs` row:
    - Cancel request (running): `SET cancel_requested_at = now() WHERE status='running' AND cancel_requested_at IS NULL`.
    - Success: `SET status='succeeded' WHERE status='running' AND cancel_requested_at IS NULL AND <fence>`.
-   The second writer blocks on the row lock; after the first commits, PostgreSQL re-evaluates the
-   second statement's WHERE against the new row version, which no longer matches ⇒ 0 rows.
+   Every writer first takes the job row lock (`SELECT … FOR UPDATE`; worker reports take the worker and
+   credential share locks before it, ADR-0003), then runs the CAS against the committed row. The second
+   writer therefore sees the first one's result and its CAS matches 0 rows. (Amended TASK-M1-BE-04: relying
+   on EPQ re-check alone is insufficient, because a waiter whose locker did not modify the row is not re-checked.)
    - **Cancel committed first ⇒ success denied.** The success call instead finalizes the job as
      `canceled` (attempt `canceled`) in the same transaction — the worker has stopped, so this is the
-     cancellation acknowledgment. Reply reason `cancel_requested`.
+     cancellation acknowledgment. **Canonical reply (RV01-03): OK with `OUTCOME_CANCELED`**, and the
+     `canceled` event carries `data.worker_reported = "success"` (no result content) so operators can see
+     the handler finished (RV01-08). `cancel_requested` is not an error reason for reports.
    - **Success committed first ⇒ cancel is a no-op conflict**: REST 409 `job_terminal`
      (`details.status='succeeded'`). Success is never rolled back.
    - Cancel on `canceled` is an idempotent 200; on `failed` is 409.
@@ -32,8 +36,11 @@
 6. **Manual retry** (failed only) inserts a new job with `retried_from_job_id`, fresh budget, its own
    idempotency scope; parent untouched. Partial unique index allows one child per parent; the
    `Idempotency-Key` (namespace `manual-retry:<parent>`) makes the call replay-safe; audited.
-7. Late/duplicate worker reports: same-attempt duplicate of the committed outcome ⇒ idempotent OK
-   (`already_final`); anything else ⇒ denied + bounded diagnostic audit row; no job/event change.
+7. Late/duplicate worker reports: a retry from the **same attempt, worker and incarnation** of the
+   committed outcome ⇒ OK with the **same** outcome and `already_final=true`. This applies to
+   `OUTCOME_SUCCEEDED` (only if the result hash matches, else `result_mismatch`) and to `OUTCOME_CANCELED`.
+   A report naming another worker's attempt ⇒ `stale_attempt`. Anything else ⇒ denied with a bounded
+   audit row (`diagnostic` for late reports, `security` for identity problems) and no job/event change.
 
 ## Consequences
 - A handler may have produced side effects even when its success is denied (at-least-once; §16).

@@ -29,16 +29,35 @@ the worker receives `lease_expires_at` and a relative `lease_ttl` and must use t
   `running ⇔ current_attempt_id/lease_expires_at/hard_deadline_at NOT NULL`.
 
 ### Fence (applies to RenewLease, ReportSuccess, ReportFailure, PollCancellation)
-attempt id + lease generation match `jobs` · job `running` · `lease_expires_at > now()` ·
-`hard_deadline_at > now()` · attempt `active` and owned by (`worker_id`, `incarnation_id`) ·
+attempt id + lease generation match `jobs` · job `running` · `lease_expires_at > clock_timestamp()` ·
+`hard_deadline_at > clock_timestamp()` · attempt `active` and owned by (`worker_id`, `incarnation_id`) ·
 `workers.current_incarnation_id = incarnation_id`, worker not deregistered · credential not revoked/expired.
-Evaluated **inside the CAS statement**, not by a prior SELECT. Revocation committed before the
-statement starts is always observed (READ COMMITTED statement snapshot); **revocation bound = 0
-for new mutations**; an in-flight statement that began before the revoke commit may still succeed.
-Credential lookups are not cached for mutations.
+
+**Locking and time (amended TASK-M1-BE-04, RV01-04).** Each worker mutation transaction first locks the
+`workers` + `worker_credentials` rows `FOR SHARE`, then the `jobs` row `FOR UPDATE`, then runs the CAS. The
+fence reads `clock_timestamp()`, i.e. after any lock wait.
+- **Revocation bound (exact):** a revocation, re-registration or deregistration is a non-key UPDATE on the
+  worker or credential row and conflicts with the share lock. Either it committed before the mutation took
+  the share lock, and the fence sees it (denied), or it waits until the mutation commits. A mutation that
+  commits *after* a revocation commit is therefore always denied. Revocation is linearized with reports;
+  the only window is a mutation already holding the share lock, which is bounded by that transaction's
+  `lock_timeout` + `statement_timeout`. M2 sets `SET LOCAL lock_timeout = '1s'` on worker-mutation
+  transactions (`statement_timeout` 5 s, ADR-0001); the PoC does not set it yet.
+- **Deadline bound (exact):** lease and deadline are compared with the clock after the job row lock is
+  held. A report that waited for the lock is judged at the time it got the lock, not at transaction start.
+  Locking first is required: PostgreSQL does not re-check a waiter's WHERE when the lock holder committed
+  without modifying the row (observed in `TestRV0104_DeadlineJudgedAtRecheckNotTxStart`; mutants
+  M-joblock and M-clock are killed by it).
+- Cost: the share lock briefly blocks heartbeats (`UPDATE workers`) of the same worker during a report
+  (single-row, milliseconds).
+- `lease_expires_at <= hard_deadline_at` is a CHECK. The deadline clause in the fence is defense in depth
+  (mutant M4 is equivalent unless that CHECK is also removed).
+- Credential lookups are not cached for mutations.
 
 ### Recovery
-Scheduler selects `running` rows with `lease_expires_at <= now() OR hard_deadline_at <= now()`
+Scheduler selects `running` rows with `lease_expires_at <= now() OR hard_deadline_at <= now()` (its own
+short transaction's `now()`; a report may see expiry a few ms before recovery does and is then denied,
+recovery finalizes on the next tick, covered by `TestAC03_StaleReportVsRecoveryConcurrent`)
 (`FOR UPDATE SKIP LOCKED`), marks the attempt `lease_expired`/`deadline_exceeded`, then
 `canceled` (if cancel requested) / `retry_wait` (budget left) / `failed` (`attempts_exhausted`).
 No job remains `running` longer than `min(lease_ttl after last renewal, hard deadline) + one scheduler tick`.
