@@ -22,6 +22,7 @@
 | OpenAPI parses as YAML | `python3 -c 'import yaml; d=yaml.safe_load(open("api/openapi.yaml")); …'` (PyYAML 6.0.3) → `yaml ok; paths: 15 ops: 16` | 0 | **PASS** |
 | OpenAPI `$ref`s resolve + every `/api/v1` op has 401/403/429/503 | inline python3 script over the parsed YAML → `refs 35 unresolved []`, no missing codes | 0 | **PASS** |
 | OpenAPI full schema validation | — (no `openapi-spec-validator`/redocly installed) | — | **NOT RUN** |
+| OpenAPI lint (follow-up, BE-02) | `npx --yes @redocly/cli@2.79.0 lint api/openapi.yaml` | 0 | **PASS** after fixing 8 struct errors that the PyYAML parse missed (comma-split flow descriptions). See HANDOFF-M1-BE-02. |
 | DDL applies on PG18 | `psql -h localhost -p 55432 -U clusterx -d ddlcheck -v ON_ERROR_STOP=1 --single-transaction -q -f apps/control-plane/migrations/0001_init.sql` (PostgreSQL 18.7 Homebrew) | 0 | **PASS** on the first apply, no edits needed |
 | Module | `go mod tidy` (go1.27.4 darwin/arm64) | 0 | go.sum committed `08f30ab` |
 | Vet | `go vet ./...` | 0 | **PASS** |
