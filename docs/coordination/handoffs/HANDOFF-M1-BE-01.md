@@ -8,10 +8,11 @@
   - `b7953b5` docs(security): permissions matrix, trust boundaries, architecture overview
   - `d713679` feat(db): draft migration 0001 with lifecycle constraints and indexes (unvalidated)
   - `ad9df49` test(poc): race PoC for AC-02/03/06 against PostgreSQL 18 (not yet run)
-  - plus the commit that adds this handoff
+  - `5182019` docs(handoff): HANDOFF-M1-BE-01
+  - follow-up: `08f30ab` go.sum, `060383f` claim EXPLAIN evidence, plus this handoff update
   - Files: `docs/architecture/adrs/000{1..5}-*.md`, `docs/architecture/{state-machine,overview,api-contracts}.md`, `docs/security/{permissions,trust-boundaries}.md`, `apps/control-plane/{go.mod,migrations/0001_init.sql,poc/README.md,poc/store.go,poc/store_test.go}`, `packages/proto/clusterx/worker/v1/worker.proto`, `api/openapi.yaml` (temporary ownership transfer), this file. Nothing outside the allowed paths.
 - **Contract SHA, generated code, migration impact:** source contract = master R2 @ `5a5ca99`. No generated code. Migration 0001 is the initial schema (no existing data).
-- **Implemented/Integrated:** all 7 deliverables are written (specified/proposed). Nothing is integrated. The PoC is written but **has not been compiled or run**.
+- **Implemented/Integrated:** all 7 deliverables are written. The PoC passes under `-race` on PG 18.7 (follow-up 2026-11-17, commits `08f30ab`, `060383f`). Nothing is integrated.
 
 ## Commands, exit codes, results
 
@@ -21,26 +22,24 @@
 | OpenAPI parses as YAML | `python3 -c 'import yaml; d=yaml.safe_load(open("api/openapi.yaml")); …'` (PyYAML 6.0.3) → `yaml ok; paths: 15 ops: 16` | 0 | **PASS** |
 | OpenAPI `$ref`s resolve + every `/api/v1` op has 401/403/429/503 | inline python3 script over the parsed YAML → `refs 35 unresolved []`, no missing codes | 0 | **PASS** |
 | OpenAPI full schema validation | — (no `openapi-spec-validator`/redocly installed) | — | **NOT RUN** |
-| DDL applies on PG18 | `psql -v ON_ERROR_STOP=1 --single-transaction -f apps/control-plane/migrations/0001_init.sql` | — | **NOT RUN**: PostgreSQL 18 was not installed |
-| PoC `go test -race` | `CLUSTERX_PG_ADMIN_DSN=… go test -race -count=1 -v ./poc/` in `apps/control-plane` | — | **NOT RUN**: Go was not installed; `go.sum` not generated |
+| DDL applies on PG18 | `psql -h localhost -p 55432 -U clusterx -d ddlcheck -v ON_ERROR_STOP=1 --single-transaction -q -f apps/control-plane/migrations/0001_init.sql` (PostgreSQL 18.7 Homebrew) | 0 | **PASS** on the first apply, no edits needed |
+| Module | `go mod tidy` (go1.27.4 darwin/arm64) | 0 | go.sum committed `08f30ab` |
+| Vet | `go vet ./...` | 0 | **PASS** |
+| PoC race | `CLUSTERX_PG_ADMIN_DSN='postgres://clusterx@localhost:55432/postgres?sslmode=disable' go test -race -count=1 ./poc/...` | 0 | **PASS**: `ok github.com/Sendiw14/Clusterx/apps/control-plane/poc 2.920s` |
+| PoC race ×3, verbose | same with `-count=3 -v` | 0 | **PASS**: all 8 tests passed in each of 3 runs; `ok … 4.472s`; no SKIP lines |
+| AC-06 orderings | from the `-v` log | — | run 1 `cancel-first:96 success-first:4`; runs 2–3 `cancel-first:98 success-first:2`. Both orders were exercised. |
+| Mutation check | removed `AND j.cancel_requested_at IS NULL` from the success CAS, ran `-run TestAC06` | 1 | **FAIL as expected**: `TestAC06_CancelThenSuccess` and `TestAC06_ConcurrentCancelVsSuccess` failed, and the DB CHECK `jobs_check7` also rejected the write. Restored with `git checkout`. |
+| Claim EXPLAIN | `EXPLAIN (ANALYZE, BUFFERS, VERBOSE, SETTINGS)` on 100k seeded jobs | 0 | `docs/architecture/evidence/claim-explain.txt`: 6.6 ms. It sorts all eligible queued rows instead of walking the index top-N (finding recorded; follow-up in M4) |
 
-Toolchain status: polled every 60 s for 15 min (19:51–20:06 +0530). At 20:06 the `postgresql@18` 18.7 bottle had downloaded but `/opt/homebrew/opt/postgresql@18/bin/pg_ctl` did not exist. The Go 1.27.4 bottle was still downloading (about 32 MB). No throwaway cluster was created or started.
+History: the first pass ended with DDL and PoC **NOT RUN** because the toolchain was still installing. The integrator then installed it, and the rows above are from the follow-up run.
 
-**To finish the acceptance checks (next owner, once brew finishes):**
-```
-SP=/private/tmp/claude-501/-Users-sendiwkithnada-Documents-Clusterx/972024f7-8f0d-4184-982f-9b74a395640b/scratchpad
-PGB=/opt/homebrew/opt/postgresql@18/bin
-$PGB/initdb -D $SP/pg18data -U clusterx --auth=trust
-$PGB/pg_ctl -D $SP/pg18data -o "-p 55432 -k $SP -c listen_addresses=localhost" -l $SP/pg18.log start
-$PGB/createdb -h $SP -p 55432 -U clusterx ddlcheck
-$PGB/psql -h $SP -p 55432 -U clusterx -d ddlcheck -v ON_ERROR_STOP=1 --single-transaction -f apps/control-plane/migrations/0001_init.sql
-cd apps/control-plane && go mod tidy && go vet ./... && \
-  CLUSTERX_PG_ADMIN_DSN="postgres://clusterx@localhost:55432/postgres?host=$SP" go test -race -count=1 -v ./poc/
-$PGB/pg_ctl -D $SP/pg18data stop
-```
-Expect first-run fixes. The code has never been compiled. Likely spots: pgx `time.Duration`→`interval` encoding, and `uuid`→`string` scanning.
+Cluster: `initdb -D <scratchpad>/pg18data -U clusterx --auth=trust`, then `pg_ctl … -o "-p 55432 -k '' -c listen_addresses=localhost"`. There were two deviations from the brief:
+1. **No Unix socket.** The scratchpad path is longer than the 103-byte socket path limit (`FATAL: could not create any Unix-domain sockets`), so the cluster used TCP on localhost only (`-k ''`).
+2. **`LC_ALL=en_US.UTF-8` was required.** Without it the server stopped at startup with `FATAL: postmaster became multithreaded during startup`.
 
-## PoC coverage (written, not run)
+The cluster was stopped at the end of TASK-M1-BE-02 (see that handoff).
+
+## PoC coverage (passing)
 - AC-02: `TestAC02_ConcurrentClaimantsSingleJob` runs 25 claimants × 20 rounds and expects exactly 1 lease. `TestAC02_ConcurrentClaimantsManyJobs` runs 20 claimants on 200 jobs and expects each job leased once. `TestAC02_FailpointsLeaveNoPartialWrites` injects failpoints at `claim.after_attempt_insert`, `claim.after_job_update`, `admit.after_job_insert` and `report.before_event`. `TestAC02_SchemaRejectsSecondActiveAttempt` checks the DB guard.
 - AC-03: `TestAC03_StaleSuccessRejectedAfterExpiryAndReclaim` covers A expiring, B reclaiming at generation 2 and succeeding, then A rejected (`lease_expired`, then `job_terminal`). It also checks that B's result is kept, the attempts are `1:lease_expired,2:succeeded`, the event sequence, 2 diagnostic audit rows, and that the DB refuses an UPDATE of the terminal row.
 - AC-06: `TestAC06_CancelThenSuccess` and `TestAC06_SuccessThenCancel` test each fixed order. `TestAC06_ConcurrentCancelVsSuccess` runs 100 racing iterations and expects exactly one terminal outcome and one terminal event each time.
@@ -51,14 +50,14 @@ Expect first-run fixes. The code has never been compiled. Likely spots: pgx `tim
 - READ COMMITTED re-check semantics are load-bearing for cancel vs success (ADR-0002).
 
 ## Known limits, defects, deferred scope
-1. DDL, PoC and full OpenAPI validation are **NOT RUN**, so the AC-02/03/06 gates for M1 are **open**.
+1. Full OpenAPI validation was NOT RUN in BE-01; see BE-02. The PoC proves the SQL patterns only, not the M2 service.
 2. The PoC leaves out RenewLease, ReportFailure, drain, idempotent admission and manual retry. M2 must implement these from `state-machine.md`.
 3. ADR-0004 retention for `log_tail` needs an exception to the finished-attempt trigger. It is deferred to M5 and not in 0001.
 4. Unschedulable reasons are derived at read time, so there are no columns for them. Saturation is deliberately not counted as unschedulable.
 5. The 1.0 limit of one manual-retry child per failed job is enforced by a unique index. Retrying the child again creates a chain.
 6. Timing values in ADR-0003 are proposals until the pilot (OD-06).
-7. `go.mod` pins `pgx/v5 v5.7.5` by hand and has no `go.sum`.
-8. `EXPLAIN (ANALYZE, BUFFERS)` index evidence: NOT RUN (needs seeded data).
+7. pgx v5.7.5 was pinned by hand and confirmed by `go mod tidy`.
+8. The claim query sorts all eligible queued rows: 6.6 ms at 20k queued (`claim-explain.txt`). Optimization is deferred to M4.
 
 ## Open questions
 **For the frontend consumer (TASK-M1-FE-02 sign-off):**
@@ -82,7 +81,7 @@ Expect first-run fixes. The code has never been compiled. Likely spots: pgx `tim
 **For the integrator:** freeze `api/openapi.yaml` at M1 exit and decide on the four open contract items.
 
 ## Next owner / merge step
-Integrator: finish the NOT RUN checks above, then pass to TASK-M1-RV-01 for review and TASK-M1-FE-02 for sign-off. Do not merge to main until the PoC passes under `-race` on PG18.
+Integrator: pass to TASK-M1-RV-01 for review and TASK-M1-FE-02 for sign-off. The PoC passes.
 
 ## Requirement / gate disposition
-FR-ENG-01..24, FR-API-01..04, FR-SEC-01..05, FR-SEC-11 and FR-RT-01 are **specified**. AC-02, AC-03 and AC-06 have tests **written but not run**. MW-01 is ok: single owner, allowed paths only. MW-04 is partial: effort and Ultracode are unverified.
+FR-ENG-01..24, FR-API-01..04, FR-SEC-01..05, FR-SEC-11 and FR-RT-01 are **specified**. AC-02, AC-03 and AC-06 are **tested at PoC level** (passing under `-race` against PG 18.7 on a dev laptop; not in CI yet). MW-01 is ok: single owner, allowed paths only. MW-04 is partial: effort and Ultracode are unverified.
