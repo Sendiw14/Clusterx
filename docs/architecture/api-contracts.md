@@ -4,7 +4,7 @@ Status: **specified**, not frozen. Integrator freezes at M1 exit (§1.3 step 3).
 
 | Contract | Path | Version | Validation run in M1 |
 |---|---|---|---|
-| REST | `api/openapi.yaml` | OpenAPI 3.1.1, API `1.0.0-draft.1` | YAML parse + `$ref` resolution (python3 PyYAML); **full OpenAPI schema validation NOT RUN** (no validator installed) |
+| REST | `api/openapi.yaml` | OpenAPI 3.1.1, API `1.0.0-draft.2` | PyYAML parse + `$ref` check; `npx @redocly/cli@2.79.0 lint` → valid, 0 errors, 5 intended warnings (TASK-M1-BE-02) |
 | gRPC | `packages/proto/clusterx/worker/v1/worker.proto` | package `v1`, protocol_version 1 | `protoc --descriptor_set_out=/dev/null` |
 | SQL | `apps/control-plane/migrations/0001_init.sql` | 0001 | `psql -v ON_ERROR_STOP=1 --single-transaction` on PG 18 |
 | State table | `docs/architecture/state-machine.md` | M1 | PoC tests for AC-02/03/06 |
@@ -19,9 +19,10 @@ Status: **specified**, not frozen. Integrator freezes at M1 exit (§1.3 step 3).
 - Masking: viewer sees `null` + `masked_fields` (see docs/security/permissions.md).
 - Idempotency: `Idempotency-Key` on `POST /jobs` and `POST /jobs/{id}/retry` (ADR-0004).
 
-## Open contract items (need integrator/owner decision; NOT invented as endpoints)
-1. Token issuance/revocation and worker-credential issuance endpoints — required by §8 `/app/settings/tokens`
-   and §7, but not in the §6 operation list.
-2. WebSocket endpoint path/handshake — §6 requires the channel but names no path.
-3. BFF login/session endpoints live in Next.js (frontend lane under Opus auth contract).
-4. Handler registry listing for `/app/jobs/new` (allowlisted handler select + schema) — not in §6 list.
+## Contract items resolved by integrator (CCR-M1-decisions.md, implemented in draft.2)
+CCR-01 tokens + worker credentials · CCR-02 `GET /handlers` · CCR-03 `GET /stream` · CCR-04 `GET /config` ·
+CCR-07 attempt log flags · CCR-09 → ADR-0006. Deferred: CCR-05/06 (M6; interim `/audit?subject_type=&subject_id=`), CCR-08 (M8).
+
+## Still open
+- **CCR-10 (proposed in ADR-0006, not in OpenAPI):** BFF↔Go session lifecycle (login exchange, logout, `me`).
+  Go owns `users`/`sessions`, so the BFF needs a way to create/revoke sessions and read the effective role.

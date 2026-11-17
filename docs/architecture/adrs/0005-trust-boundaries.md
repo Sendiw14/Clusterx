@@ -20,17 +20,17 @@
    256-bit random secret) and looks up `api_tokens`; checks revoked/expired, role and scopes
    (`jobs:read`, `jobs:write`, `workers:read`, `workers:write`, `metrics:read`, `audit:read`).
    Effective permission = role ∩ scopes. `last_used_at` updated asynchronously. Token issuance/revocation
-   is an operator console action via the BFF (endpoints are an open contract item — not in §6 list).
+   is an operator console action via the BFF (`/api/v1/tokens`, CCR-01); API tokens can never manage tokens.
 4. **Workers → Go (gRPC)**: TLS when non-loopback; metadata `authorization: Bearer cxw_<prefix>_<secret>`
    checked against `worker_credentials` on **every** RPC (no cache for Claim/Renew/Report). Credential
    bound to the worker row at Register; `worker_id`+`incarnation_id` in each request must match the
    bound worker. Workers have no DB access and no REST access.
 5. **Demo isolation**: `/demo` uses bundled fixtures only; the demo build has no control-plane base URL
    or credentials configured; enforced by a network-isolation test (AC-14). No demo login bypass.
-6. **WebSocket** `/api/v1/stream` (proposed, not in §6 list — open contract item): upgrade requires a
-   fresh service assertion (via BFF) and allowed `Origin`; server closes the socket at assertion/session
-   expiry and on logout (session revoked check every ≤ 30 s). Messages are hints `{type, job_id, version}`
-   only; clients reconcile via HTTP.
+6. **WebSocket** `/api/v1/stream` (CCR-03): the browser connects to the BFF (Origin allowlist + session
+   cookie there); the BFF opens the upstream socket with a fresh service assertion. Go re-checks the session
+   every ≤ 30 s and closes 4401 at expiry/logout. Messages are hints `{type, entity, id, version}`; clients
+   reconcile via HTTP. Details: ADR-0006.
 7. Every REST operation is authorized in Go (role, scope, object, field); see permissions matrix.
    Privileged actions append `audit_events` (`category='privileged'`).
 

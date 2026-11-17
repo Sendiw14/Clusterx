@@ -36,9 +36,18 @@ A viewer token can only hold `*:read` scopes (issuance rejects otherwise).
 | `GET /api/v1/audit` | ✓ (all categories) | ✓ `privileged` only, `details` masked | `audit:read` | ✗ 401 | no |
 | `GET /health/live`, `/health/ready` | ✓ | ✓ | none | ✓ (status only) | no |
 | `GET /metrics` | scrape token only | ✗ | — | ✗ 401 | no |
-| Token issue/revoke/rotate *(open contract item)* | ✓ | ✗ 403 | none (session only, never via token) | ✗ | **yes** |
-| Worker credential issue/revoke/rotate *(open contract item)* | ✓ | ✗ 403 | none (session only) | ✗ | **yes** |
-| WebSocket `/api/v1/stream` *(open contract item)* | ✓ | ✓ (hints carry no sensitive fields) | `jobs:read` | ✗ | no |
+| `GET /api/v1/tokens` | ✓ | ✗ 403 | **none** (BFF session only; any API token ⇒ 403) | ✗ 401 | no |
+| `POST /api/v1/tokens` | ✓ | ✗ 403 | **none** (session only) | ✗ 401 | **yes** `token.create` |
+| `POST /api/v1/tokens/{id}/revoke` | ✓ | ✗ 403 | **none** (session only) | ✗ 401 | **yes** `token.revoke` |
+| `GET /api/v1/worker-credentials` | ✓ | ✗ 403 | **none** (session only) | ✗ 401 | no |
+| `POST /api/v1/worker-credentials` | ✓ | ✗ 403 | **none** (session only) | ✗ 401 | **yes** `worker_credential.create` |
+| `POST /api/v1/worker-credentials/{id}/revoke` | ✓ | ✗ 403 | **none** (session only) | ✗ 401 | **yes** `worker_credential.revoke` |
+| `GET /api/v1/handlers` | ✓ | ✓ | `jobs:read` | ✗ 401 | no |
+| `GET /api/v1/config` | ✓ | ✓ | any read scope | ✗ 401 | no |
+| `GET /api/v1/stream` (WebSocket, via BFF) | ✓ | ✓ (hints carry ids/versions only) | `jobs:read` | ✗ 401 | no |
+
+Token/credential management is deliberately unavailable to API tokens, so a leaked token cannot mint
+or revoke credentials. Rotation = create + revoke (CCR-01).
 
 Denied mutations append `audit_events` (`category='security'`, `outcome='denied'`). Rule: 401 when the
 principal is not established; 403 when established but not permitted. Object-level: single
@@ -60,6 +69,10 @@ Masked fields are returned as `null` and named in `masked_fields`. Never partial
 | Worker | credential id/prefix/hash | never via these routes | never |
 | Audit | `details` | ✓ | masked |
 | Audit | `security`/`diagnostic` rows | ✓ | not returned |
+| Audit | `actor` | ✓ | ✓ principal ref only (OQ-03 proposal — **needs owner nod**) |
+| API token / worker credential | `secret` | **once**, in the 201 create response only (`Cache-Control: no-store`) | never |
+| API token / worker credential | hash | never | never |
+| Attempt | `log_truncated`, `log_expired` | ✓ | ✓ (flags only) |
 | Any | secret hashes, session ids, tokens | **never returned to anyone** | never |
 
 ## Worker (gRPC) permissions

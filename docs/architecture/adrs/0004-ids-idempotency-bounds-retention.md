@@ -12,10 +12,11 @@ opaque to clients; ordering for pagination uses `(created_at, id)` explicitly, n
 - Scope: (`principal`, `namespace`, `key`) where principal = `user:<uuid>` or `token:<uuid>`.
 - Fingerprint: SHA-256 over RFC 8785 (JCS) canonical JSON of {namespace, handler_name, handler_version,
   payload, priority, run_after (UTC RFC 3339 or null), max_attempts, timeout_seconds}.
+- Replay signal: HTTP 200 + header `Idempotent-Replayed: true` (first create 201) — CCR-M1.
 - Retention: 24 h (`expires_at`). Concurrency: inserted in the **same transaction** as the job with
   `INSERT ... ON CONFLICT (principal, namespace, idem_key) DO UPDATE ... WHERE expires_at <= now()`;
   on 0 rows the transaction rolls back and the existing row is read:
-  same fingerprint ⇒ 200 + original job (header `Idempotency-Replayed: true`);
+  same fingerprint ⇒ 200 + original job (header `Idempotent-Replayed: true`);
   different ⇒ 409 `idempotency_conflict` (details: `job_id` of the original).
   A concurrent identical submission blocks on the unique index until the first commits, then replays.
 - Expired keys may be reused; cleanup deletes expired rows hourly.
@@ -51,8 +52,9 @@ Terminal immutability forbids UPDATE, not DELETE. Retention is a separate lifecy
 | audit_events | 90 d | batch delete |
 | idempotency | 24 h | batch delete |
 | sessions | expiry + 7 d | batch delete |
-Deleted jobs answer 404 `job_not_found`; the UI shows "data expired" when a referenced ID 404s and
-its known `terminal_at` is older than retention. Figures are not legal advice (§6). Backups: 14 d.
+Retention writes `job_tombstones(job_id, terminal_at, expired_at)` in the same transaction as the DELETE;
+tombstoned IDs answer **410 `expired`** (CCR-M1), unknown IDs 404. Tombstones are kept 90 d, after which
+the ID answers 404. Figures are not legal advice (§6). Backups: 14 d.
 The log-retention exception function is **not** in migration 0001 (M5, FR-ENG-23).
 
 ## Migrations
