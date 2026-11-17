@@ -3,7 +3,7 @@ openapi: 3.1.1
 # 3.1.x chosen per assumption A-03 until 3.2.1 generator compatibility is proven (M3).
 info:
   title: CLUSTERX Control Plane API
-  version: 1.0.0-draft.2
+  version: 1.0.0-draft.3
   summary: REST API of the CLUSTERX coordinator (/api/v1).
   description: |
     Source contract: docs/product/MASTER_PROMPT.md R2 §6. State semantics: docs/architecture/state-machine.md.
@@ -23,6 +23,7 @@ info:
     * Mutation responses return the post-state resource; 409 `details` always carry the current
       `{status, version}` so the UI can reconcile without another read.
     * draft.2 (TASK-M1-BE-02) implements docs/coordination/CCR-M1-decisions.md: CCR-01/02/03/04/07, field additions.
+    * draft.3 (TASK-M1-BE-03) adds the BFF session lifecycle (CCR-10, ADR-0006 §5): /api/v1/sessions, /api/v1/me.
 servers:
   - url: http://localhost:8080
     description: Local development coordinator
@@ -34,6 +35,7 @@ tags:
   - { name: workers, description: 'Worker inventory and drain.' }
   - { name: metrics, description: 'DB-derived counts and series; effective configuration.' }
   - { name: audit, description: 'Privileged, security and diagnostic events.' }
+  - { name: sessions, description: 'BFF-only human session lifecycle (CCR-10, ADR-0006).' }
   - { name: credentials, description: 'API tokens and worker credentials (operator session only).' }
   - { name: realtime, description: 'Best-effort WebSocket hints; snapshots are authoritative.' }
   - { name: health, description: 'Liveness, readiness and Prometheus metrics.' }
@@ -480,6 +482,92 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '503': { $ref: '#/components/responses/Unavailable' }
 
+  /api/v1/sessions:
+    post:
+      tags: [sessions]
+      operationId: createSession
+      summary: Create a human session after the BFF completed GitHub OAuth (BFF only). Audited (session.create, category security).
+      description: |
+        Authenticated **only** by a BFF login assertion (`bffLoginAssertion`): `sub=github:<numeric user id>`,
+        `purpose=login`, no `sid`, `exp <= iat+60s`, single-use `jti`. Go checks the numeric GitHub id
+        against the `users` allowlist, creates a `sessions` row storing only SHA-256 of a fresh 256-bit
+        secret, and returns the secret **once** for the BFF to place in the `__Host-clusterx_session` cookie.
+        Any other credential (API token, normal service assertion) ⇒ 403 `forbidden`, `details.reason=credential_not_allowed`.
+        Not allowlisted or disabled ⇒ 403 with `details.reason` `not_allowlisted` | `user_disabled` (identity proven, no entitlement).
+      security: [ { bffLoginAssertion: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SessionCreate' }
+            example: { github_login: octo-operator }
+      responses:
+        '201':
+          description: Session created. Cache-Control no-store. The secret is never returned again.
+          headers:
+            Cache-Control: { schema: { type: string, enum: [no-store] } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionCreated' }
+              example:
+                session_id: 0193a0f2-9000-7000-8000-0000000000e1
+                secret: 'cxs_q3Jk…(43 chars base64url)'
+                user: { id: 0193a0f2-0000-7000-8000-000000000001, github_login: octo-operator }
+                role: operator
+                expires_at: '2026-11-17T22:00:00Z'
+                idle_timeout_seconds: 7200
+                idle_expires_at: '2026-11-17T12:00:00Z'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403':
+          description: Identity proven but no entitlement, or wrong credential type for this operation.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                notAllowlisted:
+                  value: { code: forbidden, message: "This GitHub account is not allowed to sign in.", details: { reason: not_allowlisted }, request_id: "req_01JD60" }
+                apiToken:
+                  value: { code: forbidden, message: "Sessions cannot be managed with an API token.", details: { reason: credential_not_allowed }, request_id: "req_01JD61" }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /api/v1/sessions/current:
+    delete:
+      tags: [sessions]
+      operationId: deleteCurrentSession
+      summary: Log out — revoke the session named by the assertion's `sid` (BFF only). Audited (session.revoke, category security).
+      description: |
+        Effective immediately: the next assertion carrying this `sid` gets 401 `session_revoked`, and open streams
+        close 4401 within <= 30 s. Already revoked/expired ⇒ 401 with that reason; the BFF treats both as logged out.
+        API tokens ⇒ 403 `credential_not_allowed`.
+      security: [ { serviceAssertion: [] } ]
+      responses:
+        '204': { description: Revoked. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /api/v1/me:
+    get:
+      tags: [sessions]
+      operationId: getMe
+      summary: Effective identity, role and session expiry for the assertion's `sid` (BFF only; any role). API tokens ⇒ 403.
+      description: The role is read from `users.role` (DB), never from the assertion's role hint. The BFF calls this for `/bff/session` and after any 403.
+      security: [ { serviceAssertion: [] } ]
+      responses:
+        '200':
+          description: Current identity.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
   /api/v1/tokens:
     get:
       tags: [credentials]
@@ -749,6 +837,11 @@ paths:
 
 components:
   securitySchemes:
+    bffLoginAssertion:
+      type: http
+      scheme: bearer
+      bearerFormat: JWS
+      description: 'BFF login assertion (ADR-0006 §5): sub=github:<id>, purpose=login, no sid, exp <= 60s, single-use jti. Valid only for POST /api/v1/sessions.'
     serviceAssertion:
       type: http
       scheme: bearer
@@ -1032,6 +1125,47 @@ components:
         details: { type: [object, 'null'], x-clusterx-sensitive: true }
         masked_fields: { type: array, items: { type: string, enum: [details] } }
 
+    SessionCreate:
+      type: object
+      required: [github_login]
+      additionalProperties: false
+      description: The GitHub numeric id comes from the signed assertion `sub`, never from the body.
+      properties:
+        github_login: { type: string, minLength: 1, maxLength: 39, description: Display name refreshed on each login. }
+    SessionUser:
+      type: object
+      required: [id, github_login]
+      properties:
+        id: { type: string, format: uuid }
+        github_login: { type: string }
+    SessionCreated:
+      type: object
+      required: [session_id, secret, user, role, expires_at, idle_timeout_seconds, idle_expires_at]
+      properties:
+        session_id: { type: string, format: uuid, description: Becomes the `sid` claim of later assertions. }
+        secret: { type: string, description: 'cxs_<base64url 256-bit>. Shown once; only its SHA-256 is stored.' }
+        user: { $ref: '#/components/schemas/SessionUser' }
+        role: { type: string, enum: [operator, viewer] }
+        expires_at: { type: string, format: date-time, description: Absolute expiry (sessions.expires_at). }
+        idle_timeout_seconds: { type: integer, example: 7200 }
+        idle_expires_at:
+          type: string
+          format: date-time
+          description: 'now + idle_timeout_seconds. draft.3: idle expiry is enforced by the BFF, which revokes the session; Go-side idle enforcement needs a sessions.last_activity_at column (deferred while DDL is under review).'
+    Me:
+      type: object
+      required: [user, role, session]
+      properties:
+        user: { $ref: '#/components/schemas/SessionUser' }
+        role: { type: string, enum: [operator, viewer] }
+        session:
+          type: object
+          required: [id, created_at, expires_at, idle_timeout_seconds]
+          properties:
+            id: { type: string, format: uuid }
+            created_at: { type: string, format: date-time }
+            expires_at: { type: string, format: date-time }
+            idle_timeout_seconds: { type: integer }
     ApiToken:
       type: object
       required: [id, name, role, scopes, prefix, owner_user_id, created_at]
@@ -1300,6 +1434,7 @@ components:
         session_expired | session_revoked | user_disabled ⇒ end the browser session (re-login);
         assertion_invalid | assertion_expired ⇒ BFF fault, retry once with a fresh assertion, else surface as 502 — never a login loop;
         token_invalid | token_revoked | token_expired ⇒ direct API token problem.
+        On POST /api/v1/sessions only assertion_invalid | assertion_expired can occur (there is no session yet).
       headers:
         WWW-Authenticate: { schema: { type: string } }
       content:
