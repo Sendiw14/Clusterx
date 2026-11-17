@@ -57,6 +57,9 @@ func TestAC09_ReportFenceDenials(t *testing.T) {
 		}},
 		{"hard deadline passed", "M4", "deadline_exceeded", time.Second, func(t *testing.T, l *Lease) {
 			time.Sleep(1100 * time.Millisecond)
+			// Try to keep the lease alive past the deadline. The CHECK lease_expires_at <= hard_deadline_at rejects
+			// this (so M4 alone is equivalent); without that CHECK only the fence's deadline clause stops the report.
+			_ = execErr(`UPDATE jobs SET lease_expires_at = hard_deadline_at + interval '1 minute' WHERE id = $1`, l.JobID)
 		}},
 	}
 	for _, c := range cases {
