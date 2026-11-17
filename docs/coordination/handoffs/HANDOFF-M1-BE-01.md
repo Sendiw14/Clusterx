@@ -65,7 +65,7 @@ The cluster was stopped at the end of TASK-M1-BE-02 (see that handoff).
 - Is the masking shape OK: `null` plus `masked_fields[]`?
 - Is a 31-day max and 7-day default window on the jobs list acceptable?
 - Can the job detail page reconcile using `version` + `GET /jobs/{id}/events?after_version=`?
-- The job-detail lineage field `retry_child_job_id` needs confirmation.
+- The job-detail lineage field (named `retry_child_job_id` in draft.1; renamed `retried_as_job_id` in draft.2 per CCR-M1) needs confirmation.
 - Unschedulable reasons are an enum of 3. Is that enough UI copy?
 - The §6 operation list has no endpoints for these. Which ones do you need (see `api-contracts.md` open items)?
   - Token issuance (`/app/settings/tokens`)

@@ -26,7 +26,7 @@ A viewer token can only hold `*:read` scopes (issuance rejects otherwise).
 | `GET /api/v1/jobs` | ✓ | ✓ (masked) | `jobs:read` | ✗ 401 | no |
 | `GET /api/v1/jobs/{id}` | ✓ | ✓ (masked) | `jobs:read` | ✗ 401 | no |
 | `GET /api/v1/jobs/{id}/attempts` | ✓ | ✓ (masked) | `jobs:read` | ✗ 401 | no |
-| `GET /api/v1/jobs/{id}/events` | ✓ | ✓ | `jobs:read` | ✗ 401 | no |
+| `GET /api/v1/jobs/{id}/events` | ✓ | ✓ (`data` is the closed `JobEventData` schema, so it has no maskable content; RV01-14) | `jobs:read` | ✗ 401 | no |
 | `POST /api/v1/jobs/{id}/cancel` | ✓ | ✗ 403 | `jobs:write` | ✗ 401 | **yes** `job.cancel` |
 | `POST /api/v1/jobs/{id}/retry` | ✓ | ✗ 403 | `jobs:write` | ✗ 401 | **yes** `job.manual_retry` |
 | `GET /api/v1/workers` | ✓ | ✓ (masked) | `workers:read` | ✗ 401 | no |
@@ -48,7 +48,7 @@ A viewer token can only hold `*:read` scopes (issuance rejects otherwise).
 | `POST /api/v1/worker-credentials/{id}/revoke` | ✓ | ✗ 403 | **none** (session only) | ✗ 401 | **yes** `worker_credential.revoke` |
 | `GET /api/v1/handlers` | ✓ | ✓ | `jobs:read` | ✗ 401 | no |
 | `GET /api/v1/config` | ✓ | ✓ | any read scope | ✗ 401 | no |
-| `GET /api/v1/stream` (WebSocket, via BFF) | ✓ | ✓ (hints carry ids/versions only) | `jobs:read` | ✗ 401 | no |
+| `GET /api/v1/stream` (WebSocket, via BFF) | ✓ | ✓ (hints carry ids/versions only) | `jobs:read` — token streams re-validated ≤ 30 s, close 4401/4403 (RV01-13) | ✗ 401 | no |
 
 Token/credential management is deliberately unavailable to API tokens, so a leaked token cannot mint
 or revoke credentials. Rotation = create + revoke (CCR-01).
