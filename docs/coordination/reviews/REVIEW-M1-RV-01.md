@@ -89,3 +89,135 @@ No P0 findings.
 ## Gate disposition
 
 M1 exit (§14 "core invariants review; working focused contention/timeout experiments"): **not met** until RV01-01..03 are fixed and re-reviewed. Core claim/cancel/stale-success invariants (AC-02, AC-03, AC-06) are demonstrated at PoC level against real PostgreSQL 18.7 under `-race` (C2). AC-07, AC-09, AC-13 evidence: NOT RUN / absent.
+
+## Round 2 (182566e)
+
+- Reviewer: critical-review role, model `claude-opus-5-5`, requested effort high (effective effort UNVERIFIED, MW-04). Not the author of BE-04 (MW-03). Read-only on all worktrees: `.worktrees/review` `git status --short` is empty after the review.
+- Target: detached `.worktrees/review` @ `182566e` (`m1/backend` after TASK-M1-BE-04, commits `b91fb60..182566e`).
+- Inputs: MASTER_PROMPT R2 §4–§7, §11, §14; round-1 text above; `TASK-M1-BE-04.md`; `HANDOFF-M1-BE-04.md` (including the author's mutant table); ADR-0002..0006; `state-machine.md`; `0001_init.sql`; `poc/{store.go,store_test.go,fence_test.go}`; `worker.proto`; `api/openapi.yaml` draft.4; `docs/security/{permissions,trust-boundaries}.md`.
+
+### Environment and commands
+
+`<sp>` = `/private/tmp/claude-501/-Users-sendiwkithnada-Documents-Clusterx/d0be9e8c-d590-4212-a424-878a0768bde1/scratchpad`
+
+| # | Command | Exit | Result |
+|---|---|---|---|
+| R1 | Fresh cluster: `initdb -D <sp>/pgrv -U clusterx --auth=trust`; `LC_ALL=en_US.UTF-8 pg_ctl … -o "-p 55434 -k '' -c listen_addresses=localhost" -w start` | 0 | PG 18.7 (Homebrew, aarch64), TCP only |
+| R2 | `cp -R .worktrees/review/apps/control-plane <sp>/rv01/r2` (fresh copy from `182566e`; the round-1 copies `cp`/`cp2` were not used) | 0 | — |
+| R3 | `go vet ./...` (copy) | 0 | PASS |
+| R4 | `CLUSTERX_PG_ADMIN_DSN=…55434… go test -race -count=3 -v ./poc/` (copy, unmodified) | 0 | PASS: 108 `--- PASS` lines (incl. subtests), 0 FAIL, 0 SKIP, `ok … 30.627s`. Random AC-06 tallies `cancel-first:99 success-first:1`, `cancel-first:100`, `cancel-first:100`. AC-03 boundary tallies `{denied-then-recovered:3 recovered:15 success:12}`, `{2,13,15}`, `{1,14,15}`. Log `<sp>/rv01/r2_baseline.txt` |
+| R5 | Mutants: `<sp>/rv01/mutate.sh` copies `r2` to `<sp>/rv01/r2mut/<name>`, applies one `perl -0pi` edit, verifies the file changed, runs `go test -count=1 ./poc/` | — | table below; outputs `<sp>/rv01/r2mut/*.out` |
+| R6 | Reviewer probes `<sp>/rv01/r2probe/poc/review2_test.go`: `go test -race -count=1 -v -run 'TestRV2_' ./poc/` | 0 | output quoted in findings; log `<sp>/rv01/r2_probes.txt` |
+| R7 | `pg_ctl -D <sp>/pgrv -m fast stop`; `lsof -iTCP:55434 -sTCP:LISTEN` | 0 | stopped, nothing listening. Server log: exactly 2 `deadlock detected`, both from the intentional hazard probes H1/H2 |
+
+Not re-run by me (integrator already confirmed at `182566e`, or out of scope): DDL apply with `psql --single-transaction` (the test harness applies `0001_init.sql` to a fresh DB in every run above, without error), redocly lint, protoc.
+
+### Per-item disposition
+
+| ID | Disposition | Evidence |
+|---|---|---|
+| RV01-01 | **CLOSED** | `TestAC09_ReportFenceDenials` has one case per clause. Each case asserts the denial code, an unchanged job/attempt/event snapshot and exactly one audit row. `TestAC09_ClaimDenials` covers revoked, expired, superseded, draining and deregistered. `TestE8_CancelRequestedThenLeaseExpiry` covers cancel on expiry. Re-run kills M1, M2, M3, M5 and M11, each in the subtest named for it (table below). M4: see the next row. |
+| RV01-01 / M4 | **ACCEPTED-DISPOSITION** (equivalent mutant) | While `running`, CHECK `(status='running') = (current_attempt_id, lease_expires_at, hard_deadline_at NOT NULL)` and CHECK `lease_expires_at <= hard_deadline_at` (0001 L159-163) hold. So `lease_expires_at > clock_timestamp()` implies `hard_deadline_at > clock_timestamp()`. The clause cannot be the only failing conjunct: M4 is equivalent, the same class as round-1 M6b/M13. The disposition is acceptable because the supporting CHECK is itself pinned: `M4+DCHECK` (fence clause and CHECK removed together) is killed by `TestAC09…/M4_hard_deadline_passed` (`want denied deadline_exceeded`) and by `TestSchemaGuards (h)`. Keep the clause as defense in depth. Condition: the CHECK and `TestSchemaGuards (h)` must not be removed without restoring a fence-only deadline test. |
+| RV01-02 | **CLOSED** (contract + DB view; request-path enforcement is M5) | View `api_token_authority` (0001 L409-420): role and scopes ∩ the owner's current role; `user_disabled`/`token_revoked`/`token_expired` status. ADR-0005 #3, permissions.md L11 and OpenAPI `ApiTokenCreate.role` all say the same thing. Mutant A-Dtokenview is killed (`viewer/jobs:write,jobs:read/ok, want viewer/jobs:read/ok`). Reviewer mutant N8 (drop the `user_disabled` branch) is also killed. `*:read` survival on demotion matches the viewer column of the route matrix, including `audit:read` (privileged rows only, masked). |
+| RV01-03 | **CLOSED** | One contract everywhere: OK `OUTCOME_CANCELED`; a same-attempt/worker/incarnation retry gets OK with the same outcome and `already_final=true`. Sources agree: ADR-0002 §3/§7, state-machine E5 and the denial table (`cancel_requested` is "never an error"), worker.proto L18-24/L157/L165, PoC `classify` L324-325, and `TestAC06_CancelThenSuccess` L374. No residual `FAILED_PRECONDITION cancel_requested` text in docs, api or packages (grep). Mutant A-Mreply is killed. |
+| RV01-04 | **CLOSED** | `lockForReport` (store.go L190-197) takes `FOR SHARE OF w, c`, then the job row `FOR UPDATE`; the fence uses `clock_timestamp()` (L179-183). ADR-0003 states the exact bound. Kills: A-Mlock (`timed out waiting for 2 lock waiters`), A-Mjoblock and A-Mclock (`report after deadline = <nil>, want deadline_exceeded`). Reviewer mutant N1 (lock only `w`, not `c`) is also killed by `TestRV0104_RevocationSerializesWithInFlightReport`. The author's observation that a waiter whose locker did not modify the row gets no EPQ re-check is correct, and it is why the job lock comes first. The PoC still has no `lock_timeout` (disclosed; M2). New risks from this fix: NF-01, NF-02. |
+| RV01-05 | **CLOSED** (residual NF-05) | Insert guard and update guard (0001 L309-350); Claim updates the job first. `TestSchemaGuards (a)(b)(c)`; author mutants D-attemptguard/D-jobguard. Reviewer mutant N9 (drop the `current_attempt_id = NEW.id` test in the insert guard) survives, but it is equivalent: `UNIQUE(job_id, attempt_number)` plus the deferred composite FK cover it. |
+| RV01-06 | **CLOSED** (residuals NF-03, NF-04) | Lineage may only be nulled (L296-299); attempts and events of a retained job cannot be deleted; young audit rows cannot be deleted. `TestSchemaGuards (d)(e)(f)(g)` plus a legitimate retention delete. Re-run A-Dhistdel is killed (`(e) events of retained job deleted: accepted`). Probe `TestRV2_Retention (1)`: a terminal parent and its terminal child deleted in one statement, with tombstones → `err=<nil>`; the cascade passes the history guard. |
+| RV01-07 | **CLOSED** | `classify` (L316-323) checks the attempt's worker and incarnation and compares `result_sha256`. Re-run A-Mdupowner is killed (`other worker = {succeeded true}, <nil>; want stale_attempt`). Gap: NF-06 (N6). |
+| RV01-08 | **CLOSED** | The `canceled` event gets `data = {"worker_reported":"success"}` and the attempt keeps `result_sha256`. Asserted in `TestAC06_CancelThenSuccess`; OpenAPI `JobEventData.worker_reported`. |
+| RV01-09 | **CLOSED** | `TestAC06_ForcedOrderings` forces both commit orders with two queued lock waiters and asserts each. `TestAC03_StaleReportVsRecoveryConcurrent` races report against recovery at the boundary and asserts the three valid outcomes (tallies in R4). The cancel-first bias is ruled on below (Q6c). |
+| RV01-10 | **ACCEPTED-DISPOSITION** (deferred to M2, as round 1 recommended) | Unchanged. Added to the M2 list: recovery `deadline_exceeded` classification is untested (reviewer mutant N13 survives) and finished-attempt immutability is untested (N12 survives). See NF-06. |
+| RV01-11 | **CLOSED** (spec; code M5/M6) | ADR-0006 §1 claims table: `sessions.user_id = sub`; OpenAPI L1583 `assertion_invalid`. The false "bound" claim is removed and replaced by an honest statement (Q5). |
+| RV01-12 | **CLOSED** (accepted residual) | ADR-0006 §1 `jti` row and trust-boundaries B2: replay window ≤ 65 s after a restart; reads and WebSocket upgrades are never single-use. |
+| RV01-13 | **CLOSED** (spec) | ADR-0006 §4, OpenAPI `/stream` L857, permissions.md stream row: token streams are re-validated against `api_token_authority` every ≤ 30 s; close codes 4401/4403. |
+| RV01-14 | **CLOSED** (contract) | `JobEventData` is closed (`additionalProperties: false`) with no payload, result, message or log field. Permissions row updated. The DB column stays free-form JSON ≤ 4 KiB; Go builds the content, which is acceptable. |
+| RV01-15 | **ACCEPTED-DISPOSITION** (deferred to M4 by the ticket, before AC-19) | Unchanged. |
+
+No item is REOPENED.
+
+### Mutant re-run (independent; one mutant at a time on a fresh copy of `182566e`, full suite `go test -count=1 ./poc/`)
+
+| Mutant | Change | Exit | Verdict | First failing test / line |
+|---|---|---|---|---|
+| M1 | drop `c.revoked_at IS NULL AND (c.expires_at …)` from fence | 1 | KILLED | `TestAC09_ReportFenceDenials/M1_credential_revoked` and `/M1_credential_expired`: `report = {succeeded false}, <nil>; want denied credential_revoked` |
+| M2 | drop `w.current_incarnation_id = $5` | 1 | KILLED | `…/M2_worker_re-registered_(old_process_reports)`: `want denied incarnation_mismatch` |
+| M3 | drop `a.worker_incarnation_id = $5` | 1 | KILLED | `…/M3_attempt_held_by_another_incarnation`: `want denied incarnation_mismatch` |
+| M4 | drop `j.hard_deadline_at > clock_timestamp()` | 0 | survived — **equivalent** (accepted, above) | — |
+| M4+DCHECK | M4 and drop CHECK `lease_expires_at <= hard_deadline_at` | 1 | KILLED | `…/M4_hard_deadline_passed`: `want denied deadline_exceeded`; also `TestSchemaGuards` |
+| M5 | drop `w.status <> 'deregistered'` | 1 | KILLED | `…/M5_worker_deregistered`: `want denied worker_deregistered` |
+| M11 | drop `case cancel:` in `RecoverExpired` | 1 | KILLED | `TestE8_CancelRequestedThenLeaseExpiry`: `recover = 0, ERROR: … violates check constraint "jobs_check9"` |
+| A-Mlock | (author) drop the worker/credential `FOR SHARE` | 1 | KILLED | `TestRV0104_RevocationSerializesWithInFlightReport`: `timed out waiting for 2 lock waiters` |
+| A-Mclock | (author) `clock_timestamp()` → `now()` in fence | 1 | KILLED | `TestRV0104_DeadlineJudgedAtRecheckNotTxStart`: `report after deadline = <nil>, want deadline_exceeded` |
+| A-Mjoblock | (author) drop job `FOR UPDATE` in `lockForReport` | 1 | KILLED | same test, same line |
+| A-Mdupowner | (author) drop "not the caller's attempt" case | 1 | KILLED | `TestRV0107_…`: `other worker = {succeeded true}, <nil>; want stale_attempt` |
+| A-Mreply | (author) drop idempotent canceled reply | 1 | KILLED | `TestAC06_CancelThenSuccess`: `retried success after cancel = { false}, denied: job_terminal; want OK/canceled/already_final` |
+| A-Dtokenview | (author) view returns raw scopes | 1 | KILLED | `TestRV0102_…`: `viewer/jobs:write,jobs:read/ok, want viewer/jobs:read/ok` |
+| A-Dhistdel | (author) drop `job_events_no_delete` trigger | 1 | KILLED | `TestSchemaGuards`: `(e) events of retained job deleted: accepted` |
+| N1 | (reviewer) `FOR SHARE OF w, c` → `FOR SHARE OF w` | 1 | KILLED | `TestRV0104_RevocationSerializesWithInFlightReport`: `timed out waiting for 2 lock waiters` |
+| N2 | (reviewer) drop the credential check in Claim | 1 | KILLED | `TestAC09_ClaimDenials` (`claim = [ … ], <nil>`) |
+| N3 | (reviewer) Claim `w.status = 'active'` → `<> 'deregistered'` | 1 | KILLED | `TestAC09_ClaimDenials` (draining claimed) |
+| N4 | (reviewer) Claim incarnation check `OR true` | 1 | KILLED | `TestAC09_ClaimDenials` (superseded claimed) |
+| N5 | (reviewer) drop `cancel_requested_at IS NULL` from the success CAS | 1 | KILLED | `TestAC06_ForcedOrderings`: `violates check constraint "jobs_check10"` |
+| N6 | (reviewer) drop `case terminal && !credOK` in `classify` | 0 | **SURVIVED** | NF-06. The behaviour is correct today (probe `TestRV2_RevokedWorkerRetryOfCommittedSuccess` → `denied: credential_revoked`), but no suite test pins it |
+| N8 | (reviewer) drop the `user_disabled` branch of the view | 1 | KILLED | `TestRV0102_…`: `…/ok, want …/user_disabled` |
+| N9 | (reviewer) drop `current_attempt_id = NEW.id` from the insert guard | 0 | survived — equivalent | covered by `UNIQUE(job_id, attempt_number)` and the deferred composite FK |
+| N12 | (reviewer) drop the `job_attempts_finished_immutable` trigger | 0 | **SURVIVED** | NF-06 (state-machine global rule 3 is unpinned) |
+| N13 | (reviewer) recovery always marks `lease_expired` (no `deadline_exceeded`) | 0 | **SURVIVED** | NF-06 (within the RV01-10 M2 scope) |
+
+### Rulings
+
+- **Q3 — M4 "equivalent mutant":** accepted (see the RV01-01 / M4 row above).
+- **Q4 — hint-only WebSocket streams do not count as session activity: acceptable, and the correct choice.**
+  - If an open socket counted, a forgotten tab would keep a session alive until the 12 h absolute cap and defeat the idle timeout.
+  - Go re-validates stream sessions every ≤ 30 s, including the idle check, so the socket closes with 4401 at idle expiry, and `auth_expiring` warns 60 s before.
+  - Caveat to document in ADR-0006 §3: the refetches the UI issues after hints are ordinary authenticated requests and do bump `last_activity_at`. An unattended dashboard on a busy cluster therefore stays alive until the absolute expiry. "Idle" means "no API traffic", not "no human input".
+  - Either accept that, or mark hint-driven refetches with a header such as `X-Clusterx-Background: 1` that Go excludes from the bump. P2, owner's call. It does not block.
+- **Q5 — ADR-0006 "BFF signing-key holder = full impersonation of any allowlisted user": honest, and adequately mitigated for 1.0.**
+  - The statement is now accurate. `POST /api/v1/sessions` trusts `sub=github:<id>` with no proof of the OAuth exchange. `trust-boundaries.md` B2 and ADR-0006 Consequences agree, and the false "bound" claim from round 1 is gone.
+  - It is acceptable for 1.0 because master §4 makes the BFF the human-session authority. Compromise of the BFF host already yields every live browser session and the OAuth client secret. The key adds only "users not currently logged in", which does not change the class of the risk.
+  - The mitigations are proportionate: key only on the BFF host, `kid` rotation, a `security` audit row with `kid` on every `session.create`, burst alerting in M8.
+  - Two conditions for M5:
+    - (a) The `session.create` audit row must be written in the same transaction as the session row (fail closed).
+    - (b) The demo build and CI must never hold the signing key (AC-14). Add this to the AC-25 secret-redaction canaries.
+  - Recommend Go-side verification of the OAuth exchange as a post-1.0 item in the risk register, not before release.
+- **Q6a — lock ordering deadlock risk:**
+  - **No deadlock among the current PoC paths.** Probe `TestRV2_DeadlockStress` ran for 8 s: 6 claimers, 10 reporters (20 % delayed past the lease), 3 cancelers, 2 recoverers, a promoter, 2 heartbeat writers (`UPDATE workers`) and an admitter, on 3 workers, 2 of them sharing one credential. Result: `ops=195218 deadlocks=0 otherErrors=0 jobs=15994`, and `assertCoherent` holds on every job.
+  - This holds because Claim takes `w` `FOR UPDATE` before any job and only `SKIP LOCKED` jobs. Cancel and recovery never touch `workers` or `worker_credentials`. Reports take `w`/`c` before `j` and never write `w`/`c`.
+  - **The order is not stated as a global rule.** Two plausible M2 shapes deadlock today (NF-01).
+- **Q6b — new triggers vs retention:**
+  - The retention `DELETE FROM jobs` cascade passes the history guard; R6 probe (1) deletes a parent and child together.
+  - The ADR-0004 `log_tail` retention mechanism, as written, cannot work against the finished-attempt trigger (NF-03).
+  - The delete guards are also not complete (NF-04).
+- **Q6c — cancel-first bias 98–100 % (R4: 99/1, 100/0, 100/0): acceptable, not a safety regression.**
+  - Cause: `ReportSuccess` spends one round trip on the identity share lock before contending for the job row, while `RequestCancel`'s first statement is the job lock.
+  - ADR-0002 makes either winner correct, and both orderings are now forced and asserted deterministically (`TestAC06_ForcedOrderings`).
+  - Consequence: the random `TestAC06_ConcurrentCancelVsSuccess` now almost never exercises success-first. It remains useful as a consistency smoke test (exactly one terminal event per job) and must not be read as two-path coverage.
+  - Optional: add a random 0–2 ms pre-start jitter to the cancel side to restore a mix. P2, non-blocking.
+
+### New findings
+
+| ID | Sev | file:line | Problem | Evidence | Fix | Blocks M1 exit? |
+|---|---|---|---|---|---|---|
+| NF-01 | P2 | `docs/architecture/state-machine.md:42-43`; `docs/architecture/adrs/0003-leases-heartbeat-fencing-timing.md:36-38`; `poc/store.go:190-197` | The lock order (`workers`+`worker_credentials` share, then `jobs`) is specified only for worker mutations. Two plausible M2 shapes deadlock against `ReportSuccess`. **H1:** a worker mutation that also writes its own worker/credential row in the same tx, such as bumping `worker_credentials.last_used_at` or `workers.last_heartbeat_at` / `last_seen_at`. This upgrades the share lock, so two concurrent reports of one worker deadlock; capacity allows up to 256 concurrent reports. **H2:** a Deregister/Drain/revoke/re-register path that locks the job row(s) first and then updates the worker/credential row. PostgreSQL detects the cycle and aborts one transaction, so there is no corruption, but the worker gets an internal error. | `TestRV2_ShareLockUpgradeHazard`: `tx1=ERROR: deadlock detected (SQLSTATE 40P01)`. `TestRV2_ReverseOrderHazard`: `report: ERROR: deadlock detected (SQLSTATE 40P01)`. | Make the order global in state-machine.md and ADR-0003: every transaction that touches both locks `workers` → `worker_credentials` → `jobs` (ascending id within a class) and never writes `workers`/`worker_credentials` after taking the share lock. Usage/heartbeat bumps go in their own transaction. Deregister/revoke recover jobs only after updating the worker/credential row, or in a later scheduler tick. Map 40P01/40001 to a retryable `UNAVAILABLE` and retry once server-side. Add the H1/H2 shapes as M2 regression tests. | no (contract text before M2 implements Deregister/Drain/usage tracking) |
+| NF-02 | P2 | `poc/store.go:212,225,278,289`; `migrations/0001_init.sql:244` | Worker-mutation timestamps use `now()` (transaction start), while authorization now uses `clock_timestamp()` after the lock waits. A report whose transaction began before a cancel, then waited (for example behind its own worker's Claim holding `w` `FOR UPDATE`), finalizes `canceled` with `terminal_at` earlier than `cancel_requested_at`. Its `canceled` event's `occurred_at` is also earlier than the `cancel_requested` event, even though its `version` is higher. The same class lets `revoked_at` precede the `terminal_at` of an accepted report when the revoking transaction began first. A timeline sorted by time, or an audit question like "accepted after revocation?", gets the wrong answer. | `TestRV2_TerminalAtBeforeCancelRequested`: `canceled terminal_at<cancel_requested_at=true ms=52 events(version:type@occurred order)=1:admitted,2:claimed,4:canceled,3:cancel_requested`. | Use `clock_timestamp()` (read after the locks) for `terminal_at`, `finished_at`, `updated_at` and event `occurred_at` in worker mutations and cancel, or `GREATEST(now(), cancel_requested_at)`. State in api-contracts that event order is `version`, never `occurred_at`. Add the probe as a test. | no |
+| NF-03 | P2 | `docs/architecture/adrs/0004-ids-idempotency-bounds-retention.md:49`; `migrations/0001_init.sql:380-391` | ADR-0004 says the 7-day `log_tail` expiry uses "a SECURITY DEFINER function that bypasses the finished-attempt trigger". Triggers fire whatever the function's owner, so that mechanism cannot work; the §6 7-day log retention has no workable path. | `TestRV2_Retention (3)`: SECURITY DEFINER `UPDATE job_attempts SET log_tail = NULL` → `ERROR: attempt … is finished (succeeded) and immutable (SQLSTATE 23514)`. | Before the M5 migration, make the trigger itself allow exactly `NEW = OLD except log_tail: <non-null> → NULL AND OLD.finished_at <= now() - interval '7 days'`, or gate on a dedicated role or `current_setting('clusterx.retention', true)` set only inside the retention function. Correct the ADR text and add a test, including a negative test (any other column, or a young attempt, is rejected). | no |
+| NF-04 | P2 | `migrations/0001_init.sql:7-10,352-378` | The history and audit delete guards are row-level `BEFORE DELETE` triggers. (a) `TRUNCATE` bypasses them. (b) `DELETE FROM jobs` of a non-terminal or young terminal job is not guarded, and it cascades away that job's attempts and events. Only out-of-band grants, which no artifact shows, prevent either. | `TestRV2_Retention (5)`: `TRUNCATE job_events` with retained jobs → `err=<nil>`. `(2)`: `DELETE running job: rows=1 err=<nil>`. | Ship the role/grant script as a reviewed artifact (runtime role: no TRUNCATE, no DELETE on `jobs`/`job_events`/`job_attempts`/`audit_events`). Add `BEFORE DELETE ON jobs` requiring `terminal_at IS NOT NULL AND terminal_at <= now() - <retention floor>`, and `BEFORE TRUNCATE` statement triggers that raise. | no |
+| NF-05 | P2 | `migrations/0001_init.sql:309-331` | Residual of RV01-05: the DB still lets a job leave `running` while its attempt stays `active`; only code prevents it. The next Claim of that job then fails on the partial unique index, which aborts the whole claim batch for every worker whose top-priority eligible row it is (head-of-line poison). | `TestRV2_ActiveAttemptOnNonRunningJob`: `err=<nil> state=retry_wait/active; next claim: [] ERROR: duplicate key value violates unique constraint "job_attempts_one_active_per_job"`. | Add a `DEFERRABLE INITIALLY DEFERRED` constraint trigger on `jobs`: when `OLD.status='running' AND NEW.status<>'running'`, the attempt `OLD.current_attempt_id` must not be `active` at commit. It is deferred because Report updates the job before the attempt. | no |
+| NF-06 | P2 | `poc/store.go:318-319,416-419`; `migrations/0001_init.sql:380-391`; `poc/store_test.go:415-455` | Surviving non-equivalent mutants. **N6:** the terminal-job `credential_revoked` precedence in `classify` (state-machine denial order) has no test. **N12:** finished-attempt immutability (state-machine global rule 3) has no test. **N13:** recovery `deadline_exceeded` vs `lease_expired` classification and `failure_class='timeout'` have no test. Also: the stale docs at state-machine.md:85-86 and ADR-0002:47 still say the cancel/success mechanism is the "READ COMMITTED re-check", whereas it is now lock-first (ADR-0002 §3 itself was amended). | Mutant table rows N6, N12, N13 (`exit=0`). | Add three assertions to the M2 table-driven suite: revoked-credential retry of a committed success ⇒ `credential_revoked`; `UPDATE` of a finished attempt rejected; deadline recovery ⇒ attempt `deadline_exceeded`, job `failure_class` per budget. Align the two doc sentences with ADR-0002 §3. | no |
+
+No new P0 or P1.
+
+### P0 / P1 summary (round 2)
+
+- P0: none.
+- P1: none open. RV01-01, RV01-02 and RV01-03 are CLOSED with independent evidence (mutants M1/M2/M3/M5/M11 killed, M4 accepted as equivalent; view and contract aligned; one canonical reply).
+- Reopened: none.
+
+### M1-exit verdict: **PASS**
+
+Basis:
+- The §14 M1 exit requires a "core invariants review; working focused contention/timeout experiments". Both are met at PoC level against real PostgreSQL 18.7 under `-race`, with these covered: AC-02 (claim exclusivity, failpoints), AC-03 (stale report, concurrent boundary), AC-06 (both orders forced), AC-09 (every fence clause on report and claim), E8 cancel-on-expiry, revocation and deadline serialization (RV01-04), and DB guards for budget, lineage and history.
+- All three round-1 P1s are closed. Every P2 is closed or carries an accepted disposition.
+- NF-01..NF-06 are P2 and do not block M1. NF-01 and NF-03 change contract text and must be resolved before M2 implements Deregister/Drain/usage tracking, and before the M5 retention migration, respectively.
+- Remaining NOT RUN, unchanged and expected at M1: Go request-path enforcement of token authority, `sid`↔`sub`, idle timeout and stream re-validation (M5/M6); AC-07, manual retry, RenewLease cap, ReportFailure and drain (M2); PoC `lock_timeout` (M2).
+- This verdict is the reviewer's recommendation. Freezing draft.4 and accepting M1 remain the human owner's and integrator's decision (MW-05).
