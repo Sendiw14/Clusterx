@@ -1,0 +1,12 @@
+home 390 {"body":16.068,"h1":42.43,"h2":26.69,"h3":18.173,"kpi":0} h1/body 2.64 h2/body 1.66
+overview 390 {"body":14,"h1":28,"h2":18,"h3":0,"kpi":32} h1/body 2.00 h2/body 1.29
+jobs 390 {"body":14,"h1":28,"h2":21,"h3":0,"kpi":0} h1/body 2.00 h2/body 1.50
+job-detail 390 {"body":14,"h1":28,"h2":18,"h3":16,"kpi":0} h1/body 2.00 h2/body 1.29
+workers 390 {"body":14,"h1":28,"h2":18,"h3":0,"kpi":0} h1/body 2.00 h2/body 1.29
+login 390 {"body":16.068,"h1":26.69,"h2":0,"h3":0,"kpi":0} h1/body 1.66 h2/body 0.00
+home 1440 {"body":17,"h1":80,"h2":38.24,"h3":21,"kpi":0} h1/body 4.71 h2/body 2.25
+overview 1440 {"body":14,"h1":28,"h2":18,"h3":0,"kpi":32} h1/body 2.00 h2/body 1.29
+jobs 1440 {"body":14,"h1":28,"h2":21,"h3":0,"kpi":0} h1/body 2.00 h2/body 1.50
+job-detail 1440 {"body":14,"h1":28,"h2":18,"h3":16,"kpi":0} h1/body 2.00 h2/body 1.29
+workers 1440 {"body":14,"h1":28,"h2":18,"h3":0,"kpi":0} h1/body 2.00 h2/body 1.29
+login 1440 {"body":17,"h1":38.24,"h2":0,"h3":0,"kpi":0} h1/body 2.25 h2/body 0.00

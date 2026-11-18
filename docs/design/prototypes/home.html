@@ -1,0 +1,1260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLUSTERX: jobs that outlive their workers (design prototype)</title>
+<meta name="description" content="Design prototype of the CLUSTERX home route. Illustrative data.">
+<style id="tokens">
+/*
+ * CLUSTERX design tokens: "Precision Under Motion" (white-first).
+ * Source of truth for color, type, space, shape, motion. M2 design artifact (TASK-M2-FE-01).
+ * Names follow Tailwind CSS 4 theme namespaces (--color-*, --font-*, --text-*, --radius-*,
+ * --shadow-*, --ease-*, --breakpoint-*) so the same file can be imported into a Tailwind 4
+ * `@theme` block at M6. Adoption method is NOT YET VERIFIED against an installed Tailwind
+ * (no Tailwind in M2). See docs/design/brand-and-tokens.md.
+ *
+ * Every text/surface pair used by the design is measured by docs/design/tools/contrast.mjs,
+ * which reads THIS file. Change a color here and rerun it. Do not copy hex values elsewhere.
+ */
+:root {
+  /* ---- Surfaces ---- */
+  --color-white: #FFFFFF;        /* primary surface */
+  --color-canvas: #F7F9FC;       /* page background behind white cards */
+  --color-panel: #EEF2F7;        /* subtle panels, table header, code well on light */
+
+  /* ---- Ink (text) ---- */
+  --color-ink: #111827;          /* primary text */
+  --color-ink-2: #475569;        /* secondary text */
+  --color-ink-3: #5B6678;        /* tertiary / meta text; still >= 4.5:1 on white, canvas, panel */
+  --color-ink-disabled: #8A94A6; /* disabled controls only (WCAG exempts inactive components) */
+
+  /* ---- Lines ---- */
+  --color-line: #E2E8F0;         /* decorative dividers and card borders (never the only boundary of a control) */
+  --color-line-strong: #7C8A9E;  /* control boundaries, focus-free affordances: >= 3:1 on white/canvas/panel */
+
+  /* ---- Accent: cobalt ---- */
+  --color-accent: #2457E7;       /* primary actions, links, focus ring */
+  --color-accent-ink: #1B46C2;   /* accent text on tinted surfaces, hover state */
+  --color-accent-tint: #E8EEFD;
+
+  /* ---- Status: base = graphics/icons/bars (>= 3:1); ink = text (>= 4.5:1 on white and on its tint) ---- */
+  --color-success: #0C8A63;      /* graphical use only: icon strokes, bars, chart lines */
+  --color-success-ink: #0A7050;  /* text */
+  --color-success-tint: #E5F4EE;
+  --color-warning: #A96B08;      /* graphical use only */
+  --color-warning-ink: #8A5806;  /* text */
+  --color-warning-tint: #FBF0DC;
+  --color-danger: #C33444;       /* graphical; also passes as text on white/canvas */
+  --color-danger-ink: #A82A39;   /* text on tints and panel */
+  --color-danger-tint: #FBE8EA;
+  --color-neutral: #64748B;      /* neutral state glyphs (scheduled, queued, canceled) */
+  --color-neutral-tint: #EEF2F7;
+
+  /* ---- Focus ---- */
+  --color-focus: #2457E7;        /* 2 px ring + 2 px offset on light surfaces */
+  --color-focus-on-dark: #9DB7FF;
+
+  /* ---- Code (deliberate dark contrast block, not a theme) ---- */
+  --color-code-bg: #0F172A;
+  --color-code-ink: #E2E8F0;
+  --color-code-mute: #94A3B8;
+  --color-code-key: #9DB7FF;
+  --color-code-str: #7FD6B0;
+  --color-code-num: #F2C57C;
+  --color-code-err: #FF9AA5;
+
+  /* ---- Chart encoding (color is never the only channel: also dash + marker + direct label) ---- */
+  --chart-succeeded: var(--color-success);   /* solid line, circle marker */
+  --chart-failed: var(--color-danger);       /* dashed 6 3, square marker */
+  --chart-canceled: var(--color-neutral);    /* dotted 1 3, triangle marker */
+  --chart-single: var(--color-accent);       /* one-series charts: solid, diamond marker */
+  --chart-grid: var(--color-line);
+  --chart-axis: var(--color-ink-2);
+  --chart-stale-opacity: 0.45;               /* dimmed when S-STALE / S-OFFLINE */
+
+  /* ---- Fonts (self-host later; files not bundled in M2, see brand-and-tokens.md) ---- */
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-display: "Newsreader", ui-serif, "New York", Georgia, "Times New Roman", serif; /* public hero/page titles only */
+
+  /* ---- Fluid type scale: 320 px to 1440 px viewport, public + docs ---- */
+  --text-step--1: clamp(0.8125rem, 0.793rem + 0.1vw, 0.875rem);   /* 13 to 14 */
+  --text-step-0: clamp(1rem, 0.975rem + 0.12vw, 1.0625rem);       /* 16 to 17 */
+  --text-step-1: clamp(1.125rem, 1.07rem + 0.27vw, 1.3125rem);    /* 18 to 21 */
+  --text-step-2: clamp(1.3125rem, 1.2rem + 0.55vw, 1.75rem);      /* 21 to 28 */
+  --text-step-3: clamp(1.625rem, 1.4rem + 1.1vw, 2.5rem);         /* 26 to 40 */
+  --text-step-4: clamp(2rem, 1.6rem + 2vw, 3.5rem);               /* 32 to 56 */
+  --text-step-5: clamp(2.5rem, 1.75rem + 3.7vw, 5rem);            /* 40 to 80, hero */
+  --leading-tight: 1.04;
+  --leading-heading: 1.18;
+  --leading-body: 1.6;
+  --leading-ui: 1.4;
+  --tracking-display: -0.028em;
+  --tracking-heading: -0.014em;
+  --tracking-label: 0.08em;    /* mono uppercase micro-labels */
+
+  /* ---- Fixed type scale: console (density over fluidity) ---- */
+  --text-ui-xs: 0.75rem;   /* 12, mono micro-labels only */
+  --text-ui-sm: 0.8125rem; /* 13, table meta */
+  --text-ui-md: 0.875rem;  /* 14, console body and table cells */
+  --text-ui-lg: 1rem;      /* 16, inputs (avoids iOS zoom), form labels */
+  --text-ui-h3: 1.125rem; /* 18: section and card titles, 1.29x body */
+  --text-ui-h2: 1.25rem;
+  --text-ui-h1: 1.75rem;  /* 28: console page title, 2.0x body */
+
+  /* ---- Spacing: 4 px base, Tailwind 4 `--spacing` convention plus named steps ---- */
+  --spacing: 0.25rem;
+  --space-1: 0.25rem;  --space-2: 0.5rem;   --space-3: 0.75rem;  --space-4: 1rem;
+  --space-5: 1.5rem;   --space-6: 2rem;     --space-7: 3rem;     --space-8: 4rem;
+  --space-9: 6rem;     --space-10: 8rem;
+  --section-gap: clamp(3rem, 2rem + 5vw, 7rem);   /* editorial vertical rhythm between public sections */
+
+  /* ---- Grid ---- */
+  --grid-cols: 12;
+  --grid-gutter: clamp(1rem, 0.6rem + 1.6vw, 2rem);
+  --grid-margin: clamp(1rem, 0.4rem + 3vw, 3rem);
+  --max-width-marketing: 75rem;   /* 1200 */
+  --max-width-console: 90rem;     /* 1440 */
+  --max-width-prose: 42.5rem;     /* about 68 characters at step-0 */
+  --sidebar-width: 15rem;
+  --topbar-height: 3.5rem;
+
+  /* ---- Breakpoints (constants for Tailwind and tests; custom properties cannot drive @media) ---- */
+  --breakpoint-xs: 30rem;   /* 480 */
+  --breakpoint-sm: 40rem;   /* 640, table to stacked cards below this */
+  --breakpoint-md: 48rem;   /* 768 */
+  --breakpoint-lg: 64rem;   /* 1024, console sidebar docks */
+  --breakpoint-2xl: 90rem;  /* 1440 */
+
+  /* ---- Shape ---- */
+  --border-width: 1px;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;        /* default card and control radius: precise, not pillowy */
+  --radius-lg: 10px;
+  --radius-full: 999px;    /* status chips only */
+
+  /* ---- Depth: understated; borders carry structure, shadows only lift overlays ---- */
+  --shadow-xs: 0 1px 0 rgb(17 24 39 / 0.04);
+  --shadow-sm: 0 1px 2px rgb(17 24 39 / 0.06);
+  --shadow-overlay: 0 12px 32px -8px rgb(17 24 39 / 0.18), 0 2px 6px rgb(17 24 39 / 0.08);
+
+  /* ---- Icons ---- */
+  --icon-stroke: 1.5;      /* SVG stroke-width at 16/20 px, round caps/joins */
+  --icon-size-sm: 1rem;
+  --icon-size-md: 1.25rem;
+  --icon-size-lg: 1.5rem;
+
+  /* ---- Density (table rows / controls) ---- */
+  --row-comfortable: 2.75rem;   /* 44 */
+  --row-compact: 2rem;          /* 32, still above the 24 px WCAG 2.5.8 minimum */
+  --control-height: 2.5rem;     /* 40 */
+  --control-height-sm: 2rem;    /* 32 */
+  --target-min: 1.5rem;         /* 24, WCAG 2.5.8 floor */
+
+  /* ---- Motion (values from route-inventory section 1.7, within MASTER section 9 budgets) ---- */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-hover: 150ms;
+  --duration-section: 260ms;
+  --duration-overlay-in: 200ms;
+  --duration-overlay-out: 160ms;
+  --duration-route: 180ms;
+  --duration-hero: 560ms;
+  --duration-live: 400ms;
+  --duration-atlas-step: 600ms;
+  --duration-topo-pulse: 1200ms;
+}
+
+/* Reduced motion: collapse every duration. Components additionally remove translate/scale, see motion-and-assets.md. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-hover: 0ms;
+    --duration-section: 0ms;
+    --duration-overlay-in: 0ms;
+    --duration-overlay-out: 0ms;
+    --duration-route: 0ms;
+    --duration-hero: 0ms;
+    --duration-live: 0ms;
+    --duration-atlas-step: 0ms;
+    --duration-topo-pulse: 0ms;
+  }
+}
+</style>
+<style id="shared">
+/* CLUSTERX design prototype styles (shared). Uses tokens.css variables only; no hex literals except where a token cannot express it. */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-padding-top:calc(var(--topbar-height) + 1rem);scroll-padding-bottom:4rem}
+body{margin:0;font-family:var(--font-sans);font-size:var(--text-step-0);line-height:var(--leading-body);color:var(--color-ink);background:var(--color-white);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body.console{background:var(--color-canvas);font-size:var(--text-ui-md);line-height:var(--leading-ui)}
+img,svg{display:block;max-width:100%}
+a{color:var(--color-accent);text-decoration-thickness:1px;text-underline-offset:.18em}
+a:hover{color:var(--color-accent-ink)}
+h1,h2,h3,h4{margin:0;font-weight:600;letter-spacing:var(--tracking-heading);line-height:var(--leading-heading);text-wrap:balance}
+p{margin:0}
+ul,ol{margin:0;padding:0}
+code,kbd,samp,.mono{font-family:var(--font-mono);font-size:.92em}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--color-focus);outline-offset:2px;border-radius:var(--radius-xs)}
+.dark :focus-visible,.code :focus-visible{outline-color:var(--color-focus-on-dark)}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+[hidden]{display:none!important}
+.icon{width:var(--icon-size-sm);height:var(--icon-size-sm);flex:none;fill:none}
+.icon-md{width:var(--icon-size-md);height:var(--icon-size-md)}
+
+/* skip link */
+.skip{position:absolute;left:var(--space-3);top:-4rem;z-index:100;background:var(--color-ink);color:var(--color-white);padding:var(--space-2) var(--space-4);border-radius:var(--radius-md);text-decoration:none}
+.skip:focus{top:var(--space-3)}
+
+/* prototype label bar (not sticky: must never obscure focus) */
+.proto-bar{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-4);align-items:center;justify-content:space-between;background:var(--color-ink);color:var(--color-white);font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:.04em;padding:var(--space-2) var(--grid-margin);min-height:2rem}
+.proto-bar b{font-weight:500;color:var(--color-white)}
+.proto-bar .proto-states{display:flex;flex-wrap:wrap;gap:var(--space-1)}
+.proto-bar button{background:transparent;border:1px solid var(--color-code-mute);color:var(--color-white);border-radius:var(--radius-sm);padding:2px var(--space-2);font:inherit;cursor:pointer;min-height:1.5rem}
+.proto-bar button[aria-pressed="true"]{background:var(--color-white);color:var(--color-ink);border-color:var(--color-white)}
+.proto-bar :focus-visible{outline-color:var(--color-focus-on-dark)}
+
+/* layout */
+.wrap{max-width:var(--max-width-marketing);margin-inline:auto;padding-inline:var(--grid-margin)}
+.wrap-wide{max-width:var(--max-width-console);margin-inline:auto;padding-inline:var(--grid-margin)}
+.grid12{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:var(--grid-gutter)}
+.section{padding-block:var(--section-gap)}
+.section.alt{background:var(--color-canvas);border-block:1px solid var(--color-line)}
+.stack>*+*{margin-top:var(--stack,var(--space-4))}
+
+/* editorial type */
+.display{font-family:var(--font-display);font-weight:400;font-size:var(--text-step-5);line-height:var(--leading-tight);letter-spacing:var(--tracking-display)}
+.display em{font-style:italic;color:var(--color-accent-ink)}
+.h2{font-family:var(--font-display);font-weight:400;font-size:var(--text-step-3);letter-spacing:var(--tracking-display);line-height:1.1}
+.h3{font-size:var(--text-step-1);font-weight:600}
+.lede{font-size:var(--text-step-1);line-height:1.5;color:var(--color-ink-2);max-width:38rem}
+.eyebrow{font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--color-ink-2);display:flex;align-items:center;gap:var(--space-3)}
+.eyebrow::before{content:"";width:1.5rem;height:1px;background:var(--color-ink);flex:none}
+.muted{color:var(--color-ink-2)}
+.meta{color:var(--color-ink-3);font-size:var(--text-ui-sm)}
+.tick-rule{height:9px;border:0;background:
+  repeating-linear-gradient(90deg,var(--color-line-strong) 0 1px,transparent 1px 8px) bottom/100% 5px no-repeat,
+  linear-gradient(var(--color-ink),var(--color-ink)) bottom/100% 1px no-repeat}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);min-height:var(--control-height);padding:0 var(--space-4);border-radius:var(--radius-md);border:1px solid var(--color-line-strong);background:var(--color-white);color:var(--color-ink);font-weight:500;font-size:var(--text-ui-md);text-decoration:none;cursor:pointer;transition:background-color var(--duration-hover) var(--ease-out),border-color var(--duration-hover) var(--ease-out),color var(--duration-hover) var(--ease-out);white-space:nowrap}
+.btn:hover{background:var(--color-panel);color:var(--color-ink)}
+.btn-primary{background:var(--color-accent);border-color:var(--color-accent);color:var(--color-white)}
+.btn-primary:hover{background:var(--color-accent-ink);border-color:var(--color-accent-ink);color:var(--color-white)}
+.btn-danger{background:var(--color-white);border-color:var(--color-danger);color:var(--color-danger-ink)}
+.btn-danger:hover{background:var(--color-danger-tint);color:var(--color-danger-ink)}
+.btn-danger-solid{background:var(--color-danger);border-color:var(--color-danger);color:var(--color-white)}
+.btn-danger-solid:hover{background:var(--color-danger-ink);border-color:var(--color-danger-ink);color:var(--color-white)}
+.btn-ghost{border-color:transparent;background:transparent}
+.btn-sm{min-height:var(--control-height-sm);padding:0 var(--space-3);font-size:var(--text-ui-sm)}
+.btn-lg{min-height:3rem;padding:0 var(--space-5);font-size:var(--text-ui-lg)}
+.btn[aria-disabled="true"],.btn:disabled{color:var(--color-ink-disabled);border-color:var(--color-line);background:var(--color-panel);cursor:not-allowed}
+.btn[data-pending="true"]{cursor:progress}
+.btn .spin{display:none;width:1em;height:1em;border:2px solid currentColor;border-right-color:transparent;border-radius:50%}
+.btn[data-pending="true"] .spin{display:inline-block;animation:spin 800ms linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.icon-btn{display:inline-grid;place-items:center;min-width:var(--control-height-sm);min-height:var(--control-height-sm);padding:0;border:1px solid transparent;background:transparent;border-radius:var(--radius-md);cursor:pointer;color:var(--color-ink-2)}
+.icon-btn:hover{background:var(--color-panel);color:var(--color-ink)}
+.link-btn{background:none;border:0;padding:0;color:var(--color-accent);text-decoration:underline;text-underline-offset:.18em;cursor:pointer}
+
+/* chips and status */
+.status{display:inline-flex;align-items:center;gap:6px;padding:2px 8px 2px 6px;border-radius:var(--radius-full);font-size:var(--text-ui-sm);font-weight:500;line-height:1.35;white-space:nowrap;background:var(--color-neutral-tint);color:var(--color-ink)}
+.status .icon{color:var(--color-neutral)}
+.status[data-s="running"]{background:var(--color-accent-tint)}.status[data-s="running"] .icon{color:var(--color-accent)}
+.status[data-s="retry_wait"],.status[data-s="stale"],.status[data-s="draining"]{background:var(--color-warning-tint)}
+.status[data-s="retry_wait"] .icon,.status[data-s="stale"] .icon,.status[data-s="draining"] .icon{color:var(--color-warning)}
+.status[data-s="succeeded"],.status[data-s="online"]{background:var(--color-success-tint)}
+.status[data-s="succeeded"] .icon,.status[data-s="online"] .icon{color:var(--color-success)}
+.status[data-s="failed"],.status[data-s="revoked"]{background:var(--color-danger-tint)}
+.status[data-s="failed"] .icon,.status[data-s="revoked"] .icon{color:var(--color-danger)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border:1px solid var(--color-line-strong);border-radius:var(--radius-sm);font-size:var(--text-ui-sm);background:var(--color-white);color:var(--color-ink);min-height:1.5rem}
+.chip button{background:none;border:0;padding:0;display:inline-grid;place-items:center;min-width:1.5rem;min-height:1.5rem;margin-right:-6px;cursor:pointer;color:var(--color-ink-2)}
+.chip-reason{border-color:var(--color-warning);background:var(--color-warning-tint);color:var(--color-warning-ink)}
+.chip-reason .icon{color:var(--color-warning)}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:var(--text-ui-xs);font-family:var(--font-mono);letter-spacing:.03em;padding:1px 6px;border-radius:var(--radius-xs);border:1px solid var(--color-line-strong);background:var(--color-white);color:var(--color-ink-2);text-transform:uppercase}
+.masked{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border:1px dashed var(--color-line-strong);border-radius:var(--radius-sm);background:var(--color-panel);color:var(--color-ink-2);font-size:var(--text-ui-sm)}
+
+/* forms */
+.field{display:grid;gap:6px}
+.field label,.label{font-weight:500;font-size:var(--text-ui-sm)}
+.input,.select{min-height:var(--control-height);padding:0 var(--space-3);border:1px solid var(--color-line-strong);border-radius:var(--radius-md);background:var(--color-white);font-size:var(--text-ui-lg);width:100%}
+.select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--color-ink-2) 50%),linear-gradient(135deg,var(--color-ink-2) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:2rem}
+.input:hover,.select:hover{border-color:var(--color-ink-2)}
+.help{font-size:var(--text-ui-sm);color:var(--color-ink-2)}
+@media (min-width:768px){.input,.select{font-size:var(--text-ui-md)}}
+
+/* cards and panels */
+.card{background:var(--color-white);border:1px solid var(--color-line);border-radius:var(--radius-md);box-shadow:var(--shadow-xs)}
+.card-pad{padding:var(--space-4)}
+.card-h{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--space-2) var(--space-4);padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-line)}
+.card-h h2,.card-h h3{font-size:var(--text-ui-h3)}
+.dl{display:grid;grid-template-columns:minmax(7rem,max-content) 1fr;gap:var(--space-2) var(--space-4);margin:0}
+.dl dt{color:var(--color-ink-2)}.dl dd{margin:0;min-width:0;overflow-wrap:anywhere}
+@media (max-width:479px){.dl{grid-template-columns:1fr;gap:0}.dl dd{margin-bottom:var(--space-3)}}
+
+/* notices */
+.notice{display:flex;gap:var(--space-3);align-items:flex-start;padding:var(--space-3) var(--space-4);border-radius:var(--radius-md);border:1px solid var(--color-line);background:var(--color-panel);font-size:var(--text-ui-md)}
+.notice .icon{margin-top:2px;color:var(--color-ink-2)}
+.notice .grow{flex:1;min-width:0}
+.notice.warn{background:var(--color-warning-tint);border-color:var(--color-warning)}.notice.warn .icon{color:var(--color-warning)}
+.notice.err{background:var(--color-danger-tint);border-color:var(--color-danger)}.notice.err .icon{color:var(--color-danger)}
+.notice.ok{background:var(--color-success-tint);border-color:var(--color-success)}.notice.ok .icon{color:var(--color-success)}
+.notice.info{background:var(--color-accent-tint);border-color:var(--color-accent)}.notice.info .icon{color:var(--color-accent)}
+.notice strong{font-weight:600}
+.actions{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-2)}
+
+/* empty state */
+.empty{display:grid;justify-items:start;gap:var(--space-3);padding:var(--space-7) var(--space-5);max-width:34rem}
+.empty h3{font-size:var(--text-ui-h2)}
+.empty p{color:var(--color-ink-2)}
+
+/* tables */
+.tbl-wrap{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:var(--text-ui-md)}
+.tbl caption{text-align:left;padding:var(--space-3) var(--space-4);color:var(--color-ink-2);font-size:var(--text-ui-sm)}
+.tbl th{font-weight:500;text-align:left;font-size:var(--text-ui-sm);color:var(--color-ink-2);background:var(--color-panel);padding:var(--space-2) var(--space-4);border-block:1px solid var(--color-line);white-space:nowrap}
+.tbl td{padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-line);vertical-align:middle;height:var(--row-comfortable)}
+.tbl tbody tr:hover{background:var(--color-canvas)}
+.tbl .num{font-variant-numeric:tabular-nums}
+.tbl td a.id{font-family:var(--font-mono);font-size:var(--text-ui-sm);font-weight:500}
+.tbl tr.upd td{animation:rowflash var(--duration-live) var(--ease-out)}
+@keyframes rowflash{from{background:var(--color-accent-tint)}to{background:transparent}}
+.sortbtn{background:none;border:0;padding:0;font:inherit;color:inherit;display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+@media (max-width:639px){
+  .tbl thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .tbl,.tbl tbody,.tbl tr,.tbl td{display:block;width:100%}
+  .tbl tr{padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-line)}
+  .tbl td{display:grid;grid-template-columns:7.25rem 1fr;gap:var(--space-3);border:0;padding:3px 0;height:auto;min-height:1.5rem}
+  .tbl td::before{content:attr(data-label);color:var(--color-ink-2);font-size:var(--text-ui-sm)}
+  .tbl td[data-label=""]::before{display:none}
+  .tbl td[data-primary]{order:-1;display:flex;flex-wrap:wrap;gap:var(--space-2);padding-bottom:var(--space-2)}
+  .tbl td[data-primary]::before{display:none}
+  .tbl tbody{display:flex;flex-direction:column}
+  .tbl caption{display:block;width:100%}
+  .cell{min-width:0}
+}
+
+/* skeleton */
+.skel{display:block;border-radius:var(--radius-sm);background:var(--color-panel);animation:skel 1s ease-in-out 10;min-height:1rem}
+@keyframes skel{50%{opacity:.5}}
+.skel-row{height:var(--row-comfortable);margin:var(--space-2) var(--space-4)}
+
+/* code */
+.code{background:var(--color-code-bg);color:var(--color-code-ink);border-radius:var(--radius-md);font-family:var(--font-mono);font-size:var(--text-ui-sm);line-height:1.65}
+.code-h{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);padding:var(--space-2) var(--space-4);border-bottom:1px solid rgb(148 163 184 / .25);color:var(--color-code-mute);font-size:var(--text-ui-xs);letter-spacing:.06em;text-transform:uppercase}
+.code pre{margin:0;padding:var(--space-4);overflow:auto;tab-size:2}
+.code .k{color:var(--color-code-key)}.code .s{color:var(--color-code-str)}.code .n{color:var(--color-code-num)}.code .c{color:var(--color-code-mute)}.code .e{color:var(--color-code-err)}
+.code .btn{min-height:1.75rem;background:transparent;border-color:var(--color-code-mute);color:var(--color-code-ink);text-transform:none;letter-spacing:0;font-size:var(--text-ui-sm)}
+.code .btn:hover{background:rgb(148 163 184 / .18);color:var(--color-white)}
+.jsonblock{font-family:var(--font-mono);font-size:var(--text-ui-sm);background:var(--color-panel);border:1px solid var(--color-line);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);overflow:auto;max-height:14rem;margin:0}
+
+/* dialogs */
+dialog{border:1px solid var(--color-line);border-radius:var(--radius-lg);box-shadow:var(--shadow-overlay);padding:0;max-width:min(32rem,calc(100vw - 2rem));width:100%;color:var(--color-ink);background:var(--color-white)}
+dialog::backdrop{background:rgb(17 24 39 / .45)}
+dialog[open]{animation:dlg var(--duration-overlay-in) var(--ease-out)}
+@keyframes dlg{from{opacity:0;transform:scale(.98)}}
+.dlg-h{padding:var(--space-4) var(--space-5) 0}.dlg-h h2{font-size:var(--text-ui-h3)}
+.dlg-b{padding:var(--space-3) var(--space-5);display:grid;gap:var(--space-3)}
+.dlg-f{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:var(--space-2);padding:var(--space-3) var(--space-5) var(--space-4)}
+dialog.drawer{margin:0 auto 0 0;height:100dvh;max-height:100dvh;max-width:min(20rem,calc(100vw - 3rem));border-radius:0;border-width:0 1px 0 0}
+dialog.drawer[open]{animation:drawer var(--duration-overlay-in) var(--ease-out)}
+@keyframes drawer{from{opacity:0;transform:translateX(-16px)}}
+dialog.cmd{margin-top:10vh}
+
+/* live indicator */
+.live{display:inline-flex;align-items:center;gap:6px;padding:2px 10px 2px 8px;border:1px solid var(--color-line-strong);border-radius:var(--radius-full);font-size:var(--text-ui-sm);background:var(--color-white);min-height:1.75rem;cursor:default}
+.live[data-live="live"] .icon{color:var(--color-success)}
+.live[data-live="reconnecting"] .icon,.live[data-live="polling"] .icon,.live[data-live="stale"] .icon{color:var(--color-warning)}
+.live[data-live="offline"] .icon{color:var(--color-danger)}
+.live[data-live="paused"] .icon{color:var(--color-neutral)}
+.live[data-live="demo"] .icon{color:var(--color-accent)}
+
+/* reveal (M-SECTION) and hero (M-HERO) */
+.js .reveal{opacity:0;transform:translateY(8px)}
+.js .reveal.in{opacity:1;transform:none;transition:opacity var(--duration-section) var(--ease-out),transform var(--duration-section) var(--ease-out)}
+.hero-in>*{animation:heroin var(--duration-hero) var(--ease-out) both;animation-delay:calc(var(--i,0) * 60ms)}
+@keyframes heroin{from{opacity:0;transform:translateY(12px)}}
+@media (prefers-reduced-motion:reduce){
+  .js .reveal{opacity:1;transform:none}
+  .hero-in>*,dialog[open],.skel,.tbl tr.upd td{animation:none!important}
+  *{scroll-behavior:auto!important}
+}
+html[data-rm="1"] .js .reveal{opacity:1;transform:none}
+html[data-rm="1"] .hero-in>*,html[data-rm="1"] dialog[open],html[data-rm="1"] .skel{animation:none!important}
+
+/* ---------- public shell ---------- */
+.pub-h{border-bottom:1px solid var(--color-line);background:var(--color-white)}
+.pub-h .in{display:flex;align-items:center;gap:var(--space-5);min-height:4rem}
+.wordmark{display:inline-flex;align-items:center;gap:10px;font-weight:600;letter-spacing:.14em;font-size:var(--text-ui-md);color:var(--color-ink);text-decoration:none}
+.wordmark:hover{color:var(--color-ink)}
+.wordmark .icon{width:24px;height:24px;color:var(--color-accent)}
+.pub-nav{display:none;gap:var(--space-1);margin-left:auto;align-items:center}
+.pub-nav a{padding:6px var(--space-3);color:var(--color-ink-2);text-decoration:none;border-radius:var(--radius-sm);min-height:2rem;display:inline-flex;align-items:center;font-size:var(--text-ui-md);transition:color var(--duration-hover) var(--ease-out),background-color var(--duration-hover) var(--ease-out)}
+.pub-nav a:hover{color:var(--color-ink);background:var(--color-panel)}
+.pub-nav a[aria-current="page"]{color:var(--color-ink);box-shadow:inset 0 -2px 0 var(--color-accent);border-radius:0}
+.pub-menu-btn{margin-left:auto}
+@media (min-width:768px){.pub-nav{display:flex}.pub-menu-btn{display:none}}
+.drawer-nav{display:grid;padding:var(--space-3)}
+.drawer-nav a{padding:var(--space-3);min-height:2.75rem;display:flex;align-items:center;color:var(--color-ink);text-decoration:none;border-bottom:1px solid var(--color-line)}
+.pub-f{background:var(--color-canvas);border-top:1px solid var(--color-line);padding-block:var(--space-8) var(--space-6);font-size:var(--text-ui-md)}
+.pub-f .cols{display:grid;gap:var(--space-6);grid-template-columns:repeat(auto-fit,minmax(10rem,1fr))}
+.pub-f h2{font-family:var(--font-mono);font-size:var(--text-ui-xs);text-transform:uppercase;letter-spacing:var(--tracking-label);font-weight:500;color:var(--color-ink-2);margin-bottom:var(--space-3)}
+.pub-f ul{list-style:none;display:grid;gap:var(--space-2)}
+.pub-f a{color:var(--color-ink);text-decoration:none}.pub-f a:hover{text-decoration:underline}
+.pub-f .fine{margin-top:var(--space-7);padding-top:var(--space-4);border-top:1px solid var(--color-line);display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-5);justify-content:space-between;color:var(--color-ink-2);font-size:var(--text-ui-sm)}
+
+/* ---------- console shell ---------- */
+.shell{display:grid;grid-template-columns:minmax(0,1fr);min-height:100dvh}
+.side{display:none}
+@media (min-width:1024px){
+  .shell{grid-template-columns:var(--sidebar-width) minmax(0,1fr)}
+  .side{display:flex;flex-direction:column;border-right:1px solid var(--color-line);background:var(--color-white);position:sticky;top:0;height:100dvh;align-self:start}
+  .menu-btn{display:none}
+}
+.side-in{display:flex;flex-direction:column;height:100%;padding:var(--space-4) var(--space-3)}
+.side .wordmark{padding:var(--space-2) var(--space-3) var(--space-4)}
+.nav{list-style:none;display:grid;gap:2px}
+.nav a{display:flex;align-items:center;gap:var(--space-3);padding:0 var(--space-3);min-height:2.25rem;border-radius:var(--radius-md);color:var(--color-ink-2);text-decoration:none;font-weight:500;transition:background-color var(--duration-hover) var(--ease-out),color var(--duration-hover) var(--ease-out)}
+.nav a:hover{background:var(--color-panel);color:var(--color-ink)}
+.nav a[aria-current="page"]{background:var(--color-accent-tint);color:var(--color-accent-ink);box-shadow:inset 2px 0 0 var(--color-accent)}
+.nav .sub{padding-left:var(--space-6);font-weight:400}
+.nav-sep{margin:var(--space-4) var(--space-3) var(--space-2);font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--color-ink-3)}
+.side-foot{margin-top:auto;border-top:1px solid var(--color-line);padding:var(--space-3) var(--space-3) 0;display:grid;gap:var(--space-2);font-size:var(--text-ui-sm)}
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:var(--space-3);min-height:var(--topbar-height);padding:var(--space-2) var(--grid-margin);background:rgb(255 255 255 / .96);border-bottom:1px solid var(--color-line);flex-wrap:wrap}
+.crumbs{display:flex;flex-wrap:wrap;gap:var(--space-1);align-items:center;list-style:none;font-size:var(--text-ui-sm);color:var(--color-ink-2);min-width:0}
+.crumbs li+li::before{content:"/";margin-right:var(--space-1);color:var(--color-ink-3)}
+.crumbs a{color:var(--color-ink-2)}
+.crumbs [aria-current]{color:var(--color-ink);font-weight:500}
+.top .grow{flex:1}
+.cmd-btn{display:inline-flex;align-items:center;gap:var(--space-2);min-height:var(--control-height-sm);padding:0 var(--space-3);border:1px solid var(--color-line-strong);border-radius:var(--radius-md);background:var(--color-white);color:var(--color-ink-2);cursor:pointer;font-size:var(--text-ui-sm)}
+.cmd-btn kbd{font-size:var(--text-ui-xs);border:1px solid var(--color-line);border-radius:var(--radius-xs);padding:0 4px;background:var(--color-panel)}
+.cmd-btn .long{display:none}
+@media (min-width:640px){.cmd-btn .long{display:inline}}
+.role-banner{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:var(--radius-sm);background:var(--color-warning-tint);color:var(--color-warning-ink);border:1px solid var(--color-warning);font-size:var(--text-ui-sm);font-weight:500}
+.main{padding:var(--space-6) var(--grid-margin) var(--space-9);max-width:var(--max-width-console);width:100%}
+.page-h{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:var(--space-3) var(--space-5);margin-bottom:var(--space-5)}
+.page-h h1{font-size:var(--text-ui-h1);letter-spacing:var(--tracking-heading)}
+.page-h p{color:var(--color-ink-2);margin-top:var(--space-1)}
+.toolbar{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.sect{margin-top:var(--space-6)}
+.sect>h2{font-size:var(--text-ui-h3);margin-bottom:var(--space-3)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(10.5rem,1fr));gap:0;list-style:none;border:1px solid var(--color-line);border-radius:var(--radius-md);background:var(--color-white);overflow:hidden}
+.kpis li{padding:var(--space-4);border-right:1px solid var(--color-line);border-bottom:1px solid var(--color-line);margin:0 -1px -1px 0;display:grid;gap:2px;align-content:start}
+.kpi-v{font-size:2rem;font-weight:500;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi-l{color:var(--color-ink-2);font-size:var(--text-ui-sm);display:flex;align-items:center;gap:6px}
+.kpi-n{color:var(--color-ink-3);font-size:var(--text-ui-sm)}
+.two{display:grid;gap:var(--space-5)}
+@media (min-width:1024px){.two{grid-template-columns:minmax(0,3fr) minmax(0,2fr)}.two.even{grid-template-columns:1fr 1fr}}
+.filters{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:flex-end}
+.filters .field{min-width:9rem;flex:1 1 9rem;max-width:14rem}
+.chips{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.pager{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-top:1px solid var(--color-line)}
+.seg{display:inline-flex;border:1px solid var(--color-line-strong);border-radius:var(--radius-md);overflow:hidden;background:var(--color-white)}
+.seg button{border:0;background:transparent;min-height:var(--control-height-sm);padding:0 var(--space-3);cursor:pointer;display:inline-flex;gap:6px;align-items:center;font-size:var(--text-ui-sm);color:var(--color-ink-2)}
+.seg button+button{border-left:1px solid var(--color-line-strong)}
+.seg button[aria-pressed="true"]{background:var(--color-ink);color:var(--color-white)}
+.seg :focus-visible{outline-offset:-2px}
+
+/* topology */
+.topo{border:1px solid var(--color-line);border-radius:var(--radius-md);background:var(--color-white)}
+.topo-view{overflow:hidden;background:
+  linear-gradient(var(--color-white),var(--color-white));position:relative;min-height:16rem}
+.topo-view>svg{width:100%;height:auto;max-height:26rem}
+.topo .node{cursor:pointer}
+.topo .node rect.body{fill:var(--color-white);stroke:var(--color-line-strong);stroke-width:1.25}
+.topo .node[data-sel="1"] rect.body{stroke:var(--color-accent);stroke-width:2.5}
+.topo .node text{font-family:var(--font-sans);font-size:11px;fill:var(--color-ink)}
+.topo .node .sub{fill:var(--color-ink-2);font-family:var(--font-mono);font-size:10px}
+.topo .node[data-live="stale"] rect.body{stroke-dasharray:4 3;stroke:var(--color-warning)}
+.topo .node[data-live="off"] rect.body{stroke-dasharray:1 3}
+.topo .node:focus-visible{outline:none}
+.topo .node:focus-visible rect.body{stroke:var(--color-focus);stroke-width:3}
+.topo .pulse{fill:none;stroke:var(--color-accent);stroke-width:1.5;opacity:0;animation:pulse var(--duration-topo-pulse) var(--ease-in-out) 3}
+@keyframes pulse{0%{opacity:.7;transform:scale(1)}100%{opacity:0;transform:scale(1.25)}}
+.topo-view.is-stale>svg{opacity:var(--chart-stale-opacity)}
+.topo-tools{display:flex;gap:var(--space-1);flex-wrap:wrap;align-items:center;padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--color-line)}
+.legend{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-4);list-style:none;font-size:var(--text-ui-sm);color:var(--color-ink-2);padding:var(--space-3) var(--space-4);border-top:1px solid var(--color-line)}
+.legend li{display:inline-flex;align-items:center;gap:6px}
+
+/* chart */
+.chart{position:relative}
+.chart svg{width:100%;height:auto}
+.chart .grid line{stroke:var(--chart-grid)}
+.chart .axis text{font-size:11px;fill:var(--chart-axis);font-family:var(--font-mono)}
+.chart.is-stale svg{opacity:var(--chart-stale-opacity)}
+.chart-legend{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-5);list-style:none;padding:var(--space-2) var(--space-4) var(--space-3);font-size:var(--text-ui-sm)}
+.chart-legend li{display:inline-flex;align-items:center;gap:8px}
+
+/* timeline / attempts */
+.timeline{list-style:none;position:relative;display:grid;gap:var(--space-4);padding-left:var(--space-5)}
+.timeline::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:1px;background:var(--color-line-strong)}
+.timeline li{position:relative}
+.timeline li::before{content:"";position:absolute;left:calc(-1 * var(--space-5));top:6px;width:11px;height:11px;border-radius:50%;background:var(--color-white);border:2px solid var(--color-line-strong)}
+.timeline li[data-kind="ok"]::before{border-color:var(--color-success)}
+.timeline li[data-kind="bad"]::before{border-color:var(--color-danger);border-radius:2px}
+.timeline li[data-kind="warn"]::before{border-color:var(--color-warning);border-radius:0;transform:rotate(45deg)}
+.timeline .t{font-family:var(--font-mono);font-size:var(--text-ui-xs);color:var(--color-ink-2)}
+.attempt{border:1px solid var(--color-line);border-radius:var(--radius-md);background:var(--color-white)}
+.attempt+.attempt{margin-top:var(--space-3)}
+.attempt>header{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-4);align-items:center;padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-line)}
+.attempt>div{padding:var(--space-3) var(--space-4)}
+.logtail{font-family:var(--font-mono);font-size:var(--text-ui-xs);background:var(--color-code-bg);color:var(--color-code-ink);border-radius:var(--radius-sm);padding:var(--space-3);overflow:auto;max-height:9rem;margin:var(--space-2) 0 0;white-space:pre}
+
+/* misc */
+.pill-demo{display:inline-flex;gap:6px;align-items:center;font-family:var(--font-mono);font-size:var(--text-ui-xs);border:1px solid var(--color-accent);color:var(--color-accent-ink);border-radius:var(--radius-full);padding:1px 8px}
+.toast-live{position:fixed;left:50%;bottom:var(--space-5);transform:translateX(-50%);background:var(--color-ink);color:var(--color-white);padding:var(--space-3) var(--space-4);border-radius:var(--radius-md);box-shadow:var(--shadow-overlay);z-index:60;font-size:var(--text-ui-sm);max-width:calc(100vw - 2rem)}
+@media (forced-colors:active){
+  .status,.chip,.live,.badge,.masked{border:1px solid CanvasText}
+  :focus-visible{outline:2px solid Highlight}
+}
+@media print{.proto-bar,.top,.side{display:none}}
+</style>
+<style>
+.hero{padding-block:clamp(2.5rem,1rem + 6vw,6rem) var(--section-gap)}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-7);align-items:end}
+.hero-grid>*{min-width:0}
+@media (min-width:1024px){.hero-grid{grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:var(--space-8)}}
+.hero h1{max-width:14ch}
+.hero .lede{margin-top:var(--space-5)}
+.cta-row{display:flex;flex-wrap:wrap;gap:var(--space-3);margin-top:var(--space-6)}
+@media (max-width:479px){.cta-row .btn{width:100%}}
+.hero-note{margin-top:var(--space-4);font-size:var(--text-ui-sm);color:var(--color-ink-2);max-width:34rem}
+.plate{border:1px solid var(--color-ink);border-radius:var(--radius-sm);background:var(--color-white);position:relative}
+.plate::before{content:"";position:absolute;inset:6px -6px -6px 6px;border:1px solid var(--color-line-strong);border-radius:var(--radius-sm);z-index:-1}
+.plate-h{display:flex;justify-content:space-between;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-ink);font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:.06em;text-transform:uppercase}
+.ledger{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:var(--text-ui-sm)}
+.ledger th{text-align:left;font-weight:500;color:var(--color-ink-2);padding:var(--space-2) var(--space-4);font-size:var(--text-ui-xs);letter-spacing:.06em;text-transform:uppercase}
+.ledger td{padding:var(--space-2) var(--space-4);border-top:1px solid var(--color-line);vertical-align:top}
+.ledger td:first-child{color:var(--color-ink-2);white-space:nowrap}
+.ledger tr.rej td{background:var(--color-danger-tint)}
+.ledger .who{color:var(--color-ink-2)}
+.plate-f{padding:var(--space-3) var(--space-4);border-top:1px solid var(--color-line);font-size:var(--text-ui-sm);color:var(--color-ink-2)}
+.sec-h{display:grid;gap:var(--space-4);margin-bottom:var(--space-7);max-width:44rem}
+.pillars{display:grid;gap:0;border:1px solid var(--color-ink);border-radius:var(--radius-sm);background:var(--color-white)}
+@media (min-width:900px){.pillars{grid-template-columns:repeat(3,1fr)}.pillars>*+*{border-left:1px solid var(--color-line-strong)}}
+.pillars>*{padding:var(--space-6) var(--space-5)}
+@media (max-width:899px){.pillars>*+*{border-top:1px solid var(--color-line-strong)}}
+.pillars .no{font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:var(--tracking-label);color:var(--color-ink-2)}
+.pillars h3{margin:var(--space-3) 0 var(--space-3);font-size:var(--text-step-1)}
+.pillars p{color:var(--color-ink-2)}
+.pillars .proof{margin-top:var(--space-4);font-family:var(--font-mono);font-size:var(--text-ui-sm);color:var(--color-ink)}
+
+/* Atlas */
+.atlas-card{border:1px solid var(--color-ink);border-radius:var(--radius-sm);background:var(--color-white)}
+.atlas-h{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-4);justify-content:space-between;align-items:center;padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-ink)}
+.atlas-h .tag{font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--color-ink);padding:1px 8px;border-radius:var(--radius-xs)}
+.atlas-body{display:grid}
+@media (min-width:1100px){.atlas-body{grid-template-columns:minmax(0,1fr) 17rem}.atlas-body .steps{border-left:1px solid var(--color-line);border-top:0}}
+.atlas-stage{overflow-x:auto;padding:var(--space-3)}
+.atlas-stage svg{min-width:680px;width:100%;height:auto}
+@media (max-width:479px){.atlas-stage{display:none}}
+.atlas-stage:focus-visible{outline-offset:-2px}
+.steps{border-top:1px solid var(--color-line);padding:var(--space-4);display:grid;gap:var(--space-3);align-content:start}
+.steps ol{list-style:none;display:grid;gap:2px;counter-reset:s}
+.steps li{counter-increment:s;display:grid;grid-template-columns:1.75rem 1fr;gap:var(--space-2);padding:6px var(--space-2);border-radius:var(--radius-sm);font-size:var(--text-ui-md)}
+.steps li::before{content:counter(s,decimal-leading-zero);font-family:var(--font-mono);font-size:var(--text-ui-xs);color:var(--color-ink-2);padding-top:3px}
+.steps li[aria-current="step"]{background:var(--color-accent-tint);box-shadow:inset 2px 0 0 var(--color-accent)}
+.steps li strong{display:block;font-weight:600}
+.steps li span{color:var(--color-ink-2);font-size:var(--text-ui-sm)}
+.atlas-ctl{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center;padding:var(--space-3) var(--space-4);border-top:1px solid var(--color-line)}
+.atlas-cap{padding:var(--space-3) var(--space-4) var(--space-4);border-top:1px solid var(--color-line);min-height:5.5rem}
+.atlas-cap b{display:block;font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--color-ink-2);margin-bottom:var(--space-1)}
+.atlas-legend{display:grid;gap:var(--space-3) var(--space-5);grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));list-style:none;padding:var(--space-4);border-top:1px solid var(--color-line);font-size:var(--text-ui-sm);color:var(--color-ink-2)}
+.atlas-legend li{display:flex;align-items:center;gap:var(--space-3)}
+.atlas-legend svg{width:44px;height:24px;flex:none}
+.atlas-legend strong{color:var(--color-ink);font-weight:600}
+/* svg parts */
+#atlas text{font-family:var(--font-sans);font-size:16px;fill:var(--color-ink)}
+#atlas .sub{font-family:var(--font-mono);font-size:13.5px;fill:var(--color-ink-2)}
+#atlas .strong{font-weight:600}
+#atlas .body{fill:var(--color-white);stroke:var(--color-ink);stroke-width:1.5;transition:stroke var(--duration-atlas-step) var(--ease-out),fill var(--duration-atlas-step) var(--ease-out)}
+#atlas .g{transition:opacity var(--duration-atlas-step) var(--ease-out)}
+#atlas .g.is-off{opacity:0}
+#atlas .g.is-dim{opacity:.38}
+#atlas .g.is-hl .body{stroke:var(--color-accent);stroke-width:2.5;fill:var(--color-accent-tint)}
+#atlas .g.is-ok .body{stroke:var(--color-success);stroke-width:2.5;fill:var(--color-success-tint)}
+#atlas .g.is-bad .body{stroke:var(--color-danger);stroke-width:2.5;fill:var(--color-danger-tint)}
+#atlas .dorm .body{stroke:var(--color-line-strong)}
+#atlas .edge{fill:none;stroke:var(--color-ink);stroke-width:1.75}
+#atlas .edge.renew{stroke:var(--color-accent);stroke-dasharray:5 4}
+#atlas .edge.fail{stroke:var(--color-danger);stroke-dasharray:5 4}
+#atlas .ring{fill:none;stroke:var(--color-accent);stroke-width:3;stroke-linecap:round;transform:rotate(-90deg);transform-box:fill-box;transform-origin:center;transition:stroke-dasharray var(--duration-atlas-step) linear}
+#atlas .ringbase{fill:none;stroke:var(--color-line);stroke-width:3}
+#atlas .token{fill:var(--color-accent);stroke:var(--color-white);stroke-width:1.5}
+#atlas .tag{font-family:var(--font-mono);font-size:12.5px;fill:var(--color-ink-2)}
+#atlas .clock{font-family:var(--font-mono);font-size:15px;fill:var(--color-ink)}
+.faq details{border-top:1px solid var(--color-line-strong);padding:var(--space-4) 0}
+.faq details:last-child{border-bottom:1px solid var(--color-line-strong)}
+.faq summary{cursor:pointer;font-weight:600;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:var(--space-4);min-height:2rem}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font-family:var(--font-mono);font-size:1.25rem;line-height:1}
+.faq details[open] summary::after{content:"\2212"}
+.faq p{margin-top:var(--space-3);color:var(--color-ink-2);max-width:44rem}
+.arch{display:grid;gap:0;border:1px solid var(--color-ink);border-radius:var(--radius-sm);background:var(--color-white);counter-reset:a}
+@media (min-width:900px){.arch{grid-template-columns:repeat(5,1fr)}.arch>li+li{border-left:1px solid var(--color-ink)}}
+.arch>li{list-style:none;padding:var(--space-4);position:relative;counter-increment:a}
+@media (max-width:899px){.arch>li+li{border-top:1px solid var(--color-ink)}}
+.arch .tier{font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--color-ink-2)}
+.arch h3{font-size:var(--text-step-0);margin:var(--space-2) 0}
+.arch p{font-size:var(--text-ui-md);color:var(--color-ink-2)}
+.arch .trust{display:inline-block;margin-top:var(--space-3);font-family:var(--font-mono);font-size:var(--text-ui-xs);border:1px dashed var(--color-line-strong);padding:1px 6px;border-radius:var(--radius-xs);color:var(--color-ink-2)}
+.preview{border:1px solid var(--color-ink);border-radius:var(--radius-sm);overflow:hidden;background:var(--color-canvas)}
+.preview-bar{display:flex;gap:var(--space-3);align-items:center;padding:var(--space-2) var(--space-4);border-bottom:1px solid var(--color-line);background:var(--color-white);font-family:var(--font-mono);font-size:var(--text-ui-xs);color:var(--color-ink-2);flex-wrap:wrap}
+.preview-in{padding:var(--space-4);display:grid;gap:var(--space-4)}
+.story{display:grid;gap:var(--space-6)}
+@media (min-width:900px){.story{grid-template-columns:minmax(0,4fr) minmax(0,6fr);align-items:start}}
+.cta-band{background:var(--color-ink);color:var(--color-white);padding-block:var(--space-8);border-radius:0}
+.cta-band .h2{color:var(--color-white);max-width:20ch}
+.cta-band .btn{border-color:var(--color-white)}
+.cta-band .btn-primary{background:var(--color-white);color:var(--color-ink)}
+.cta-band .btn-primary:hover{background:var(--color-accent-tint);color:var(--color-ink)}
+.cta-band .btn:not(.btn-primary){background:transparent;color:var(--color-white)}
+.cta-band :focus-visible{outline-color:var(--color-focus-on-dark)}
+</style>
+</head>
+<body data-default-state="loaded">
+<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <!-- CLUSTERX icon sprite. 16 px grid, 1.5 px stroke, round caps/joins. Original geometry (primitive shapes), authored in-repo.
+       Status glyphs differ by SILHOUETTE, not color: dashed circle, stacked bars, half-filled circle, cyclic arrow, check circle, square cross, slashed circle. -->
+  <defs>
+    <symbol id="mark" viewBox="0 0 24 24">
+      <rect x="2" y="2" width="8" height="8" rx="1.5" fill="currentColor"/>
+      <rect x="12" y="2" width="8" height="8" rx="1.5" fill="currentColor"/>
+      <rect x="2" y="12" width="8" height="8" rx="1.5" fill="currentColor"/>
+      <rect x="14.75" y="12.75" width="7.5" height="7.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 2"/>
+    </symbol>
+
+    <!-- job state glyphs -->
+    <symbol id="g-scheduled" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2.2 2"/><path d="M8 4.8V8l2.2 1.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-queued" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 6h6M5 8.5h4M5 11h2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="g-running" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2.75a5.25 5.25 0 0 1 0 10.5z" fill="currentColor"/></symbol>
+    <symbol id="g-retry" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.7-3.76" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M13 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-succeeded" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.2 8.2l2 2 3.6-4.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-failed" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="g-canceled" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.8 12.2l8.4-8.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+
+    <!-- worker state glyphs -->
+    <symbol id="g-online" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.5" fill="currentColor"/><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+    <symbol id="g-stale" viewBox="0 0 16 16"><path d="M8 2.5l6 10.5H2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.8v2.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".5" fill="currentColor"/></symbol>
+    <symbol id="g-draining" viewBox="0 0 16 16"><path d="M3 12.5h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 3v6.5M5.2 7l2.8 2.8L10.8 7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-off" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 8h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="g-revoked" viewBox="0 0 16 16"><path d="M8 2l5 1.8v3.9c0 3-2 5.1-5 6.3-3-1.2-5-3.3-5-6.3V3.8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M6 6.2l4 4M10 6.2l-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+
+    <!-- general icons -->
+    <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.2 7V5a2.8 2.8 0 0 1 5.6 0v2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 3.5v-.5A1 1 0 0 0 9.500 2H3.500A1 1 0 0 0 2.500 3v6A1 1 0 0 0 3.500 10H4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5L14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 16 16"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-x" viewBox="0 0 16 16"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-chev-d" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-chev-r" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-chev-l" viewBox="0 0 16 16"><path d="M10 4L6 8l4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-ext" viewBox="0 0 16 16"><path d="M9 3h4v4M13 3L7.500 8.500M11 9.500V12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h2.500" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2V11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="5" r=".6" fill="currentColor"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 16 16"><path d="M8 2.200l6 10.600H2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.500v3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.200" r=".6" fill="currentColor"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13.500 8a5.500 5.500 0 1 1-1.700-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M13.500 2.500V5H11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 16 16"><path d="M3 8h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-play" viewBox="0 0 16 16"><path d="M5 3.500v9l7.500-4.500z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 16 16"><path d="M5.500 3.500v9M10.500 3.500v9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-step" viewBox="0 0 16 16"><path d="M3.500 3.500v9l6-4.500z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 3.500v9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 16 16"><path d="M3 8a5 5 0 1 0 1.700-3.760" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M3 2.500v3h3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-up" viewBox="0 0 16 16"><path d="M8 13V3M4 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-down" viewBox="0 0 16 16"><path d="M8 3v10M4 9l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-list" viewBox="0 0 16 16"><path d="M5.500 4h8M5.500 8h8M5.500 12h8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="2.500" cy="4" r=".8" fill="currentColor"/><circle cx="2.500" cy="8" r=".8" fill="currentColor"/><circle cx="2.500" cy="12" r=".8" fill="currentColor"/></symbol>
+    <symbol id="i-graph" viewBox="0 0 16 16"><circle cx="3.500" cy="8" r="1.800" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12.500" cy="3.500" r="1.800" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12.500" cy="12.500" r="1.800" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.100 7.200l5.800-2.900M5.100 8.800l5.800 2.900" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 16 16"><path d="M2.500 3.500h11L9.500 8.500v4l-3 1v-5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+    <symbol id="i-signal-off" viewBox="0 0 16 16"><path d="M2.500 6.500a8 8 0 0 1 11 0M5 9a4.500 4.500 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="12" r=".9" fill="currentColor"/><path d="M2.500 2.500l11 11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.800V8l2.200 1.400" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-dot" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3" fill="currentColor"/></symbol>
+    <symbol id="i-pausebar" viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6.500 6v4M9.500 6v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-arrows" viewBox="0 0 16 16"><path d="M8 2v12M2 8h12M8 2L6 4M8 2l2 2M8 14l-2-2M8 14l2-2M2 8l2-2M2 8l2 2M14 8l-2-2M14 8l-2 2" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></symbol>
+  </defs>
+</svg>
+
+<a class="skip" href="#main">Skip to content</a>
+<div class="proto-bar" role="region" aria-label="Prototype notice"><b>design prototype — illustrative data</b><span>Route: / (home). Fonts shown are system fallbacks. Links to routes outside this set are inert by design.</span></div>
+<header class="pub-h">
+  <div class="wrap in">
+    <a class="wordmark" href="home.html" aria-label="CLUSTERX home"><svg class="icon" aria-hidden="true"><use href="#mark"/></svg>CLUSTERX</a>
+    <nav class="pub-nav" aria-label="Primary">
+      <a href="#" data-nolink="/architecture" data-nav="architecture">Architecture</a>
+      <a href="#" data-nolink="/docs" data-nav="docs">Docs</a>
+      <a href="#" data-nolink="/changelog" data-nav="changelog">Changelog</a>
+      <a href="#" data-nolink="/demo" data-nav="demo">Demo</a>
+      <a class="btn btn-sm" href="login.html" data-nav="login" style="margin-left:var(--space-3)">Sign in</a>
+    </nav>
+    <button class="btn btn-sm pub-menu-btn" type="button" data-open="#pub-drawer" aria-haspopup="dialog"><svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg>Menu</button>
+  </div>
+  <dialog id="pub-drawer" class="drawer" aria-label="Site menu">
+    <div class="dlg-h" style="display:flex;justify-content:space-between;align-items:center"><span class="wordmark">CLUSTERX</span><button class="icon-btn" type="button" data-close aria-label="Close menu"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <nav class="drawer-nav" aria-label="Site menu">
+      <a href="#" data-nolink="/architecture">Architecture</a><a href="#" data-nolink="/docs">Docs</a><a href="#" data-nolink="/changelog">Changelog</a><a href="#" data-nolink="/demo">Demo</a><a href="login.html">Sign in</a>
+    </nav>
+  </dialog>
+</header>
+
+<div id="status-live" class="sr-only" role="status" aria-live="polite"></div>
+
+<main id="main" tabindex="-1">
+  <section class="hero" aria-labelledby="hero-h">
+    <div class="wrap hero-grid">
+      <div class="hero-in">
+        <p class="eyebrow" style="--i:0">Open-source distributed job engine · self-hosted</p>
+        <h1 id="hero-h" class="display" style="--i:1;margin-top:var(--space-5)">Jobs that outlive their <em>workers.</em></h1>
+        <p class="lede" style="--i:2">CLUSTERX runs every job at least once. Leases and fencing make sure a worker that vanished, and then came back, cannot overwrite what happened while it was gone.</p>
+        <div class="cta-row" style="--i:3">
+          <a class="btn btn-primary btn-lg" href="#" data-nolink="/demo">Explore the demo</a>
+          <a class="btn btn-lg" href="#" data-nolink="/docs/quickstart">Read the quickstart</a>
+        </div>
+        <p class="hero-note" style="--i:3">At-least-once, not exactly-once: a handler can run twice, so side effects need to be idempotent. The engine guarantees only that the database never records a stale result.</p>
+      </div>
+      <figure class="plate reveal" style="margin:0" aria-labelledby="plate-cap">
+        <div class="plate-h"><span>Fig. 1 · one job, two workers</span><span>Illustrative, scripted</span></div>
+        <div class="tbl-wrap">
+        <table class="ledger">
+          <caption class="sr-only">Ledger of the scripted example: time, event, resulting status</caption>
+          <thead><tr><th scope="col">Time</th><th scope="col">Event</th><th scope="col">Status</th></tr></thead>
+          <tbody>
+            <tr><td>t+00.0 s</td><td>admit <span class="who">· committed</span></td><td>queued</td></tr>
+            <tr><td>t+00.4 s</td><td>claim, lease gen 1 <span class="who">· worker A</span></td><td>running</td></tr>
+            <tr><td>t+30.4 s</td><td>lease expired</td><td>retry_wait</td></tr>
+            <tr><td>t+32.9 s</td><td>claim, lease gen 2 <span class="who">· worker B</span></td><td>running</td></tr>
+            <tr><td>t+34.1 s</td><td>result committed</td><td>succeeded</td></tr>
+            <tr class="rej"><td>t+41.7 s</td><td>late report from worker A <span class="who">· rejected</span></td><td>succeeded <span class="who">(unchanged)</span></td></tr>
+          </tbody>
+        </table></div>
+        <figcaption id="plate-cap" class="plate-f">Worker A went silent, B finished the job, and A's late report was fenced off. The handler ran twice; the record is still single and coherent.</figcaption>
+      </figure>
+    </div>
+    <div class="wrap" aria-hidden="true"><hr class="tick-rule" style="margin-top:var(--space-7)"></div>
+  </section>
+
+  <section class="section" aria-labelledby="atlas-h" style="padding-top:0">
+    <div class="wrap">
+      <div class="sec-h reveal"><p class="eyebrow">The Execution Atlas</p><h2 id="atlas-h" class="h2">Follow one job through a worker failure.</h2><p class="lede">Eight steps, scripted and deterministic. Nothing on this diagram is live telemetry; the real console draws the same shapes from persisted state.</p></div>
+      <div class="atlas-card reveal" role="group" aria-labelledby="atlas-h">
+        <div class="atlas-h"><span class="tag">Illustrative, scripted</span><span class="meta" style="font-size:var(--text-ui-sm)" id="atlas-clock-t">Step 0 of 8</span></div>
+        <div class="atlas-body">
+          <div>
+            <div class="atlas-stage" tabindex="0" role="region" aria-label="Execution Atlas diagram (scrolls horizontally on narrow screens)">
+<svg id="atlas" viewBox="0 0 1000 500" role="img" aria-describedby="atlas-desc" focusable="false">
+  <title>Execution Atlas: one job, a lease expiry and a rejected late result</title>
+  <desc id="atlas-desc">A job is admitted into a queue. Worker A claims it as attempt 1 under a 30 second lease and renews it, then goes silent. The lease expires, a recovery step puts the job back in the queue, and worker B claims it as attempt 2. Worker B commits the result. A late report from worker A is rejected because its attempt is stale. The same eight steps are listed beside the diagram.</desc>
+  <defs>
+    <marker id="ah-ink" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1.5L8.500 5 1 8.500z" fill="var(--color-ink)"/></marker>
+    <marker id="ah-acc" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1.500L8.500 5 1 8.500z" fill="var(--color-accent)"/></marker>
+    <marker id="ah-red" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1.500L8.500 5 1 8.500z" fill="var(--color-danger)"/></marker>
+  </defs>
+  <text id="clk" class="clock" x="20" y="30">t+00 s</text>
+
+  <!-- edges (behind nodes) -->
+  <g class="g is-off" data-vis="1-8"><path id="e1" class="edge" d="M130 220 L212 220" marker-end="url(#ah-ink)"/><text class="sub" x="171" y="198" text-anchor="middle">admit</text><text class="tag" x="171" y="244" text-anchor="middle">committed</text></g>
+  <g class="g is-off" data-vis="2-8"><path id="e2" class="edge" d="M355 204 C395 204 395 112 420 108" marker-end="url(#ah-ink)"/><text class="sub" x="372" y="146" text-anchor="end">claim</text><text class="tag" x="372" y="162" text-anchor="end">gen 1</text></g>
+  <g class="g is-off" data-vis="3-3"><path id="e5" class="edge renew" d="M580 77 C560 34 468 34 455 70" marker-end="url(#ah-acc)"/><text class="sub" x="518" y="26" text-anchor="middle">renew · +30 s</text></g>
+  <g class="g is-off" data-vis="5-8"><path id="e6" class="edge fail" d="M625 133 C675 176 715 204 748 214" marker-end="url(#ah-red)"/><text class="sub" x="705" y="168" style="fill:var(--color-danger-ink)">lease expired</text></g>
+  <g class="g is-off" data-vis="6-8"><path id="e7" class="edge" d="M768 246 C735 505 285 505 285 254" marker-end="url(#ah-ink)"/><text class="sub" x="520" y="488" text-anchor="middle">retry_wait, then queued after backoff</text></g>
+  <g class="g is-off" data-vis="6-8"><path id="e3" class="edge" d="M355 236 C395 236 395 332 420 336" marker-end="url(#ah-ink)"/><text class="sub" x="372" y="296" text-anchor="end">claim</text><text class="tag" x="372" y="312" text-anchor="end">gen 2</text></g>
+  <g class="g is-off" data-vis="7-8"><path id="e9" class="edge" d="M672 344 C800 344 890 306 920 258" marker-end="url(#ah-ink)"/><text class="sub" x="800" y="326">result committed</text></g>
+  <g class="g is-off" data-vis="8-8"><path id="e8" class="edge fail" d="M672 108 C800 92 890 130 920 186" marker-end="url(#ah-red)"/>
+    <circle cx="806" cy="106" r="12" fill="var(--color-white)" stroke="var(--color-danger)" stroke-width="2"/><path d="M797.500 114.500 L814.500 97.500" stroke="var(--color-danger)" stroke-width="2" stroke-linecap="round"/>
+    <text class="sub" x="806" y="74" text-anchor="middle" style="fill:var(--color-danger-ink)">stale report · fenced off</text></g>
+
+  <!-- job -->
+  <g id="n-job" class="g dorm" data-hl="1"><rect class="body" x="20" y="192" width="110" height="56" rx="6"/><text class="strong" x="75" y="215" text-anchor="middle">job</text><text class="sub" x="75" y="235" text-anchor="middle">9c1e4f02</text><text id="job-status" class="sub" x="75" y="270" text-anchor="middle">&#8203;</text></g>
+  <!-- queue -->
+  <g id="n-queue" class="g dorm" data-hl="1,6"><rect class="body" x="215" y="190" width="140" height="60" rx="6"/><rect x="227" y="203" width="28" height="34" rx="3" fill="none" stroke="var(--color-line-strong)"/><rect x="261" y="203" width="28" height="34" rx="3" fill="none" stroke="var(--color-line-strong)"/><rect x="295" y="203" width="28" height="34" rx="3" fill="none" stroke="var(--color-line-strong)"/><text class="sub" x="285" y="180" text-anchor="middle">queue</text></g>
+  <!-- attempt 1 + lease -->
+  <g class="g is-off" data-vis="2-8" data-dim="6-8"><circle class="ringbase" cx="455" cy="105" r="30"/>
+    <circle id="ring1" class="ring" cx="455" cy="105" r="30" pathLength="100" stroke-dasharray="0 100"/>
+    <circle id="a1" class="body" cx="455" cy="105" r="19"/><text class="strong" x="455" y="111" text-anchor="middle">1</text><text class="sub" x="455" y="152" text-anchor="middle">attempt 1</text><text class="tag" x="455" y="168" text-anchor="middle">lease gen 1</text><line x1="474" y1="105" x2="515" y2="105" stroke="var(--color-ink-2)" stroke-width="1.5"/></g>
+  <!-- worker A -->
+  <g id="n-wa" class="g dorm" data-hl="2,3" data-dim="4-8"><polygon class="body" points="515,77 655,77 671,93 671,133 531,133 515,117"/><text class="strong" x="593" y="102" text-anchor="middle">worker A</text><text class="sub" x="593" y="121" text-anchor="middle">inc-3e8</text></g>
+  <g class="g is-off" data-vis="4-5"><text class="sub" x="593" y="66" text-anchor="middle" style="fill:var(--color-danger-ink)">silent: no renewals</text></g>
+  <!-- attempt 2 + lease -->
+  <g class="g is-off" data-vis="6-8"><circle class="ringbase" cx="455" cy="335" r="30"/>
+    <circle id="ring2" class="ring" cx="455" cy="335" r="30" pathLength="100" stroke-dasharray="0 100"/>
+    <circle id="a2" class="body" cx="455" cy="335" r="19"/><text class="strong" x="455" y="341" text-anchor="middle">2</text><text class="sub" x="455" y="382" text-anchor="middle">attempt 2</text><text class="tag" x="455" y="398" text-anchor="middle">lease gen 2</text><line x1="474" y1="335" x2="515" y2="335" stroke="var(--color-ink-2)" stroke-width="1.5"/></g>
+  <!-- worker B -->
+  <g id="n-wb" class="g dorm" data-hl="6,7"><polygon class="body" points="515,307 655,307 671,323 671,363 531,363 515,347"/><text class="strong" x="593" y="332" text-anchor="middle">worker B</text><text class="sub" x="593" y="351" text-anchor="middle">inc-91c</text></g>
+  <!-- recovery -->
+  <g id="n-rec" class="g is-off" data-vis="5-8" data-hl="5,6"><polygon class="body" points="790,172 840,220 790,268 740,220"/><text class="strong" x="790" y="218" text-anchor="middle" style="font-size:14px">recover</text><text class="tag" x="790" y="290" text-anchor="middle">if budget left</text></g>
+  <!-- result -->
+  <g id="n-res" class="g dorm" data-hl="" data-ok="7-8"><rect class="body" x="860" y="192" width="120" height="60" rx="6" transform="translate(-0,0)"/><rect x="860" y="192" width="8" height="60" rx="3" fill="var(--color-ink)"/><text class="strong" x="926" y="217" text-anchor="middle">result</text><text id="res-status" class="sub" x="926" y="236" text-anchor="middle">&#8203;</text></g>
+  <circle id="token" class="token" r="6" cx="-20" cy="-20" opacity="0"/>
+</svg>
+            </div>
+            <div class="atlas-ctl" role="group" aria-label="Atlas controls">
+              <button class="btn btn-sm" type="button" id="at-play" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg><span>Play</span></button>
+              <button class="btn btn-sm" type="button" id="at-step"><svg class="icon" aria-hidden="true"><use href="#i-step"/></svg>Step</button>
+              <button class="btn btn-sm" type="button" id="at-reset"><svg class="icon" aria-hidden="true"><use href="#i-reset"/></svg>Reset</button>
+              <span class="meta" style="margin-left:auto">Plays once on first view, then rests. Reduced motion: step through only.</span>
+            </div>
+            <div class="atlas-cap" id="atlas-cap" role="status" aria-live="polite"><b>Step 0 of 8</b><span>Press Play or Step. The steps are listed alongside; the diagram only mirrors them.</span></div>
+          </div>
+          <div class="steps">
+            <h3 class="h3" style="font-size:var(--text-ui-lg)">The eight steps</h3>
+            <ol id="atlas-steps">
+              <li><div><strong>Admit</strong><span>Committed before the API answers.</span></div></li>
+              <li><div><strong>Claim</strong><span>Attempt 1, lease generation 1.</span></div></li>
+              <li><div><strong>Renew</strong><span>Worker A extends its lease.</span></div></li>
+              <li><div><strong>Silence</strong><span>Worker A stops renewing.</span></div></li>
+              <li><div><strong>Expire</strong><span>Lease ends on the database clock.</span></div></li>
+              <li><div><strong>Recover</strong><span>Back to queued; worker B claims it.</span></div></li>
+              <li><div><strong>Commit</strong><span>Worker B's result is accepted.</span></div></li>
+              <li><div><strong>Fence</strong><span>Worker A's late report is rejected.</span></div></li>
+            </ol>
+          </div>
+        </div>
+        <ul class="atlas-legend" aria-label="Atlas legend">
+          <li><svg viewBox="0 0 44 24" aria-hidden="true"><rect x="4" y="5" width="36" height="14" rx="3" fill="none" stroke="var(--color-ink)" stroke-width="1.5"/></svg><span><strong>Job</strong> rounded block, status written beneath</span></li>
+          <li><svg viewBox="0 0 44 24" aria-hidden="true"><rect x="3" y="4" width="38" height="16" rx="3" fill="none" stroke="var(--color-ink)" stroke-width="1.5"/><path d="M15 8v8M27 8v8" stroke="var(--color-line-strong)" stroke-width="1.5"/></svg><span><strong>Queue</strong> slotted block, depth shown by filled slots</span></li>
+          <li><svg viewBox="0 0 44 24" aria-hidden="true"><circle cx="22" cy="12" r="6" fill="none" stroke="var(--color-ink)" stroke-width="1.5"/></svg><span><strong>Attempt</strong> numbered circle, one per claim</span></li>
+          <li><svg viewBox="0 0 44 24" aria-hidden="true"><circle cx="22" cy="12" r="9" fill="none" stroke="var(--color-accent)" stroke-width="3" stroke-dasharray="40 17" stroke-linecap="round"/></svg><span><strong>Lease</strong> ring around an attempt; arc length is time left</span></li>
+          <li><svg viewBox="0 0 44 24" aria-hidden="true"><polygon points="6,5 34,5 40,10 40,19 12,19 6,14" fill="none" stroke="var(--color-ink)" stroke-width="1.5"/></svg><span><strong>Worker</strong> chamfered block, with its incarnation</span></li>
+          <li><svg viewBox="0 0 44 24" aria-hidden="true"><polygon points="22,2 36,12 22,22 8,12" fill="none" stroke="var(--color-ink)" stroke-width="1.5"/></svg><span><strong>Recovery</strong> diamond: the engine decides retry or fail</span></li>
+          <li><svg viewBox="0 0 44 24" aria-hidden="true"><rect x="4" y="5" width="36" height="14" rx="3" fill="none" stroke="var(--color-ink)" stroke-width="1.5"/><rect x="4" y="5" width="6" height="14" rx="2" fill="var(--color-ink)"/></svg><span><strong>Result</strong> block with a solid spine</span></li>
+          <li><svg viewBox="0 0 44 24" aria-hidden="true"><path d="M3 12h34" stroke="var(--color-ink)" stroke-width="1.75" marker-end="url(#ah-ink)"/><path d="M3 20h30" stroke="var(--color-accent)" stroke-width="1.75" stroke-dasharray="5 4"/><path d="M3 5h30" stroke="var(--color-danger)" stroke-width="1.75" stroke-dasharray="5 4"/></svg><span><strong>Edges</strong> solid committed, blue dashed renewal, red dashed rejected</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section alt" aria-labelledby="pill-h">
+    <div class="wrap">
+      <div class="sec-h reveal"><p class="eyebrow">Three things it does</p><h2 id="pill-h" class="h2">Small surface. Stated guarantees.</h2></div>
+      <div class="pillars reveal">
+        <article><p class="no">01 / Admission</p><h3>Acknowledged means committed.</h3><p>A job gets a success response only after its transaction commits in PostgreSQL. A coordinator restart does not lose acknowledged work.</p><p class="proof">POST /jobs → 201 after commit</p></article>
+        <article><p class="no">02 / Execution</p><h3>Leases and fencing.</h3><p>Every claim creates an attempt and a lease generation in one transaction. Reports from a stale attempt, generation, or revoked credential are refused.</p><p class="proof">attempt + generation + incarnation</p></article>
+        <article><p class="no">03 / Operation</p><h3>A console that shows persisted state.</h3><p>Queue age, workers, attempts and events come from the database. When the live channel drops, the screen says so and reconciles from a snapshot.</p><p class="proof">live hint → snapshot → render</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="arch-h">
+    <div class="wrap">
+      <div class="sec-h reveal"><p class="eyebrow">Architecture</p><h2 id="arch-h" class="h2">One coordinator, one database, workers that pull.</h2><p class="lede">Workers never touch the database. They ask the coordinator for work and report back over authenticated gRPC.</p></div>
+      <ol class="arch reveal" aria-label="Architecture layers, left to right">
+        <li><p class="tier">Layer 1</p><h3>Browser</h3><p>Console and public site over HTTPS. Holds no API or worker tokens.</p><span class="trust">session cookie only</span></li>
+        <li><p class="tier">Layer 2</p><h3>Next.js server</h3><p>Human sessions and the server-side proxy. Signs short-lived service assertions.</p><span class="trust">trust boundary</span></li>
+        <li><p class="tier">Layer 3</p><h3>Go coordinator</h3><p>REST, gRPC, scheduler and authorization on every call.</p><span class="trust">enforces roles</span></li>
+        <li><p class="tier">Layer 4</p><h3>PostgreSQL</h3><p>The only authoritative store for jobs, attempts, leases and events.</p><span class="trust">single source of truth</span></li>
+        <li><p class="tier">Layer 5</p><h3>Workers</h3><p>Trusted, precompiled handlers. Pull work, renew leases, report results.</p><span class="trust">credential per worker</span></li>
+      </ol>
+      <p style="margin-top:var(--space-4)"><a href="#" data-nolink="/architecture">Read the full architecture, trade-offs and failure domains</a></p>
+    </div>
+  </section>
+
+  <section class="section alt" aria-labelledby="story-h">
+    <div class="wrap story">
+      <div class="sec-h reveal" style="margin-bottom:0"><p class="eyebrow">The worker-failure story</p><h2 id="story-h" class="h2">What happens when a worker dies mid-job.</h2><p class="lede">The same eight steps, in plain terms: no retry is hidden, no result is overwritten.</p></div>
+      <ol class="timeline reveal" aria-label="Worker failure timeline">
+        <li><span class="t">t+00 s</span><p><strong>Claimed.</strong> Worker A holds attempt 1 under a 30 s lease.</p></li>
+        <li data-kind="warn"><span class="t">t+30 s</span><p><strong>Lease expires.</strong> The database clock decides, not the worker. Attempt 1 counts against the job's budget.</p></li>
+        <li><span class="t">t+32 s</span><p><strong>Retried.</strong> With budget left the job goes back to the queue; worker B claims attempt 2.</p></li>
+        <li data-kind="ok"><span class="t">t+34 s</span><p><strong>Committed.</strong> Worker B's result is recorded with its attempt and generation.</p></li>
+        <li data-kind="bad"><span class="t">t+41 s</span><p><strong>Rejected.</strong> Worker A reports late. The result is refused and a diagnostic event is kept. The job still says succeeded.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="prev-h">
+    <div class="wrap">
+      <div class="sec-h reveal"><p class="eyebrow">Console</p><h2 id="prev-h" class="h2">Open a job and see every attempt.</h2></div>
+      <figure class="preview reveal" style="margin:0" aria-labelledby="prev-cap">
+        <div class="preview-bar"><span>/app/jobs</span><span>design prototype preview — illustrative data, not a capture of shipped software</span></div>
+        <div class="preview-in">
+          <div class="card tbl-wrap"><table class="tbl"><caption>Jobs, 4 shown</caption>
+            <thead><tr><th scope="col">Job</th><th scope="col">Handler</th><th scope="col">Status</th><th scope="col">Attempts</th></tr></thead>
+            <tbody>
+              <tr><td data-label="Job"><span class="mono">3f9a21c4</span></td><td data-label="Handler">thumbnail@2</td><td data-label="Status"><span class="status" data-s="running"><svg class="icon" aria-hidden="true"><use href="#g-running"/></svg>Running</span></td><td data-label="Attempts">1 of 3</td></tr>
+              <tr><td data-label="Job"><span class="mono">9c1e4f02</span></td><td data-label="Handler">ocr@1</td><td data-label="Status"><span class="status" data-s="succeeded"><svg class="icon" aria-hidden="true"><use href="#g-succeeded"/></svg>Succeeded</span></td><td data-label="Attempts">2 of 3</td></tr>
+              <tr><td data-label="Job"><span class="mono">b07d5e19</span></td><td data-label="Handler">export@3</td><td data-label="Status"><span class="status" data-s="failed"><svg class="icon" aria-hidden="true"><use href="#g-failed"/></svg>Failed</span></td><td data-label="Attempts">3 of 3</td></tr>
+              <tr><td data-label="Job"><span class="mono">e2a6c880</span></td><td data-label="Handler">digest@1</td><td data-label="Status"><span class="status" data-s="retry_wait"><svg class="icon" aria-hidden="true"><use href="#g-retry"/></svg>Retry wait</span></td><td data-label="Attempts">1 of 3</td></tr>
+            </tbody></table></div>
+        </div>
+        <figcaption id="prev-cap" class="plate-f" style="background:var(--color-white)">A final screenshot from shipped software replaces this preview at M7 and will be captioned with the version it was captured from.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section alt" aria-labelledby="qs-h">
+    <div class="wrap grid12" style="row-gap:var(--space-6)">
+      <div class="reveal" style="grid-column:1/-1"><p class="eyebrow">Quickstart</p><h2 id="qs-h" class="h2" style="margin-top:var(--space-4)">Three workers on your machine.</h2></div>
+      <div class="reveal" style="grid-column:1/-1;max-width:48rem">
+        <div class="notice warn" style="margin-bottom:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><div class="grow"><strong>Not yet verified from a clean checkout.</strong> These commands are an example of the intended flow. The verification stamp appears here only after the clean-checkout run has passed.</div></div>
+        <div class="code">
+          <div class="code-h"><span>Shell · example</span><button class="btn btn-sm" type="button" data-copy="#qs-code"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg><span class="cl">Copy</span></button></div>
+          <pre tabindex="0" aria-label="Quickstart commands"><code id="qs-code"><span class="c"># clone and start the coordinator, database, console and three workers</span>
+git clone &lt;repository-url&gt; clusterx &amp;&amp; cd clusterx
+docker compose up --build
+
+<span class="c"># submit a job, then watch it in the console</span>
+curl -X POST http://localhost:8080/api/v1/jobs \
+  -H "Idempotency-Key: demo-1" \
+  -H "Authorization: Bearer $CLUSTERX_TOKEN" \
+  -d '{"handler_name":"thumbnail","handler_version":2,"payload":{}}'</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="faq-h">
+    <div class="wrap grid12" style="row-gap:var(--space-6)">
+      <div class="reveal" style="grid-column:1/-1"><p class="eyebrow">Limitations and questions</p><h2 id="faq-h" class="h2" style="margin-top:var(--space-4)">What it does not promise.</h2></div>
+      <div class="faq reveal" style="grid-column:1/-1;max-width:48rem">
+        <details><summary>Is processing exactly-once?</summary><p>No. Execution is at-least-once. If a worker loses its lease while a handler is still running, the handler may run again on another worker. The database only records a result from the current attempt, so make external side effects idempotent.</p></details>
+        <details><summary>Can the engine stop a handler that ignores cancellation?</summary><p>No. Deadlines and cancellation are cooperative: they stop the engine from accepting results, not a goroutine from running. Handlers should honor their context.</p></details>
+        <details><summary>What if the coordinator goes down?</summary><p>There is one coordinator. While it is down, no new claims or reports happen; workers must not assume a lease still holds. Processing resumes from PostgreSQL when it returns.</p></details>
+        <details><summary>Is job order strict FIFO?</summary><p>No. Eligible jobs are claimed by priority, due time and creation time, but concurrent claimers can see rows out of strict order.</p></details>
+        <details><summary>Does the demo show real data?</summary><p>No. The public demo is seeded fixture data in your browser, with no connection to a running system. The real engine runs locally with Docker Compose.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-band" aria-labelledby="cta-h">
+    <div class="wrap" style="display:grid;gap:var(--space-5)">
+      <h2 id="cta-h" class="h2">Run it, break a worker, read the record.</h2>
+      <div class="cta-row" style="margin-top:0">
+        <a class="btn btn-primary btn-lg" href="#" data-nolink="/docs/quickstart">Quickstart</a>
+        <a class="btn btn-lg" href="#" data-nolink="GitHub repository">Source on GitHub <svg class="icon" aria-hidden="true"><use href="#i-ext"/></svg><span class="sr-only">(external)</span></a>
+      </div>
+    </div>
+  </section>
+</main>
+<footer class="pub-f">
+  <div class="wrap">
+    <div class="cols">
+      <div><a class="wordmark" href="home.html"><svg class="icon" aria-hidden="true"><use href="#mark"/></svg>CLUSTERX</a><p class="muted" style="margin-top:var(--space-3);max-width:20rem">Self-hosted distributed job processing. At-least-once, fenced, inspectable.</p></div>
+      <nav aria-label="Product"><h2>Product</h2><ul><li><a href="#" data-nolink="/architecture">Architecture</a></li><li><a href="#" data-nolink="/demo">Demo</a></li><li><a href="#" data-nolink="/changelog">Changelog</a></li><li><a href="login.html">Sign in</a></li></ul></nav>
+      <nav aria-label="Documentation"><h2>Docs</h2><ul><li><a href="#" data-nolink="/docs/quickstart">Quickstart</a></li><li><a href="#" data-nolink="/docs/concepts">Concepts</a></li><li><a href="#" data-nolink="/docs/api">API reference</a></li><li><a href="#" data-nolink="/docs/workers">Worker SDK</a></li><li><a href="#" data-nolink="/docs/reliability">Reliability</a></li><li><a href="#" data-nolink="/docs/deployment">Deployment</a></li></ul></nav>
+      <nav aria-label="Project"><h2>Project</h2><ul><li><a href="#" data-nolink="/docs/security">Security</a></li><li><a href="#" data-nolink="GitHub repository">GitHub <svg class="icon" aria-hidden="true"><use href="#i-ext"/></svg><span class="sr-only">(external)</span></a></li><li><a href="#" data-nolink="Apache-2.0 license">License: Apache-2.0</a></li></ul></nav>
+    </div>
+    <div class="fine"><span>Design prototype footer. Release status: not yet released. No version has shipped.</span><span>Times shown in UTC unless a user timezone is set.</span></div>
+  </div>
+</footer>
+
+
+<script>
+/* Execution Atlas controller (prototype). Deterministic script, no timers simulating telemetry. */
+(function () {
+  var svg = document.getElementById('atlas'); if (!svg) return;
+  var S = [
+    { t: 't+00 s', job: 'queued', title: 'Admit', text: 'The API commits the job to PostgreSQL, then answers. Nothing is acknowledged before commit. Status: queued.', path: ['e1'] },
+    { t: 't+00.4 s', job: 'running', title: 'Claim', text: 'Worker A asks the coordinator for work. One transaction creates attempt 1 and lease generation 1, valid for 30 s. Status: running.', path: ['e2'], ring: ['ring1', 100] },
+    { t: 't+12 s', job: 'running', title: 'Renew', text: 'While the handler runs, worker A renews the lease before it runs out. The liveness heartbeat and the lease renewal are separate signals.', path: ['e5'], ring: ['ring1', 100] },
+    { t: 't+14 s', job: 'running', title: 'Silence', text: 'Worker A crashes or is cut off. Renewals stop. Its handler may still be running somewhere; the engine cannot know that.', ring: ['ring1', 55] },
+    { t: 't+30.4 s', job: 'retry_wait', title: 'Expire', text: 'The lease runs out on the database clock. Attempt 1 is marked lease_expired and counts against the job\'s attempt budget. Status: retry_wait.', ring: ['ring1', 0] },
+    { t: 't+32.9 s', job: 'running', title: 'Recover', text: 'Budget remains, so the job returns to the queue after backoff and worker B claims it: attempt 2, lease generation 2. Status: running.', path: ['e7', 'e3'], ring: ['ring2', 100] },
+    { t: 't+34.1 s', job: 'succeeded', res: 'committed', title: 'Commit', text: 'Worker B reports success. The coordinator accepts it because the attempt, generation and worker identity are all current. Status: succeeded.', path: ['e9'], ring: ['ring2', 100] },
+    { t: 't+41.7 s', job: 'succeeded', res: 'committed', title: 'Fence', text: 'Worker A returns and reports a result for attempt 1. The fence rejects it: that attempt is stale. The committed result stands. The handler ran twice; the record was never overwritten.', path: ['e8'], ring: ['ring2', 100] }
+  ];
+  var cur = 0, timer = null, playing = false, raf = 0;
+  var $ = function (s) { return document.querySelector(s); };
+  var token = $('#token'), cap = $('#atlas-cap'), list = $('#atlas-steps').children, clkT = $('#atlas-clock-t'), clk = $('#clk');
+  var playBtn = $('#at-play');
+  var rm = function () { return document.documentElement.getAttribute('data-rm') === '1'; };
+  function inRange(r, n) { var p = r.split('-'); return n >= +p[0] && n <= +p[1]; }
+  function render(n) {
+    cur = n; svg.setAttribute('data-step', n);
+    var gs = svg.querySelectorAll('.g');
+    for (var i = 0; i < gs.length; i++) {
+      var g = gs[i], vis = g.getAttribute('data-vis'), hl = g.getAttribute('data-hl'), dim = g.getAttribute('data-dim'), ok = g.getAttribute('data-ok');
+      if (vis) g.classList.toggle('is-off', !(n > 0 && inRange(vis, n)));
+      g.classList.toggle('is-hl', !!hl && hl.split(',').indexOf(String(n)) > -1);
+      g.classList.toggle('is-dim', !!dim && n > 0 && inRange(dim, n));
+      g.classList.toggle('is-ok', !!ok && n > 0 && inRange(ok, n));
+    }
+    var s = S[n - 1];
+    $('#job-status').textContent = s ? s.job : '​';
+    $('#res-status').textContent = s && s.res ? s.res : '​';
+    clk.textContent = s ? s.t : 't+00 s';
+    if (s && s.ring) { var rings = ['ring1', 'ring2']; var el = document.getElementById(s.ring[0]); el.setAttribute('stroke-dasharray', s.ring[1] + ' ' + (100 - s.ring[1])); }
+    if (n === 0) { document.getElementById('ring1').setAttribute('stroke-dasharray', '0 100'); document.getElementById('ring2').setAttribute('stroke-dasharray', '0 100'); }
+    for (var j = 0; j < list.length; j++) { if (j === n - 1) list[j].setAttribute('aria-current', 'step'); else list[j].removeAttribute('aria-current'); }
+    clkT.textContent = 'Step ' + n + ' of 8';
+    cap.innerHTML = ''; var b = document.createElement('b'); b.textContent = 'Step ' + n + ' of 8' + (s ? ' · ' + s.title : ''); var sp = document.createElement('span'); sp.textContent = s ? s.text : 'Press Play or Step. The steps are listed alongside; the diagram only mirrors them.'; cap.appendChild(b); cap.appendChild(sp);
+  }
+  function travel(ids, done) {
+    cancelAnimationFrame(raf); token.setAttribute('opacity', 0);
+    if (!ids || !ids.length) { done && done(); return; }
+    var paths = ids.map(function (id) { return document.getElementById(id); });
+    if (rm()) { var last = paths[paths.length - 1], L = last.getTotalLength(), p = last.getPointAtLength(L); token.setAttribute('cx', p.x); token.setAttribute('cy', p.y); token.setAttribute('opacity', 1); done && done(); return; }
+    var dur = 600 * paths.length, t0 = null;
+    token.setAttribute('opacity', 1);
+    function frame(t) {
+      if (t0 === null) t0 = t; var k = Math.min(1, (t - t0) / dur), idx = Math.min(paths.length - 1, Math.floor(k * paths.length)), local = k * paths.length - idx; if (k === 1) local = 1;
+      var pa = paths[idx], p = pa.getPointAtLength(pa.getTotalLength() * Math.min(1, local));
+      token.setAttribute('cx', p.x); token.setAttribute('cy', p.y);
+      if (k < 1) raf = requestAnimationFrame(frame); else done && done();
+    }
+    raf = requestAnimationFrame(frame);
+  }
+  function go(n) { render(n); var s = S[n - 1]; travel(s && s.path); }
+  function stop() { playing = false; clearTimeout(timer); playBtn.setAttribute('aria-pressed', 'false'); playBtn.querySelector('span').textContent = cur >= 8 ? 'Replay' : 'Play'; playBtn.querySelector('use').setAttribute('href', '#i-play'); }
+  function tick() { if (!playing) return; if (cur >= 8) { stop(); return; } go(cur + 1); timer = setTimeout(tick, rm() ? 2600 : 2400); }
+  function play() { if (cur >= 8) { go(0); render(0); cur = 0; } playing = true; playBtn.setAttribute('aria-pressed', 'true'); playBtn.querySelector('span').textContent = 'Pause'; playBtn.querySelector('use').setAttribute('href', '#i-pause'); tick(); }
+  playBtn.addEventListener('click', function () { playing ? stop() : play(); });
+  $('#at-step').addEventListener('click', function () { stop(); go(cur >= 8 ? 1 : cur + 1); stop(); });
+  $('#at-reset').addEventListener('click', function () { stop(); cancelAnimationFrame(raf); token.setAttribute('opacity', 0); render(0); playBtn.querySelector('span').textContent = 'Play'; });
+  document.addEventListener('visibilitychange', function () { if (document.hidden && playing) stop(); });
+  render(0);
+  /* auto-play once on first view, never when reduced motion */
+  var once = false;
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(function (es, o) { es.forEach(function (e) { if (e.isIntersecting && !once && !rm() && !location.hash.match(/noauto/)) { once = true; o.disconnect(); play(); } }); }, { threshold: 0.6 }).observe(svg);
+  }
+  window.CLX = window.CLX || {}; window.CLX.atlasGo = function (n) { stop(); render(n); var s = S[n - 1]; if (s && s.path) { var last = document.getElementById(s.path[s.path.length - 1]); var p = last.getPointAtLength(last.getTotalLength()); token.setAttribute('cx', p.x); token.setAttribute('cy', p.y); token.setAttribute('opacity', 1); } };
+})();
+</script>
+<script>
+/* CLUSTERX design prototype behavior (shared). Vanilla JS, no network. Every control in the prototypes is wired here or omitted. */
+(function () {
+  'use strict';
+  var root = document.documentElement;
+  root.classList.add('js');
+  var mq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false, addEventListener: function () {} };
+  var reduced = function () { return mq.matches || root.getAttribute('data-rm') === '1'; };
+  root.setAttribute('data-rm', mq.matches ? '1' : '0');
+  if (mq.addEventListener) mq.addEventListener('change', function () { root.setAttribute('data-rm', mq.matches ? '1' : '0'); });
+
+  var $ = function (s, c) { return (c || document).querySelector(s); };
+  var $$ = function (s, c) { return Array.prototype.slice.call((c || document).querySelectorAll(s)); };
+  var CLX = (window.CLX = window.CLX || {});
+
+  /* polite status region (one per page) */
+  var status = $('#status-live');
+  function say(msg) { if (status) { status.textContent = ''; setTimeout(function () { status.textContent = msg; }, 30); } }
+  CLX.say = say;
+  var toastTimer;
+  function toast(msg) {
+    var t = $('#toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; t.className = 'toast-live'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+    t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 3800);
+  }
+  CLX.toast = toast;
+
+  /* ---- hash state: #state=empty&role=viewer ---- */
+  function params() { var o = {}; (location.hash || '').replace(/^#/, '').split('&').forEach(function (p) { var kv = p.split('='); if (kv[0]) o[kv[0]] = decodeURIComponent(kv[1] || ''); }); return o; }
+  function setParams(o) { var cur = params(); for (var k in o) cur[k] = o[k]; location.hash = Object.keys(cur).map(function (k) { return k + '=' + encodeURIComponent(cur[k]); }).join('&'); }
+  CLX.params = params; CLX.setParams = setParams;
+  var LIVE = {
+    live: ['g-online', 'Live'], reconnecting: ['i-refresh', 'Reconnecting'], polling: ['i-refresh', 'Polling every 15 s'],
+    stale: ['g-stale', 'Stale'], offline: ['i-signal-off', 'Offline'], paused: ['i-pausebar', 'Paused (tab hidden)'], demo: ['i-dot', 'Demo data']
+  };
+  function setLive(kind) {
+    $$('.live').forEach(function (el) {
+      var d = LIVE[kind] || LIVE.live; el.setAttribute('data-live', kind);
+      var use = $('use', el); if (use) use.setAttribute('href', '#' + d[0]);
+      var t = $('.live-t', el); if (t) t.textContent = d[1];
+    });
+  }
+  CLX.setLive = setLive;
+  function applyState() {
+    var p = params();
+    var st = p.state || document.body.getAttribute('data-default-state') || 'loaded';
+    var role = p.role || 'operator';
+    root.setAttribute('data-state', st); root.setAttribute('data-role', role);
+    $$('[data-when]').forEach(function (el) { el.hidden = el.getAttribute('data-when').split(' ').indexOf(st) < 0; });
+    $$('[data-when-not]').forEach(function (el) { el.hidden = el.getAttribute('data-when-not').split(' ').indexOf(st) >= 0; });
+    $$('[data-role-only]').forEach(function (el) { el.hidden = el.getAttribute('data-role-only') !== role; });
+    $$('[data-hide-role]').forEach(function (el) { el.hidden = el.getAttribute('data-hide-role') === role; });
+    $$('[data-state-set]').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-state-set') === st ? 'true' : 'false'); });
+    $$('[data-role-set]').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-role-set') === role ? 'true' : 'false'); });
+    var map = (document.body.getAttribute('data-live-map') || '').split(',').reduce(function (a, s) { var kv = s.split(':'); if (kv[0]) a[kv[0]] = kv[1]; return a; }, {});
+    if ($('.live')) setLive(map[st] || 'live');
+    $$('.is-stale-target').forEach(function (el) { el.classList.toggle('is-stale', st === 'stale' || st === 'offline'); });
+    var h1 = $('h1[data-state-title]'); if (h1) { var tt = h1.getAttribute('data-state-title'); }
+    if (window.CLX.onState) window.CLX.onState(st, role);
+  }
+  window.addEventListener('hashchange', applyState);
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-state-set]'); if (b) { setParams({ state: b.getAttribute('data-state-set') }); say('Prototype state: ' + b.textContent.trim()); return; }
+    var r = e.target.closest('[data-role-set]'); if (r) { setParams({ role: r.getAttribute('data-role-set') }); say('Prototype role: ' + r.textContent.trim()); }
+  });
+
+  /* ---- dialogs ---- */
+  document.addEventListener('click', function (e) {
+    var o = e.target.closest('[data-open]');
+    if (o) { var d = $(o.getAttribute('data-open')); if (d && d.showModal) { d.showModal(); var f = $('[autofocus]', d); if (f) f.focus(); } return; }
+    var c = e.target.closest('[data-close]');
+    if (c) { var dd = c.closest('dialog'); if (dd) dd.close(c.getAttribute('data-close')); return; }
+    var dlg = e.target; if (dlg.tagName === 'DIALOG' && dlg.hasAttribute('open')) { var r = dlg.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dlg.close('dismiss'); }
+  });
+  $$('dialog.drawer a').forEach(function (a) { a.addEventListener('click', function () { var d = a.closest('dialog'); if (d) d.close(); }); });
+
+  /* ---- copy buttons ---- */
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-copy]'); if (!b) return;
+    var sel = b.getAttribute('data-copy'); var src = sel.charAt(0) === '#' ? $(sel) : null;
+    var text = src ? (src.getAttribute('data-copy-text') || src.textContent) : sel;
+    var done = function () { var l = b.querySelector('.cl'); var old = l ? l.textContent : ''; if (l) l.textContent = 'Copied'; say('Copied to clipboard'); setTimeout(function () { if (l) l.textContent = old; }, 1800); };
+    var fallback = function () { var ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (x) { say('Copy blocked. Select the text and copy manually.'); } document.body.removeChild(ta); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  });
+
+  /* ---- links to routes not in this prototype set ---- */
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('a[data-nolink]'); if (!a) return;
+    e.preventDefault(); toast('Not part of this prototype set. Route contract: docs/design/route-inventory.md (' + (a.getAttribute('data-nolink') || a.textContent.trim()) + ').');
+  });
+
+  /* ---- timestamps: local + explicit zone, UTC in title (route-inventory 1.6) ---- */
+  $$('time[data-fmt]').forEach(function (t) {
+    var d = new Date(t.getAttribute('datetime')); if (isNaN(d)) return;
+    try {
+      var loc = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZoneName: 'short' }).format(d);
+      t.textContent = loc; t.title = d.toISOString().replace('.000', '') + ' (UTC)';
+    } catch (x) { /* keep static UTC text */ }
+  });
+
+  /* ---- M-SECTION reveal ---- */
+  var rv = $$('.reveal');
+  if ('IntersectionObserver' in window && rv.length && !reduced()) {
+    var io = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } }); }, { threshold: 0.2 });
+    rv.forEach(function (el, i) { el.style.transitionDelay = Math.min(i % 4, 3) * 40 + 'ms'; io.observe(el); });
+  } else { rv.forEach(function (el) { el.classList.add('in'); }); }
+
+  /* ---- generic table filter: <select data-filter="status" data-table="#t"> rows carry data-status ---- */
+  $$('[data-filter]').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      var tb = $(sel.getAttribute('data-table')); if (!tb) return;
+      var rows = $$('tbody tr', tb), n = 0;
+      var active = $$('[data-filter][data-table="' + sel.getAttribute('data-table') + '"]').filter(function (s) { return s.value; });
+      rows.forEach(function (r) { var ok = active.every(function (s) { var v = r.getAttribute('data-' + s.getAttribute('data-filter')) || ''; return v.split(' ').indexOf(s.value) > -1; }); r.hidden = !ok; if (ok) n++; });
+      var cap = $('caption .n', tb); if (cap) cap.textContent = n;
+      var none = $(sel.getAttribute('data-empty') || '#filter-empty'); if (none) none.hidden = n > 0;
+      say(n + (n === 1 ? ' result' : ' results'));
+    });
+  });
+
+  /* ---- command search (Ctrl/Cmd+K) ---- */
+  var cmd = $('#cmd');
+  if (cmd) {
+    var inp = $('input', cmd), list = $('#cmd-list', cmd), empty = $('#cmd-empty', cmd);
+    var items = $$('li', list);
+    var refresh = function () {
+      var q = inp.value.trim().toLowerCase(); var n = 0;
+      items.forEach(function (li) { if (li.hasAttribute('data-id-result')) return; var ok = !q || li.textContent.toLowerCase().indexOf(q) > -1; li.hidden = !ok; if (ok) n++; });
+      var idr = $('[data-id-result]', list), isId = /^[0-9a-f]{8}$/.test(q);
+      if (idr) { idr.hidden = !isId; if (isId) { $('a', idr).textContent = 'Open job ' + q; n++; } }
+      var worker = /^wk-\d+$/.test(q);
+      empty.hidden = n > 0 || !q;
+      empty.textContent = (q && !isId && !worker) ? 'No job or worker with that ID. Enter an exact ID.' : '';
+    };
+    inp.addEventListener('input', refresh);
+    document.addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (!cmd.open) cmd.showModal(); inp.focus(); } });
+    cmd.addEventListener('close', function () { inp.value = ''; refresh(); });
+    refresh();
+  }
+
+  /* ---- fixtures (all illustrative) ---- */
+  function rng(seed) { var s = seed >>> 0; return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+  CLX.rng = rng;
+  var HANDLERS = [['thumbnail', 2], ['ocr', 1], ['export', 3], ['digest', 1], ['transcode', 1]];
+  CLX.workers = function (n) {
+    var r = rng(7), out = [];
+    for (var i = 0; i < n; i++) {
+      var cap = [2, 4, 4, 8][i % 4], h = HANDLERS[i % 5];
+      var st = 'online', live = true, rev = false;
+      if (n > 1 && i % 17 === 5) { st = 'stale'; live = false; }
+      if (n > 1 && i % 29 === 7) { st = 'draining'; }
+      if (n > 1 && i % 41 === 11) { st = 'revoked'; live = false; rev = true; }
+      var active = (st === 'online' && i % 3 === 0) ? Math.min(cap, 1 + (i % 3)) : (st === 'draining' ? 1 : 0);
+      var hb = live ? 2 + Math.floor(r() * 8) : 38 + Math.floor(r() * 90);
+      out.push({ id: 'wk-' + (i + 1), name: 'worker-' + String(i + 1).padStart(3, '0'), handler: h[0], ver: h[1], cap: cap, active: active, st: st, live: live, rev: rev, hb: hb, inc: 'inc-' + (1000 + i * 7).toString(16) });
+    }
+    return out;
+  };
+  var STATE_LABEL = { online: 'Online', stale: 'Stale', draining: 'Draining', revoked: 'Credential revoked', off: 'Deregistered' };
+  var STATE_GLYPH = { online: 'g-online', stale: 'g-stale', draining: 'g-draining', revoked: 'g-revoked', off: 'g-off' };
+  CLX.STATE_LABEL = STATE_LABEL; CLX.STATE_GLYPH = STATE_GLYPH;
+
+  /* ---- topology (console, data-backed in product; illustrative here). SVG graph with synchronized list. ---- */
+  CLX.topology = function (host, workers, opts) {
+    opts = opts || {};
+    var NS = 'http://www.w3.org/2000/svg', n = workers.length, cluster = n > 12;
+    var W, H, nodes = [];
+    function el(name, attrs, parent) { var e = document.createElementNS(NS, name); for (var k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+    host.textContent = '';
+    var items;
+    if (cluster) {
+      var groups = {}; workers.forEach(function (w) { (groups[w.handler] = groups[w.handler] || []).push(w); });
+      items = Object.keys(groups).map(function (k) { var g = groups[k]; return { key: k, workers: g, label: k + '@' + g[0].ver, live: g.filter(function (w) { return w.st === 'online'; }).length, stale: g.filter(function (w) { return w.st === 'stale'; }).length, drain: g.filter(function (w) { return w.st === 'draining'; }).length, rev: g.filter(function (w) { return w.rev; }).length, act: g.reduce(function (a, w) { return a + w.active; }, 0) }; });
+    } else {
+      items = workers.map(function (w) { return { key: w.id, workers: [w], label: w.name, w: w }; });
+    }
+    var cols = Math.min(items.length, 3), rows = Math.ceil(items.length / cols);
+    var nw = cluster ? 250 : 150, nh = cluster ? 78 : 54, gx = 24, gy = 22, x0 = 190;
+    W = x0 + cols * (nw + gx) + 6; H = Math.max(180, 40 + rows * (nh + gy));
+    var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': opts.label || ('Worker topology: ' + n + ' workers. A table with the same entries follows.') }, host);
+    var vb = { x: 0, y: 0, w: W, h: H };
+    var g0 = el('g', {}, svg);
+    /* coordinator hub */
+    var hubY = H / 2;
+    var hub = el('g', {}, g0);
+    el('rect', { x: 16, y: hubY - 34, width: 120, height: 68, rx: 6, fill: 'var(--color-ink)' }, hub);
+    var t1 = el('text', { x: 76, y: hubY - 4, 'text-anchor': 'middle', fill: 'var(--color-white)', 'font-size': 12, 'font-weight': 600 }, hub); t1.textContent = 'coordinator';
+    var t2 = el('text', { x: 76, y: hubY + 14, 'text-anchor': 'middle', fill: 'var(--color-code-mute)', 'font-size': 10, 'font-family': 'var(--font-mono)' }, hub); t2.textContent = 'claims via gRPC';
+    items.forEach(function (it, i) {
+      var c = i % cols, r = Math.floor(i / cols), x = x0 + c * (nw + gx), y = 24 + r * (nh + gy);
+      it.x = x; it.y = y;
+      el('path', { d: 'M136 ' + hubY + ' C 170 ' + hubY + ', 160 ' + (y + nh / 2) + ', ' + x + ' ' + (y + nh / 2), fill: 'none', stroke: 'var(--color-line-strong)', 'stroke-width': 1 }, g0);
+    });
+    items.forEach(function (it, i) {
+      var w = it.w, st = cluster ? (it.stale + it.rev === it.workers.length ? 'stale' : 'online') : w.st;
+      var g = el('g', { class: 'node', tabindex: 0, role: 'button', 'data-key': it.key, 'data-live': (st === 'stale' || st === 'revoked') ? 'stale' : (st === 'off' ? 'off' : 'on'), 'aria-label': cluster ? (it.label + ' cluster: ' + it.workers.length + ' workers, ' + it.live + ' online, ' + it.stale + ' stale, ' + it.drain + ' draining, ' + it.rev + ' revoked') : (w.name + ', ' + STATE_LABEL[w.st] + ', handler ' + w.handler + ', ' + w.active + ' of ' + w.cap + ' slots active') }, g0);
+      el('rect', { class: 'body', x: it.x, y: it.y, width: nw, height: nh, rx: 6 }, g);
+      if (cluster) {
+        var a = el('text', { x: it.x + 12, y: it.y + 22, 'font-weight': 600, 'font-size': 13 }, g); a.textContent = it.label + ' cluster';
+        var b = el('text', { x: it.x + 12, y: it.y + 42, class: 'sub' }, g); b.textContent = it.workers.length + ' workers · ' + it.act + ' active attempts';
+        var c2 = el('text', { x: it.x + 12, y: it.y + 60, class: 'sub' }, g); c2.textContent = it.live + ' on · ' + it.stale + ' stale · ' + it.drain + ' drain · ' + it.rev + ' revoked';
+      } else {
+        var u = el('use', { href: '#' + STATE_GLYPH[w.st], x: it.x + 10, y: it.y + 10, width: 16, height: 16, style: 'color:' + (w.st === 'online' ? 'var(--color-success)' : w.st === 'revoked' ? 'var(--color-danger)' : 'var(--color-warning)') }, g);
+        var a2 = el('text', { x: it.x + 32, y: it.y + 22, 'font-weight': 600 }, g); a2.textContent = w.name;
+        var b2 = el('text', { x: it.x + 10, y: it.y + 40, class: 'sub' }, g); b2.textContent = STATE_LABEL[w.st] + ' · ' + w.active + '/' + w.cap;
+        if (w.active > 0 && w.live && n < 100) { var p = el('rect', { class: 'pulse', x: it.x - 2, y: it.y - 2, width: nw + 4, height: nh + 4, rx: 8, style: 'transform-box:fill-box;transform-origin:center' }, g); void p; }
+      }
+      nodes.push(g);
+      g.addEventListener('click', function () { select(it.key, true); });
+      g.addEventListener('keydown', function (e) {
+        var idx = nodes.indexOf(g), nx = null;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(it.key, true); return; }
+        if (e.key === 'ArrowRight') nx = idx + 1; else if (e.key === 'ArrowLeft') nx = idx - 1; else if (e.key === 'ArrowDown') nx = idx + cols; else if (e.key === 'ArrowUp') nx = idx - cols;
+        if (nx !== null && nodes[nx]) { e.preventDefault(); nodes[nx].focus(); }
+      });
+    });
+    function apply() { svg.setAttribute('viewBox', vb.x + ' ' + vb.y + ' ' + vb.w + ' ' + vb.h); }
+    CLX.topoCtl = {
+      zoom: function (f) { var cx = vb.x + vb.w / 2, cy = vb.y + vb.h / 2; vb.w = Math.min(W * 2, Math.max(W / 4, vb.w * f)); vb.h = vb.w * H / W; vb.x = cx - vb.w / 2; vb.y = cy - vb.h / 2; apply(); say('Zoom ' + Math.round(W / vb.w * 100) + ' percent'); },
+      pan: function (dx, dy) { vb.x += dx * vb.w; vb.y += dy * vb.h; apply(); },
+      reset: function () { vb = { x: 0, y: 0, w: W, h: H }; apply(); say('View reset'); }
+    };
+    function select(key, fromGraph) {
+      nodes.forEach(function (g) { g.setAttribute('data-sel', g.getAttribute('data-key') === key ? '1' : '0'); });
+      if (opts.onSelect) opts.onSelect(key, fromGraph, items);
+    }
+    CLX.topoSelect = select;
+    return { items: items, select: select, svg: svg };
+  };
+  document.addEventListener('click', function (e) {
+    var z = e.target.closest('[data-topo]'); if (!z || !CLX.topoCtl) return;
+    var a = z.getAttribute('data-topo');
+    if (a === 'in') CLX.topoCtl.zoom(0.8); else if (a === 'out') CLX.topoCtl.zoom(1.25); else if (a === 'reset') CLX.topoCtl.reset();
+    else if (a === 'left') CLX.topoCtl.pan(-0.15, 0); else if (a === 'right') CLX.topoCtl.pan(0.15, 0); else if (a === 'up') CLX.topoCtl.pan(0, -0.15); else if (a === 'down') CLX.topoCtl.pan(0, 0.15);
+  });
+
+  /* ---- tabs/segment toggles: [data-toggle-group] buttons show panels by id ---- */
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-panel]'); if (!b) return;
+    var grp = b.closest('[data-panel-group]'); if (!grp) return;
+    $$('[data-panel]', grp).forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); var p = $(x.getAttribute('data-panel')); if (p) p.hidden = x !== b; });
+    say(b.textContent.trim() + ' view');
+  });
+
+  applyState();
+})();
+</script>
+</body>
+</html>

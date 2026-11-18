@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workers: CLUSTERX console (design prototype)</title>
+<!--@tokens-->
+<!--@css-->
+<style>
+.sumstrip{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-5);list-style:none;padding:var(--space-3) var(--space-4);font-size:var(--text-ui-md)}
+.sumstrip li{display:inline-flex;gap:6px;align-items:center}
+.sumstrip b{font-size:1.25rem;font-weight:600;font-variant-numeric:tabular-nums}
+.seld{padding:var(--space-3) var(--space-4);border-top:1px solid var(--color-line);font-size:var(--text-ui-md);min-height:3.5rem}
+.hb{font-variant-numeric:tabular-nums}
+.tbl tr[aria-selected="true"]{background:var(--color-accent-tint)}
+.tbl tr[data-sel="1"]{background:var(--color-accent-tint)}
+</style>
+</head>
+<body class="console" data-default-state="loaded" data-live-map="stale:stale,offline:offline,loading:reconnecting">
+<!--@sprite-->
+<a class="skip" href="#main">Skip to content</a>
+<div class="proto-bar" role="region" aria-label="Prototype notice">
+  <b>design prototype — illustrative data</b>
+  <span class="proto-states" role="group" aria-label="Show state">
+    <button type="button" data-state-set="loaded" aria-pressed="true">loaded</button>
+    <button type="button" data-state-set="loading" aria-pressed="false">loading</button>
+    <button type="button" data-state-set="none" aria-pressed="false">no worker ever</button>
+    <button type="button" data-state-set="all_offline" aria-pressed="false">all offline</button>
+    <button type="button" data-state-set="stale" aria-pressed="false">stale</button>
+    <button type="button" data-state-set="offline" aria-pressed="false">offline</button>
+    <button type="button" data-scale-set="1" aria-pressed="false">1 worker</button>
+    <button type="button" data-scale-set="10" aria-pressed="true">10 workers</button>
+    <button type="button" data-scale-set="100" aria-pressed="false">100 workers</button>
+    <button type="button" data-role-set="operator" aria-pressed="true">role: operator</button>
+    <button type="button" data-role-set="viewer" aria-pressed="false">role: viewer</button>
+  </span>
+</div>
+<div class="shell">
+  <aside class="side" aria-label="Sidebar"><div class="side-in"><!--@include p-console-side.html cur=workers--></div></aside>
+  <div>
+    <header class="top">
+      <button class="icon-btn menu-btn" type="button" data-open="#app-drawer" aria-label="Open menu" aria-haspopup="dialog"><svg class="icon icon-md" aria-hidden="true"><use href="#i-menu"/></svg></button>
+      <nav aria-label="Breadcrumb"><ol class="crumbs"><li><a href="overview.html">Console</a></li><li><span aria-current="page">Workers</span></li></ol></nav>
+      <span class="grow"></span>
+      <!--@include p-console-tools.html-->
+    </header>
+    <div id="status-live" class="sr-only" role="status" aria-live="polite"></div>
+    <main id="main" class="main" tabindex="-1">
+      <div class="page-h">
+        <div><h1>Workers</h1><p>Who is alive, what they can run, who is draining. Heartbeat ages are measured against <time datetime="2026-11-18T10:42:07Z" data-fmt>10:42:07 UTC</time>.</p></div>
+        <div class="toolbar"><button class="btn" type="button" id="refresh"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button></div>
+      </div>
+
+      <div data-when="all_offline" class="notice err" role="alert" style="margin-bottom:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><div class="grow"><strong>No worker is online.</strong> Every registered worker has missed its heartbeat. Queued jobs wait and are marked unschedulable if no capable worker returns. <div class="actions"><a class="btn btn-sm" href="jobs.html#state=unschedulable">See unschedulable jobs</a><a class="btn btn-sm" href="#" data-nolink="/docs/workers">Worker troubleshooting</a></div></div></div>
+      <div data-when="stale" class="notice warn" role="status" style="margin-bottom:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#g-stale"/></svg><div class="grow"><strong>This view is stale.</strong> Last snapshot 10:39:02 UTC. Heartbeat ages below are frozen as of then and are not ticking.</div></div>
+      <div data-when="offline" class="notice warn" role="status" style="margin-bottom:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-signal-off"/></svg><div class="grow"><strong>You're offline.</strong> Heartbeat ages are frozen as of 10:42:07 UTC.</div></div>
+      <div id="degraded" class="notice warn" style="margin-bottom:var(--space-4)" data-when="loaded stale offline" hidden><svg class="icon" aria-hidden="true"><use href="#g-stale"/></svg><div class="grow"></div></div>
+
+      <div data-when="none" class="card"><div class="empty"><svg class="icon icon-md" aria-hidden="true"><use href="#g-online"/></svg><h3>No worker has ever registered</h3><p>Workers appear here after they register with an enrolled credential. Until one does, queued jobs have no worker that can run them.</p><a class="btn btn-primary" href="#" data-nolink="/app/settings/tokens" data-hide-role="viewer">Create a worker credential</a><a href="#" data-nolink="/docs/workers">Read how to run a worker</a></div></div>
+      <div data-when="loading" aria-busy="true" class="card"><div class="skel skel-row"></div><div class="skel skel-row"></div><div class="skel skel-row"></div><div class="skel skel-row"></div><p class="sr-only">Loading workers</p></div>
+
+      <div data-when="loaded stale offline all_offline" class="is-stale-target" id="fleet">
+        <section class="card" aria-label="Fleet summary"><ul class="sumstrip" id="sum"></ul></section>
+        <section class="card sect" style="margin-top:var(--space-4)" aria-labelledby="inv-h">
+          <div class="card-h"><h2 id="inv-h">Inventory</h2>
+            <div class="toolbar"><div class="seg" role="group" aria-label="Topology or list" data-panel-group><button type="button" aria-pressed="false" data-panel="#topo-pane" id="v-graph"><svg class="icon" aria-hidden="true"><use href="#i-graph"/></svg>Graph</button><button type="button" aria-pressed="true" data-panel="#list-pane" id="v-list"><svg class="icon" aria-hidden="true"><use href="#i-list"/></svg>List</button></div></div></div>
+          <form class="filters" style="padding:var(--space-3) var(--space-4)" onsubmit="return false" aria-label="Filter workers">
+            <div class="field"><label for="f-st">State</label><select id="f-st" class="select" data-filter="st" data-table="#wt" data-empty="#wempty"><option value="">All</option><option value="online">Online</option><option value="stale">Stale</option><option value="draining">Draining</option><option value="revoked">Credential revoked</option></select></div>
+            <div class="field"><label for="f-h">Handler</label><select id="f-h" class="select" data-filter="h" data-table="#wt" data-empty="#wempty"><option value="">Any</option><option>thumbnail</option><option>ocr</option><option>export</option><option>digest</option><option>transcode</option></select></div>
+          </form>
+          <div id="topo-pane" hidden>
+            <div class="topo"><div class="topo-tools" role="group" aria-label="Zoom and pan"><button class="icon-btn" type="button" data-topo="in" aria-label="Zoom in"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></button><button class="icon-btn" type="button" data-topo="out" aria-label="Zoom out"><svg class="icon" aria-hidden="true"><use href="#i-minus"/></svg></button><button class="icon-btn" type="button" data-topo="left" aria-label="Pan left"><svg class="icon" aria-hidden="true"><use href="#i-chev-l"/></svg></button><button class="icon-btn" type="button" data-topo="up" aria-label="Pan up"><svg class="icon" aria-hidden="true"><use href="#i-up"/></svg></button><button class="icon-btn" type="button" data-topo="down" aria-label="Pan down"><svg class="icon" aria-hidden="true"><use href="#i-down"/></svg></button><button class="icon-btn" type="button" data-topo="right" aria-label="Pan right"><svg class="icon" aria-hidden="true"><use href="#i-chev-r"/></svg></button><button class="btn btn-sm btn-ghost" type="button" data-topo="reset">Reset view</button><span class="meta" id="agg-note" style="margin-left:auto"></span></div>
+              <div id="topo-view" class="topo-view is-stale-target"></div>
+              <div class="seld" id="seld" role="status" aria-live="polite">Select a node. Arrow keys move between nodes; Enter selects. The List view has the same entries.</div>
+              <ul class="legend" aria-label="Worker state legend"><li><svg class="icon" style="color:var(--color-success)" aria-hidden="true"><use href="#g-online"/></svg>Online</li><li><svg class="icon" style="color:var(--color-warning)" aria-hidden="true"><use href="#g-stale"/></svg>Stale, dashed outline</li><li><svg class="icon" style="color:var(--color-warning)" aria-hidden="true"><use href="#g-draining"/></svg>Draining</li><li><svg class="icon" style="color:var(--color-danger)" aria-hidden="true"><use href="#g-revoked"/></svg>Credential revoked</li><li><svg class="icon" aria-hidden="true"><use href="#i-dot"/></svg>Pulse ring: an attempt is running (hidden at 100 workers)</li></ul>
+            </div>
+          </div>
+          <div id="list-pane" class="tbl-wrap">
+            <table class="tbl" id="wt"><caption>Workers, <span class="n">10</span> shown · sorted by last heartbeat</caption>
+              <thead><tr><th scope="col">Worker</th><th scope="col">State</th><th scope="col">Capabilities</th><th scope="col" class="num">Active / capacity</th><th scope="col">Last heartbeat</th><th scope="col">Incarnation</th></tr></thead>
+              <tbody></tbody></table>
+          </div>
+          <div id="wempty" class="empty" hidden><h3>No workers match these filters</h3><p>Clear a filter to see the whole fleet.</p></div>
+          <div class="pager"><span class="meta" id="pgn"></span></div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+<!--@include p-console-dialogs.html cur=workers-->
+<!--@js-->
+<script>
+(function(){
+  var tb=document.querySelector('#wt tbody'), sum=document.getElementById('sum'), W=[], topo;
+  function scale(){var s=+(CLX.params().scale||10);return s===1||s===100?s:10;}
+  function ago(n){return n<60?n+' s ago':Math.floor(n/60)+' min '+(n%60)+' s ago';}
+  function build(){
+    var n=scale();W=CLX.workers(n);
+    if(document.documentElement.getAttribute('data-state')==='all_offline'){W.forEach(function(w){w.st=w.rev?'revoked':'stale';w.live=false;w.hb=Math.max(w.hb,62);w.active=0;});}
+    tb.textContent='';
+    W.forEach(function(w){var tr=document.createElement('tr');tr.setAttribute('data-key',w.id);tr.setAttribute('data-st',w.st);tr.setAttribute('data-h',w.handler);
+      var cls=w.st==='online'?'online':w.st==='revoked'?'revoked':w.st==='stale'?'stale':'draining';
+      tr.innerHTML='<td data-label="Worker" data-primary><a class="id" href="#" data-nolink="/app/workers/'+w.id+'">'+w.name+'</a></td><td data-label="State"><span class="status" data-s="'+cls+'"><svg class="icon" aria-hidden="true"><use href="#'+CLX.STATE_GLYPH[w.st]+'"/></svg>'+CLX.STATE_LABEL[w.st]+'</span>'+(w.rev?' <span class="badge">revoked</span>':'')+'</td><td data-label="Capabilities">'+w.handler+'@'+w.ver+'</td><td data-label="Active / capacity" class="num">'+w.active+' / '+w.cap+'</td><td data-label="Last heartbeat" class="hb">'+ago(w.hb)+'</td><td data-label="Incarnation" class="mono">'+w.inc+'</td>';
+      tr.addEventListener('click',function(e){if(e.target.closest('a'))return;CLX.topoSelect&&CLX.topoSelect(w.id,false);mark(w.id);});tb.appendChild(tr);});
+    var c={online:0,stale:0,draining:0,revoked:0};W.forEach(function(w){c[w.st]++;});
+    sum.innerHTML='<li><svg class="icon" style="color:var(--color-success)" aria-hidden="true"><use href="#g-online"/></svg><b>'+c.online+'</b> online</li><li><svg class="icon" style="color:var(--color-warning)" aria-hidden="true"><use href="#g-stale"/></svg><b>'+c.stale+'</b> stale</li><li><svg class="icon" style="color:var(--color-warning)" aria-hidden="true"><use href="#g-draining"/></svg><b>'+c.draining+'</b> draining</li><li><svg class="icon" style="color:var(--color-danger)" aria-hidden="true"><use href="#g-revoked"/></svg><b>'+c.revoked+'</b> credential revoked</li><li class="meta">'+W.length+' registered · 0 deregistered shown</li>';
+    var d=document.getElementById('degraded');d.querySelector('.grow').innerHTML='<strong>'+(c.stale+c.revoked)+' of '+W.length+' workers are not sending heartbeats.</strong> Jobs that only they can run will be marked unschedulable.';d.hidden=!(c.stale+c.revoked)||document.documentElement.getAttribute('data-state')==='all_offline'||!/loaded|stale|offline/.test(document.documentElement.getAttribute('data-state'));
+    document.querySelector('#wt caption .n').textContent=W.length;document.getElementById('pgn').textContent=W.length+' workers loaded. The server order shifts with every heartbeat, so this table is sorted here and de-duplicated by ID.';
+    document.getElementById('agg-note').textContent=W.length>12?'Aggregated into handler clusters at this size. Select a cluster, then use the list.':'';
+    var seld=document.getElementById('seld');
+    topo=CLX.topology(document.getElementById('topo-view'),W,{label:'Worker topology: '+W.length+' workers'+(W.length>12?', grouped into handler clusters':'')+'. The List view has the same entries.',onSelect:function(key,fromGraph,items){
+      var it=items.filter(function(x){return x.key===key;})[0]; if(!it)return;
+      if(it.w){var w=it.w;seld.textContent=w.name+': '+CLX.STATE_LABEL[w.st]+'. Runs '+w.handler+'@'+w.ver+'. '+w.active+' of '+w.cap+' slots active. Last heartbeat '+ago(w.hb)+', as of 10:42:07Z. Incarnation '+w.inc+'.';mark(w.id);}
+      else{seld.textContent=it.label+' cluster: '+it.workers.length+' workers ('+it.live+' online, '+it.stale+' stale, '+it.drain+' draining, '+it.rev+' revoked), '+it.act+' active attempts. Showing this handler in the list.';var f=document.getElementById('f-h');f.value=it.key;f.dispatchEvent(new Event('change'));}
+    }});
+    var v=CLX.params().view||(window.innerWidth<768?'list':'list');
+    document.getElementById(v==='graph'?'v-graph':'v-list').click();
+    syncBar();
+  }
+  function mark(id){Array.prototype.forEach.call(tb.children,function(r){r.setAttribute('data-sel',r.getAttribute('data-key')===id?'1':'0');});}
+  function syncBar(){document.querySelectorAll('[data-scale-set]').forEach(function(b){b.setAttribute('aria-pressed',b.getAttribute('data-scale-set')==String(scale())?'true':'false');});}
+  document.addEventListener('click',function(e){var b=e.target.closest('[data-scale-set]');if(b){CLX.setParams({scale:b.getAttribute('data-scale-set')});}});
+  window.addEventListener('hashchange',build);
+  CLX.onState=function(){if(document.getElementById('wt'))build();};
+  document.getElementById('refresh').addEventListener('click',function(){CLX.say('Refreshed. Snapshot as of 10:42:07 UTC.');});
+  build();
+})();
+</script>
+</body>
+</html>

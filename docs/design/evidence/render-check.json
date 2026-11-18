@@ -1,0 +1,379 @@
+{
+  "generated": "2026-11-18T13:52:03.478Z",
+  "browser": "chromium 159.0.8154.6",
+  "pages": [
+    {
+      "file": "home",
+      "widths": [
+        {
+          "width": 320,
+          "scrollWidth": 320,
+          "clientWidth": 320,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 360,
+          "scrollWidth": 360,
+          "clientWidth": 360,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 390,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 768,
+          "scrollWidth": 768,
+          "clientWidth": 768,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1024,
+          "scrollWidth": 1024,
+          "clientWidth": 1024,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1920,
+          "scrollWidth": 1920,
+          "clientWidth": 1920,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        }
+      ],
+      "reducedMotionRunningAnimations": []
+    },
+    {
+      "file": "login",
+      "widths": [
+        {
+          "width": 320,
+          "scrollWidth": 320,
+          "clientWidth": 320,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 360,
+          "scrollWidth": 360,
+          "clientWidth": 360,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 390,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 768,
+          "scrollWidth": 768,
+          "clientWidth": 768,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1024,
+          "scrollWidth": 1024,
+          "clientWidth": 1024,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1920,
+          "scrollWidth": 1920,
+          "clientWidth": 1920,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        }
+      ],
+      "reducedMotionRunningAnimations": []
+    },
+    {
+      "file": "overview",
+      "widths": [
+        {
+          "width": 320,
+          "scrollWidth": 320,
+          "clientWidth": 320,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 360,
+          "scrollWidth": 360,
+          "clientWidth": 360,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 390,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 768,
+          "scrollWidth": 768,
+          "clientWidth": 768,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1024,
+          "scrollWidth": 1024,
+          "clientWidth": 1024,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1920,
+          "scrollWidth": 1920,
+          "clientWidth": 1920,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        }
+      ],
+      "reducedMotionRunningAnimations": []
+    },
+    {
+      "file": "jobs",
+      "widths": [
+        {
+          "width": 320,
+          "scrollWidth": 320,
+          "clientWidth": 320,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 360,
+          "scrollWidth": 360,
+          "clientWidth": 360,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 390,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 768,
+          "scrollWidth": 768,
+          "clientWidth": 768,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1024,
+          "scrollWidth": 1024,
+          "clientWidth": 1024,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1920,
+          "scrollWidth": 1920,
+          "clientWidth": 1920,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        }
+      ],
+      "reducedMotionRunningAnimations": []
+    },
+    {
+      "file": "job-detail",
+      "widths": [
+        {
+          "width": 320,
+          "scrollWidth": 320,
+          "clientWidth": 320,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 360,
+          "scrollWidth": 360,
+          "clientWidth": 360,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 390,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 768,
+          "scrollWidth": 768,
+          "clientWidth": 768,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1024,
+          "scrollWidth": 1024,
+          "clientWidth": 1024,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1920,
+          "scrollWidth": 1920,
+          "clientWidth": 1920,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        }
+      ],
+      "reducedMotionRunningAnimations": []
+    },
+    {
+      "file": "workers",
+      "widths": [
+        {
+          "width": 320,
+          "scrollWidth": 320,
+          "clientWidth": 320,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 360,
+          "scrollWidth": 360,
+          "clientWidth": 360,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 390,
+          "scrollWidth": 390,
+          "clientWidth": 390,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 768,
+          "scrollWidth": 768,
+          "clientWidth": 768,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1024,
+          "scrollWidth": 1024,
+          "clientWidth": 1024,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1440,
+          "scrollWidth": 1440,
+          "clientWidth": 1440,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        },
+        {
+          "width": 1920,
+          "scrollWidth": 1920,
+          "clientWidth": 1920,
+          "horizontalOverflow": false,
+          "externalRequests": 0,
+          "consoleErrors": 0
+        }
+      ],
+      "reducedMotionRunningAnimations": []
+    }
+  ],
+  "failures": []
+}

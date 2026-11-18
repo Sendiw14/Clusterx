@@ -1,0 +1,16 @@
+<dialog id="app-drawer" class="drawer" aria-label="Console menu">
+  <div class="side-in"><button class="icon-btn" type="button" data-close aria-label="Close menu" style="align-self:flex-end"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  <!--@include p-console-side.html cur={{cur}}-->
+  </div>
+</dialog>
+<dialog id="cmd" class="cmd" aria-label="Jump to">
+  <div class="dlg-b" style="padding-top:var(--space-4)">
+    <div class="field"><label for="cmd-in">Jump to a page, or enter an exact job or worker ID</label><input id="cmd-in" class="input" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. 3f9a21c4" aria-describedby="cmd-empty"></div>
+    <ul id="cmd-list" class="nav" style="list-style:none">
+      <li><a href="overview.html">Overview</a></li><li><a href="jobs.html">Jobs</a></li><li><a href="workers.html">Workers</a></li>
+      <li data-id-result hidden><a href="job-detail.html">Open job</a></li>
+    </ul>
+    <p id="cmd-empty" class="help" role="status" hidden></p>
+    <p class="help">Search is by exact ID only: the API has no free-text search. Press Esc to close.</p>
+  </div>
+</dialog>
