@@ -33,16 +33,20 @@ attempt id + lease generation match `jobs` · job `running` · `lease_expires_at
 `hard_deadline_at > clock_timestamp()` · attempt `active` and owned by (`worker_id`, `incarnation_id`) ·
 `workers.current_incarnation_id = incarnation_id`, worker not deregistered · credential not revoked/expired.
 
-**Locking and time (amended TASK-M1-BE-04, RV01-04).** Each worker mutation transaction first locks the
-`workers` + `worker_credentials` rows `FOR SHARE`, then the `jobs` row `FOR UPDATE`, then runs the CAS. The
+**Locking and time (amended TASK-M1-BE-04, RV01-04; CR-M4-01 NF-01).** Global order for every transaction:
+`worker_credentials` → `workers` → `jobs` → `job_attempts` (ascending id within a class); a share-locked
+identity row is never written in the same transaction; 40P01/40001 are retried (≤ 3 runs) then `unavailable`.
+Each worker mutation transaction first locks the `worker_credentials` then `workers` row `FOR SHARE`, then
+the `jobs` row `FOR UPDATE`, then runs the CAS. The fence also requires `workers.credential_id` = the
+credential presented on the call (M4). The
 fence reads `clock_timestamp()`, i.e. after any lock wait.
 - **Revocation bound (exact):** a revocation, re-registration or deregistration is a non-key UPDATE on the
   worker or credential row and conflicts with the share lock. Either it committed before the mutation took
   the share lock, and the fence sees it (denied), or it waits until the mutation commits. A mutation that
   commits *after* a revocation commit is therefore always denied. Revocation is linearized with reports;
   the only window is a mutation already holding the share lock, which is bounded by that transaction's
-  `lock_timeout` + `statement_timeout`. M2 sets `SET LOCAL lock_timeout = '1s'` on worker-mutation
-  transactions (`statement_timeout` 5 s, ADR-0001); the PoC does not set it yet.
+  `lock_timeout` + `statement_timeout`. M4 `internal/store` sets `SET LOCAL lock_timeout = '1s'` on worker-mutation
+  transactions (`statement_timeout` 5 s, ADR-0001); the PoC does not.
 - **Deadline bound (exact):** lease and deadline are compared with the clock after the job row lock is
   held. A report that waited for the lock is judged at the time it got the lock, not at transaction start.
   Locking first is required: PostgreSQL does not re-check a waiter's WHERE when the lock holder committed

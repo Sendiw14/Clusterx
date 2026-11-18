@@ -75,7 +75,7 @@ func run(args []string) error {
 }
 
 func runMigrations(ctx context.Context, cfg config.Config, migs []migrate.Migration, log *slog.Logger) error {
-	conn, err := store.Connect(ctx, cfg.DatabaseURL)
+	conn, err := store.Connect(ctx, cfg.MigrationURL())
 	if err != nil {
 		return fmt.Errorf("migrate: connect: %w", err)
 	}
