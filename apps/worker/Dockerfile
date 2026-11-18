@@ -7,9 +7,13 @@ FROM golang:1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd
 ENV CGO_ENABLED=0 GOWORK=off GOFLAGS=-trimpath GOTOOLCHAIN=local
 WORKDIR /src
 COPY packages/proto/go.mod packages/proto/go.sum packages/proto/
+COPY packages/sdk-go/go.mod packages/sdk-go/go.sum packages/sdk-go/
+COPY examples/basic-jobs/go.mod examples/basic-jobs/go.sum examples/basic-jobs/
 COPY apps/worker/go.mod apps/worker/go.sum apps/worker/
 RUN cd apps/worker && go mod download && go mod verify
 COPY packages/proto/ packages/proto/
+COPY packages/sdk-go/ packages/sdk-go/
+COPY examples/basic-jobs/ examples/basic-jobs/
 COPY apps/worker/ apps/worker/
 ARG VERSION=dev
 RUN cd apps/worker && go build -ldflags "-s -w -X main.version=${VERSION}" -o /out/clusterx-worker ./cmd/clusterx-worker

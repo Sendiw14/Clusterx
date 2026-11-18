@@ -98,15 +98,15 @@ func Register(reg *sdk.Registry) error {
 func Specs() []sdk.HandlerSpec {
 	return []sdk.HandlerSpec{
 		{Name: "fail_n_times", Version: 1, DefaultTimeoutSeconds: 60,
-			Description: "Fails retryably (or permanently) while attempt <= n, then succeeds. Deterministic test handler.",
+			Description:   "Fails retryably (or permanently) while attempt <= n, then succeeds. Deterministic test handler.",
 			PayloadSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["n"],"properties":{"n":{"type":"integer","minimum":0,"maximum":5},"permanent":{"type":"boolean"}}}`),
 			ResultSchema:  json.RawMessage(`{"type":"object","properties":{"attempt":{"type":"integer"}}}`)},
 		{Name: "hash_sha256", Version: 1, DefaultTimeoutSeconds: 30,
-			Description: "SHA-256 of a bounded string.",
+			Description:   "SHA-256 of a bounded string.",
 			PayloadSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["data"],"properties":{"data":{"type":"string","maxLength":16384}}}`),
 			ResultSchema:  json.RawMessage(`{"type":"object","properties":{"sha256":{"type":"string"}}}`)},
 		{Name: "sleep_ms", Version: 1, DefaultTimeoutSeconds: 120,
-			Description: "Sleeps for ms milliseconds (bounded), honoring cancellation.",
+			Description:   "Sleeps for ms milliseconds (bounded), honoring cancellation.",
 			PayloadSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["ms"],"properties":{"ms":{"type":"integer","minimum":0,"maximum":60000}}}`),
 			ResultSchema:  json.RawMessage(`{"type":"object","properties":{"slept_ms":{"type":"integer"}}}`)},
 	}

@@ -1,6 +1,7 @@
-// Command clusterx-worker is the CLUSTERX reference worker. In this foundation slice it loads
-// configuration (fail closed), connects to the control plane over gRPC and waits for SIGTERM;
-// it does not claim jobs yet.
+// Command clusterx-worker is the CLUSTERX reference worker. It loads configuration (fail closed),
+// connects to the control plane over gRPC, registers the examples/basic-jobs handlers and runs the
+// SDK claim/renew/report loop. SIGTERM/SIGINT drains: no new claims, running handlers get
+// CLUSTERX_SHUTDOWN_TIMEOUT to finish, then they are canceled and reported, then the worker deregisters.
 package main
 
 import (
@@ -10,6 +11,9 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	basicjobs "github.com/Sendiw14/Clusterx/examples/basic-jobs"
+	sdk "github.com/Sendiw14/Clusterx/packages/sdk-go"
 
 	"github.com/Sendiw14/Clusterx/apps/worker/internal/config"
 	"github.com/Sendiw14/Clusterx/apps/worker/internal/rpcclient"
@@ -53,11 +57,16 @@ func run() error {
 		return err
 	}
 
-	<-ctx.Done()
-	// Nothing to drain yet: no attempts are claimed in this slice. Later tickets send Drain,
-	// finish or abandon attempts within cfg.ShutdownTimeout, then Deregister.
-	log.Info("shutdown signal received; stopping")
-	return nil
+	var reg sdk.Registry
+	if err := basicjobs.Register(&reg); err != nil {
+		return err
+	}
+	host, _ := os.Hostname()
+	w := sdk.NewWorker(conn, &reg, sdk.WorkerOptions{Name: cfg.Name, Capacity: cfg.Capacity, Hostname: host,
+		DrainGrace: cfg.ShutdownTimeout, Logger: log})
+	err = w.Run(ctx)
+	log.Info("worker stopped", "err", err)
+	return err
 }
 
 // newLogger returns a JSON logger on stdout with UTC timestamps.
