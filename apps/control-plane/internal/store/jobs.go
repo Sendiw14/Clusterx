@@ -14,7 +14,7 @@ import (
 
 // Job is the full job row plus derived read-time fields.
 type Job struct {
-	ID, Namespace, HandlerName, Status, CreatedBy                      string
+	ID, Namespace, HandlerName, Status, CreatedBy                       string
 	HandlerVersion, Priority, AttemptsUsed, MaxAttempts, TimeoutSeconds int
 	AvailableAt, CreatedAt, UpdatedAt                                   time.Time
 	CancelRequestedAt, TerminalAt, RunAfter                             *time.Time
@@ -178,14 +178,14 @@ func (s *Store) missingJob(ctx context.Context, id string) error {
 
 // Attempt is one job_attempts row.
 type Attempt struct {
-	ID, JobID, WorkerID, IncarnationID, State          string
-	Number                                              int
-	LeaseGeneration                                     int64
-	ErrorClass, ErrorCode, ErrorMessage, LogTail        *string
-	LogTruncated, LogExpired                            bool
-	LeaseExpiresAt                                      *time.Time
-	StartedAt                                           time.Time
-	FinishedAt                                          *time.Time
+	ID, JobID, WorkerID, IncarnationID, State    string
+	Number                                       int
+	LeaseGeneration                              int64
+	ErrorClass, ErrorCode, ErrorMessage, LogTail *string
+	LogTruncated, LogExpired                     bool
+	LeaseExpiresAt                               *time.Time
+	StartedAt                                    time.Time
+	FinishedAt                                   *time.Time
 }
 
 // ListAttempts returns the attempts of a job by attempt number and the job version.

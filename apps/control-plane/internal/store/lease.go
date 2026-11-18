@@ -376,12 +376,12 @@ func (s *Store) ReportFailure(ctx context.Context, r AttemptRef, f FailureParams
 }
 
 type finish struct {
-	attemptState, event, to       string
-	result                        json.RawMessage
-	errClass, errCode, errMsg     string
-	logTail                       string
-	truncated                     bool
-	data                          map[string]any
+	attemptState, event, to   string
+	result                    json.RawMessage
+	errClass, errCode, errMsg string
+	logTail                   string
+	truncated                 bool
+	data                      map[string]any
 }
 
 func (s *Store) finishAttempt(ctx context.Context, tx pgx.Tx, r AttemptRef, version int64, f finish) error {
