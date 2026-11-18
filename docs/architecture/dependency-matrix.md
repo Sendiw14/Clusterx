@@ -22,6 +22,14 @@ Rule (§3): adopt as a tested set; pin exact versions; re-verify advisories mont
 | openapi-fetch | 0.17.0 | typecheck | |
 | @redocly/cli | 2.80.0 (root); 2.79.0 used in M1 evidence | lint exit 0 | |
 | OpenAPI | 3.1.1 | lint | 3.2.1 not adopted (generator compat unproven) |
-| Next.js / React / Tailwind / Motion | _pending M3-FE web skeleton_ | — | |
+| Next.js | 16.4.6 (Turbopack build) | `pnpm --filter web build` exit 0 | |
+| React / React DOM | 19.3.1 | build + Vitest | |
+| Tailwind CSS (+ @tailwindcss/postcss) | 4.3.5 | build; generated `@theme static` from tokens.css (drift-tested) | |
+| TypeScript (web) | 5.9.3 | typecheck exit 0 | `typescript-eslint` 8.73.0 caps `<6.1` |
+| ESLint | 9.39.5 (+ eslint-config-next 16.4.6, typescript-eslint 8.73.0) | lint exit 0 | ESLint 10 rejected: bundled plugin peers stop at 9 |
+| Vitest / Vite | 5.1.1 / 8.3.8 (jsdom 31.0.1) | 50 tests | |
+| Playwright / axe | @playwright/test 1.65.1 (Chromium 159) / @axe-core/playwright 4.14.0 | e2e exit 0; axe 0 violations (59 scans) | Firefox/WebKit NOT RUN |
+| Motion | not installed | CSS + rAF meet motion matrix | add only if needed |
+| Fonts | IBM Plex Sans/Mono, Newsreader (OFL 1.1, self-hosted) | hashes in `apps/web/public/fonts/FONTS.md` | OD-17 |
 | GitHub Actions | checkout v7.0.1 `3d3c42e5…`, setup-go v7.1.0 `d8cbb804…`, setup-node v7.1.0 `949feb24…`, pnpm/action-setup v6.1.1 `73e46992…` | pinned by SHA | |
 | Container runtime (dev) | Colima 0.10.3, Docker 29.10 CLI / 29.5.2 engine, compose plugin | — | registry CDN flaky from VM (DNS/IPv6); `--dns 1.1.1.1` set |
