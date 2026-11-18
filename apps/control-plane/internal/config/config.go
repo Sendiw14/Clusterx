@@ -38,7 +38,8 @@ func (t TLSFiles) Enabled() bool { return t.CertFile != "" }
 // Config is the validated control-plane configuration.
 type Config struct {
 	Env             Env
-	DatabaseURL     string
+	DatabaseURL     string // runtime role (clusterx_runtime member): no DDL, no TRUNCATE (CR-M4-01 NF-04)
+	MigrateURL      string // migration role (schema owner); falls back to DatabaseURL in development only
 	MigrateOnStart  bool
 	HTTPAddr        string
 	HTTPTLS         TLSFiles
@@ -49,12 +50,32 @@ type Config struct {
 	GRPCTLS         TLSFiles
 	LogLevel        slog.Level
 	ShutdownTimeout time.Duration
+	Timing          Timing
 }
+
+// Timing is the ADR-0003 timing configuration, validated against its documented bounds.
+type Timing struct {
+	HeartbeatInterval, LivenessTimeout, LeaseTTL, CancelGrace, DrainGrace time.Duration
+	SchedulerTick, BackoffBase, BackoffCap                                time.Duration
+}
+
+// Timing variable names.
+const (
+	VarHeartbeatInterval = "CLUSTERX_HEARTBEAT_INTERVAL"
+	VarLivenessTimeout   = "CLUSTERX_LIVENESS_TIMEOUT"
+	VarLeaseTTL          = "CLUSTERX_LEASE_TTL"
+	VarCancelGrace       = "CLUSTERX_CANCEL_GRACE"
+	VarDrainGrace        = "CLUSTERX_DRAIN_GRACE"
+	VarSchedulerTick     = "CLUSTERX_SCHEDULER_TICK"
+	VarBackoffBase       = "CLUSTERX_BACKOFF_BASE"
+	VarBackoffCap        = "CLUSTERX_BACKOFF_CAP"
+)
 
 // Variable names.
 const (
 	VarEnv             = "CLUSTERX_ENV"
 	VarDatabaseURL     = "CLUSTERX_DATABASE_URL"
+	VarMigrateURL      = "CLUSTERX_MIGRATE_DATABASE_URL"
 	VarMigrateOnStart  = "CLUSTERX_MIGRATE_ON_START"
 	VarHTTPAddr        = "CLUSTERX_HTTP_ADDR"
 	VarHTTPTLSCert     = "CLUSTERX_HTTP_TLS_CERT_FILE"
@@ -85,6 +106,7 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 	c := Config{
 		Env:          Env(get(VarEnv)),
 		DatabaseURL:  get(VarDatabaseURL),
+		MigrateURL:   get(VarMigrateURL),
 		HTTPAddr:     orDefault(get(VarHTTPAddr), ":8080"),
 		MetricsAddr:  orDefault(get(VarMetricsAddr), ":9091"),
 		MetricsToken: get(VarMetricsToken),
@@ -122,6 +144,16 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 		fail("%s is not a valid PostgreSQL connection string", VarDatabaseURL) // err may echo the password
 	} else if prod && isKnownDefault(pc.Password) {
 		fail("%s uses a default/example password; set a generated secret in production", VarDatabaseURL)
+	}
+
+	if c.MigrateURL != "" {
+		if pc, err := pgconn.ParseConfig(c.MigrateURL); err != nil {
+			fail("%s is not a valid PostgreSQL connection string", VarMigrateURL)
+		} else if prod && isKnownDefault(pc.Password) {
+			fail("%s uses a default/example password; set a generated secret in production", VarMigrateURL)
+		}
+	} else if prod && c.MigrateOnStart {
+		fail("%s is required in production when %s=true (the runtime role cannot run DDL)", VarMigrateURL, VarMigrateOnStart)
 	}
 
 	for _, a := range []struct{ name, val string }{{VarHTTPAddr, c.HTTPAddr}, {VarMetricsAddr, c.MetricsAddr}, {VarGRPCAddr, c.GRPCAddr}} {
@@ -183,10 +215,47 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 		c.ShutdownTimeout = d
 	}
 
+	dur := func(k string, def, lo, hi time.Duration) time.Duration {
+		v := get(k)
+		if v == "" {
+			return def
+		}
+		d, err := time.ParseDuration(v)
+		if err != nil || d < lo || d > hi {
+			fail("%s must be a duration between %s and %s, got %q", k, lo, hi, v)
+			return def
+		}
+		return d
+	}
+	c.Timing = Timing{
+		HeartbeatInterval: dur(VarHeartbeatInterval, 10*time.Second, 2*time.Second, time.Minute),
+		LivenessTimeout:   dur(VarLivenessTimeout, 30*time.Second, 6*time.Second, 10*time.Minute),
+		LeaseTTL:          dur(VarLeaseTTL, 30*time.Second, 5*time.Second, 300*time.Second),
+		CancelGrace:       dur(VarCancelGrace, 15*time.Second, time.Second, 120*time.Second),
+		DrainGrace:        dur(VarDrainGrace, 60*time.Second, 0, time.Hour),
+		SchedulerTick:     dur(VarSchedulerTick, time.Second, 200*time.Millisecond, 10*time.Second),
+		BackoffBase:       dur(VarBackoffBase, 2*time.Second, 100*time.Millisecond, time.Minute),
+		BackoffCap:        dur(VarBackoffCap, 5*time.Minute, 100*time.Millisecond, time.Hour),
+	}
+	if c.Timing.LivenessTimeout < 3*c.Timing.HeartbeatInterval {
+		fail("%s must be at least 3 x %s", VarLivenessTimeout, VarHeartbeatInterval)
+	}
+	if c.Timing.BackoffCap < c.Timing.BackoffBase {
+		fail("%s must be >= %s", VarBackoffCap, VarBackoffBase)
+	}
+
 	if err := errors.Join(errs...); err != nil {
 		return Config{}, fmt.Errorf("invalid configuration: %w", err)
 	}
 	return c, nil
+}
+
+// MigrationURL is the DSN used by `migrate` and migrate-on-start.
+func (c Config) MigrationURL() string {
+	if c.MigrateURL != "" {
+		return c.MigrateURL
+	}
+	return c.DatabaseURL
 }
 
 // IsLoopback reports whether a listen address binds only to a loopback interface.

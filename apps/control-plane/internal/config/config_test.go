@@ -127,3 +127,28 @@ func TestIsLoopback(t *testing.T) {
 		}
 	}
 }
+
+func TestTimingAndMigrateURL(t *testing.T) {
+	c, err := Load(env(devBase))
+	if err != nil || c.Timing.LeaseTTL != 30*time.Second || c.Timing.LivenessTimeout != 30*time.Second || c.MigrationURL() != devBase[VarDatabaseURL] {
+		t.Fatalf("defaults: %+v %v", c.Timing, err)
+	}
+	for name, kv := range map[string][]string{
+		"lease too short":  {VarLeaseTTL, "1s"},
+		"liveness < 3x hb": {VarHeartbeatInterval, "20s"},
+		"cap < base":       {VarBackoffBase, "10s", VarBackoffCap, "1s"},
+		"bad tick":         {VarSchedulerTick, "fast"},
+		"bad migrate url":  {VarMigrateURL, "::"},
+	} {
+		if _, err := Load(env(devBase, kv...)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	if _, err := Load(env(prodBase, VarMigrateOnStart, "true")); err == nil || !strings.Contains(err.Error(), VarMigrateURL) {
+		t.Fatalf("prod migrate-on-start without migrate URL: %v", err)
+	}
+	c, err = Load(env(devBase, VarMigrateURL, "postgres://owner:x@localhost/clusterx"))
+	if err != nil || c.MigrationURL() == c.DatabaseURL {
+		t.Fatalf("migrate url: %v", err)
+	}
+}

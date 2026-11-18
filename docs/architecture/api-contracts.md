@@ -6,7 +6,7 @@ Status: **specified**, not frozen. Integrator freezes at M1 exit (§1.3 step 3).
 |---|---|---|---|
 | REST | `api/openapi.yaml` | OpenAPI 3.1.1, API `1.0.0-draft.4` | PyYAML parse + `$ref` check + stray-key scan; `npx @redocly/cli@2.79.0 lint` → valid, 0 errors, 5 intended warnings (TASK-M1-BE-04) |
 | gRPC | `packages/proto/clusterx/worker/v1/worker.proto` | package `v1`, protocol_version 1 | `protoc --descriptor_set_out=/dev/null` |
-| SQL | `apps/control-plane/migrations/0001_init.sql` | 0001 | `psql -v ON_ERROR_STOP=1 --single-transaction` on PG 18 |
+| SQL | `apps/control-plane/migrations/0001_init.sql`, `0002_m4_integrity_roles.sql` | 0002 (CR-M4-01) | `psql -v ON_ERROR_STOP=1 --single-transaction` on PG 18 |
 | State table | `docs/architecture/state-machine.md` | M1 | PoC tests for AC-02/03/06 |
 
 ## Cross-cutting rules
@@ -46,3 +46,9 @@ draft.4 (TASK-M1-BE-04): RV-01 fixes and FE-02 gaps:
 ## Still open
 - Owner: OQ-03 (viewer `/audit`) and the session lifetimes (idle 2 h, absolute 12 h).
 - Deferred by the integrator: RT-01..03 and AUDIT-01/02 to M6; OBS-01/02 and RET-01 to M8; RV01-15 (claim top-N) to M4.
+
+## Migration runner metadata (CR-M4-01 M3-1)
+`schema_migrations(version int PK, name text, checksum text sha256-hex, applied_at timestamptz)` is created and
+owned by the runner (`internal/migrate`), not by a numbered migration. Each migration and its row commit in one
+transaction under `pg_advisory_lock(0x636c757374657278)`; readiness requires the applied set to equal the binary's
+embedded set (versions and checksums). The runtime role has SELECT only.

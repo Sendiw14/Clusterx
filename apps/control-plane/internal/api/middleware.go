@@ -78,7 +78,7 @@ func wrap(server string, next http.Handler, log *slog.Logger, m *Metrics) http.H
 				status = http.StatusOK
 			}
 			route := r.Pattern
-			if route == "" {
+			if route == "" || route == "/" {
 				route = "unmatched"
 			}
 			elapsed := time.Since(start)

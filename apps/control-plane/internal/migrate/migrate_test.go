@@ -24,7 +24,7 @@ func TestLoadEmbedded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(migs) != 1 || migs[0].Name != "0001_init.sql" || migs[0].Version != 1 || len(migs[0].Checksum) != 64 {
+	if len(migs) != 2 || migs[0].Name != "0001_init.sql" || migs[1].Name != "0002_m4_integrity_roles.sql" || len(migs[0].Checksum) != 64 {
 		t.Fatalf("unexpected migrations: %+v", migs)
 	}
 }
@@ -74,7 +74,7 @@ func TestApplyFreshThenIdempotent(t *testing.T) {
 		t.Fatalf("fresh Verify: want ErrNotInitialized, got %v", err)
 	}
 	n, err := migrate.Apply(ctx, c, migs, discard)
-	if err != nil || n != 1 {
+	if err != nil || n != len(migs) {
 		t.Fatalf("first Apply = %d, %v", n, err)
 	}
 	if err := migrate.Verify(ctx, c, migs); err != nil {
@@ -92,7 +92,7 @@ func TestApplyFreshThenIdempotent(t *testing.T) {
 		t.Fatalf("second Apply = %d, %v; want 0, nil", n, err)
 	}
 	var rows int
-	if err := c.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&rows); err != nil || rows != 1 {
+	if err := c.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&rows); err != nil || rows != len(migs) {
 		t.Fatalf("schema_migrations rows = %d, %v", rows, err)
 	}
 }
@@ -119,7 +119,7 @@ func TestApplyConcurrentRunnersApplyOnce(t *testing.T) {
 		}
 		total += results[i]
 	}
-	if total != 1 {
+	if total != len(migs) {
 		t.Fatalf("migration applied %d times, want exactly 1", total)
 	}
 }

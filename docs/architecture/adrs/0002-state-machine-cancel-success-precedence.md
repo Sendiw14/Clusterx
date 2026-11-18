@@ -44,5 +44,6 @@
 
 ## Consequences
 - A handler may have produced side effects even when its success is denied (at-least-once; §16).
-- READ COMMITTED re-check semantics are load-bearing; tests `TestAC06*` must stay in CI and the
-  isolation level must not be raised to REPEATABLE READ without retry handling (serialization errors).
+- Lock-first ordering (job row `FOR UPDATE` before the CAS, §3) is load-bearing, not the READ COMMITTED
+  re-check alone; tests `TestAC06*` must stay in CI and the isolation level must not be raised to REPEATABLE
+  READ without retry handling (serialization errors). Global lock order: state-machine.md (CR-M4-01 NF-01).

@@ -46,7 +46,7 @@ snapshot `{job, version}` plus events `> version` reconcile exactly. Append-only
 Terminal immutability forbids UPDATE, not DELETE. Retention is a separate lifecycle operation:
 | Data | Retention (proposed) | Mechanism |
 |---|---|---|
-| attempt `log_tail` | 7 d after attempt finish | **exception**: retention job sets `log_tail = NULL` via a dedicated SECURITY DEFINER function that bypasses the finished-attempt trigger; documented as the only post-final mutation |
+| attempt `log_tail` | 7 d after attempt finish | **exception** (CR-M4-01 NF-03, migration 0002): the finished-attempt trigger itself allows exactly `log_tail <non-null> → NULL` with `log_expired false → true` on an attempt finished ≥ 7 d ago, every other column unchanged; entry point `clusterx_expire_attempt_logs(n)` (role `clusterx_retention`). The only post-final mutation |
 | terminal jobs + attempts + events + idempotency rows | 30 d after `terminal_at` | `DELETE FROM jobs` batch, FK CASCADE; child `retried_from_job_id` → NULL |
 | non-terminal jobs | never auto-deleted | |
 | audit_events | 90 d | batch delete |
@@ -61,7 +61,10 @@ DB guards (TASK-M1-BE-04, RV01-06):
 Retention writes `job_tombstones(job_id, terminal_at, expired_at)` in the same transaction as the DELETE;
 tombstoned IDs answer **410 `expired`** (CCR-M1), unknown IDs 404. Tombstones are kept 90 d, after which
 the ID answers 404. Figures are not legal advice (§6). Backups: 14 d.
-The log-retention exception function is **not** in migration 0001 (M5, FR-ENG-23).
+The log-retention function and the guards `jobs_retention_delete_only` (DELETE jobs only when terminal ≥ 30 d) and
+BEFORE TRUNCATE triggers on history tables are in migration 0002 (CR-M4-01 NF-03/NF-04). Runtime role
+`clusterx_runtime`: SELECT/INSERT/UPDATE, DELETE only on sessions, submission_idempotency, worker_capabilities;
+no TRUNCATE/DDL. `clusterx_retention`: the deletes above. Login users are granted one role out of band.
 
 ## Migrations
 Forward-only, numbered `NNNN_name.sql`, each applied in one transaction, expand → backfill → contract

@@ -82,9 +82,26 @@ active attempts of that worker `< capacity`. Denials: `incarnation_mismatch` [FA
 `credential_revoked` [UNAUTHENTICATED], `capacity_exhausted` (empty claim, OK), unknown handler in
 `supported` list ⇒ `unknown_handler` [INVALID_ARGUMENT]. A claim that finds no eligible row returns an empty list (OK), not an error.
 
-Cancel-vs-success order (ADR-0002): whichever transaction commits first wins; the other's CAS
-re-evaluates against the committed row (PostgreSQL READ COMMITTED re-check of the locked row) and
-matches 0 rows. Proven by `apps/control-plane/poc` `TestAC06*`.
+Cancel-vs-success order (ADR-0002 §3, lock-first): every writer takes the job row lock
+(`SELECT … FOR UPDATE`) before its CAS, so whichever transaction commits first wins and the other's CAS,
+evaluated after it obtained the lock, matches 0 rows. Proven by `internal/store` `TestAC06_CancelVersusSuccess`
+and `apps/control-plane/poc` `TestAC06*` (CR-M4-01 NF-06).
+
+## Global lock order and timestamps (CR-M4-01 NF-01, NF-02)
+
+- Every transaction that touches more than one of these classes locks them in the order
+  `worker_credentials` → `workers` → `jobs` → `job_attempts`, ascending `id` within a class. Worker mutations
+  take credential and worker `FOR SHARE`, then the job `FOR UPDATE`; Claim takes the worker `FOR UPDATE` (capacity)
+  and jobs with `SKIP LOCKED`. A transaction never writes a worker/credential row it share-locked
+  (heartbeat and `last_used_at` bumps run in their own transaction). Revoke/deregister/drain write only the
+  credential/worker row; their attempts are recovered by lease expiry (E8), never in the same transaction.
+- SQLSTATE `40P01`/`40001` aborts are retried server-side up to 3 times in total, then answered
+  `unavailable` (REST 503 / gRPC UNAVAILABLE). Worker mutations set `lock_timeout = 1s` (`55P03` ⇒ `unavailable`).
+- `terminal_at`, `finished_at`, `updated_at`, event `occurred_at` and audit `occurred_at` are
+  `clock_timestamp()` read after the locks. **`version` is the authoritative per-job order**; `occurred_at` is
+  informational. Selection predicates of scheduler loops use their own transaction's `now()`.
+- Migration 0002 enforces at commit that a job is `running` iff it has exactly one `active` attempt and that
+  attempt is `current_attempt_id` (NF-05).
 
 ## Admission denials (E1)
 
