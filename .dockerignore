@@ -1,0 +1,9 @@
+.git
+.worktrees
+node_modules
+**/node_modules
+docs
+.github
+*.env
+.env*
+!.env.example

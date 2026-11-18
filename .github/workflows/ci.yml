@@ -41,7 +41,11 @@ jobs:
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with: { go-version-file: go.work }
       - name: proto codegen is reproducible
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler && ./packages/proto/generate.sh && git diff --exit-code packages/proto/gen
+        run: |
+          curl -fsSL -o /tmp/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v29.3/protoc-29.3-linux-x86_64.zip
+          echo "3e866620c5be27664f3d2fa2d656b5f3e09b5152b42f1bedbf427b333e90021a  /tmp/protoc.zip" | sha256sum -c -
+          sudo unzip -q -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
+          ./packages/proto/generate.sh && git diff --exit-code packages/proto/gen
       - name: vet and race tests (all modules)
         run: |
           for m in $(go list -f '{{.Dir}}' -m); do (cd "$m" && go vet ./... && go test -race -count=1 ./...); done
