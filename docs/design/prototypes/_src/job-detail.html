@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job detail: CLUSTERX console (design prototype)</title>
+<!--@tokens-->
+<!--@css-->
+<style>
+.hdr{display:flex;flex-wrap:wrap;gap:var(--space-3) var(--space-5);align-items:center;justify-content:space-between}
+.hdr h1{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:center;font-size:var(--text-ui-h1)}
+.hdr h1 .mono{font-weight:600}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-5)}
+.grid2>*{min-width:0}
+@media (min-width:1024px){.grid2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.tl-ver{font-family:var(--font-mono);font-size:var(--text-ui-xs);background:var(--color-panel);border:1px solid var(--color-line);border-radius:var(--radius-xs);padding:0 5px;margin-right:6px;color:var(--color-ink-2)}
+.tl-diag{border-left:2px dashed var(--color-line-strong);padding-left:var(--space-3);color:var(--color-ink-2)}
+.countdown{font-variant-numeric:tabular-nums;font-weight:500}
+.warnbox{border-left:4px solid var(--color-warning)}
+</style>
+</head>
+<body class="console" data-default-state="running" data-live-map="offline:offline">
+<!--@sprite-->
+<a class="skip" href="#main">Skip to content</a>
+<div class="proto-bar" role="region" aria-label="Prototype notice">
+  <b>design prototype — illustrative data</b>
+  <span class="proto-states" role="group" aria-label="Show state">
+    <button type="button" data-state-set="running" aria-pressed="true">running</button>
+    <button type="button" data-state-set="cancel_requested" aria-pressed="false">cancel requested</button>
+    <button type="button" data-state-set="failed" aria-pressed="false">failed (3 attempts)</button>
+    <button type="button" data-state-set="succeeded" aria-pressed="false">succeeded (stale rejected)</button>
+    <button type="button" data-state-set="unschedulable" aria-pressed="false">unschedulable</button>
+    <button type="button" data-state-set="expired" aria-pressed="false">expired (410)</button>
+    <button type="button" data-state-set="notfound" aria-pressed="false">not found (404)</button>
+    <button type="button" data-state-set="offline" aria-pressed="false">offline</button>
+    <button type="button" data-role-set="operator" aria-pressed="true">role: operator</button>
+    <button type="button" data-role-set="viewer" aria-pressed="false">role: viewer</button>
+  </span>
+</div>
+<div class="shell">
+  <aside class="side" aria-label="Sidebar"><div class="side-in"><!--@include p-console-side.html cur=jobs--></div></aside>
+  <div>
+    <header class="top">
+      <button class="icon-btn menu-btn" type="button" data-open="#app-drawer" aria-label="Open menu" aria-haspopup="dialog"><svg class="icon icon-md" aria-hidden="true"><use href="#i-menu"/></svg></button>
+      <nav aria-label="Breadcrumb"><ol class="crumbs"><li><a href="overview.html">Console</a></li><li><a href="jobs.html">Jobs</a></li><li><span aria-current="page" class="mono" id="crumb-id">3f9a21c4</span></li></ol></nav>
+      <span class="grow"></span>
+      <!--@include p-console-tools.html-->
+    </header>
+    <div id="status-live" class="sr-only" role="status" aria-live="polite"></div>
+    <main id="main" class="main" tabindex="-1">
+
+      <!-- 404 / 410 -->
+      <div data-when="notfound"><h1 style="font-size:var(--text-ui-h1)">Job not found</h1><div class="notice" style="margin-top:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><div class="grow"><strong>No job has this ID.</strong> Check the ID, or open the jobs list and search from there. <div class="actions"><a class="btn btn-sm" href="jobs.html">Back to jobs</a></div></div></div></div>
+      <div data-when="expired"><h1 style="font-size:var(--text-ui-h1)">Job <span class="mono">8e22b9d0</span> has expired</h1><div class="notice warn" style="margin-top:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg><div class="grow"><strong>This job was removed by retention.</strong> It existed, but finished jobs are kept for 30 days, then deleted. This is not a "not found" error.
+        <dl class="dl" style="margin-top:var(--space-3)"><dt>Finished</dt><dd><time datetime="2026-10-12T08:14:51Z" data-fmt>08:14:51 UTC</time> <span class="meta">(12 Oct 2026)</span></dd><dt>Removed</dt><dd><time datetime="2026-11-11T08:20:00Z" data-fmt>08:20:00 UTC</time> <span class="meta">(11 Nov 2026)</span></dd><dt>Retention</dt><dd>30 days (configured)</dd></dl>
+        <div class="actions"><a class="btn btn-sm" href="jobs.html">Back to jobs</a><a class="btn btn-sm" href="#" data-nolink="/docs/concepts">How retention works</a></div></div></div></div>
+
+      <div data-when="running cancel_requested failed succeeded unschedulable offline">
+        <div data-when="offline" class="notice warn" role="status" style="margin-bottom:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-signal-off"/></svg><div class="grow"><strong>You're offline.</strong> This page is as of 10:42:07 UTC. Actions are disabled, and the lease countdown is paused because it cannot be known offline.</div></div>
+
+        <div class="hdr">
+          <div>
+            <h1><span>Job</span> <span class="mono" id="jid">3f9a21c4</span>
+              <button class="icon-btn" type="button" data-copy="3f9a21c4" aria-label="Copy job ID"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg></button>
+              <span class="status" data-s="running" data-when="running offline"><svg class="icon" aria-hidden="true"><use href="#g-running"/></svg>Running</span>
+              <span class="status" data-s="running" data-when="cancel_requested"><svg class="icon" aria-hidden="true"><use href="#g-running"/></svg>Running, cancellation requested</span>
+              <span class="status" data-s="failed" data-when="failed"><svg class="icon" aria-hidden="true"><use href="#g-failed"/></svg>Failed</span>
+              <span class="status" data-s="succeeded" data-when="succeeded"><svg class="icon" aria-hidden="true"><use href="#g-succeeded"/></svg>Succeeded</span>
+              <span class="status" data-s="queued" data-when="unschedulable"><svg class="icon" aria-hidden="true"><use href="#g-queued"/></svg>Queued</span>
+            </h1>
+            <p class="muted" style="margin-top:var(--space-1)"><span id="hname">thumbnail@2</span> · priority <span id="hpri">5</span> · namespace default · version <span id="hver">14</span></p>
+          </div>
+          <div class="toolbar" data-hide-role="viewer">
+            <button class="btn btn-danger" type="button" data-open="#dlg-cancel" data-when="running cancel_requested" id="b-cancel"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg><span id="cancel-lbl">Request cancellation</span></button>
+            <button class="btn btn-danger" type="button" data-open="#dlg-cancel" data-when="unschedulable"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>Cancel job</button>
+            <button class="btn btn-primary" type="button" data-open="#dlg-retry" data-when="failed"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>Retry as new job</button>
+            <span class="meta" data-when="offline">Actions unavailable offline</span>
+          </div>
+        </div>
+
+        <div id="result-note" class="notice ok" role="status" hidden style="margin-top:var(--space-4)"></div>
+        <div data-when="cancel_requested" class="notice warn" style="margin-top:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><div class="grow"><strong>Cancellation requested</strong> at <time datetime="2026-11-18T10:42:00Z" data-fmt>10:42:00 UTC</time>. The worker stops cooperatively. If it commits a success before the cancel is recorded, the job finishes as succeeded; otherwise it finishes as canceled. The lease is capped at 15 s.</div></div>
+        <div data-when="unschedulable" class="notice warn warnbox" style="margin-top:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><div class="grow"><strong>No capable worker.</strong> This job needs <span class="mono">transcode@1</span>. Two workers advertise it, but neither has sent a heartbeat for over 60 s. The job stays queued and visible; it is not lost. <div class="actions"><a class="btn btn-sm" href="workers.html">See workers that run transcode@1</a></div><p class="meta" style="margin-top:var(--space-2)">Reason: capable_workers_offline · since <time datetime="2026-11-18T10:33:20Z" data-fmt>10:33:20 UTC</time></p></div></div>
+        <div data-when="succeeded" class="notice info" style="margin-top:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><div class="grow"><strong>A late result was rejected.</strong> Worker <span class="mono">worker-003</span> reported attempt 1 after attempt 2 had already succeeded. The committed result was not changed. See the timeline.</div></div>
+
+        <div class="grid2" style="margin-top:var(--space-5)">
+          <section class="card" aria-labelledby="st-h"><div class="card-h"><h2 id="st-h">State</h2><span class="meta">As of <time datetime="2026-11-18T10:42:07Z" data-fmt>10:42:07 UTC</time></span></div>
+            <div class="card-pad"><dl class="dl">
+              <dt>Attempts</dt><dd><span data-when="running cancel_requested offline">1 of 3 used</span><span data-when="failed">3 of 3 used</span><span data-when="succeeded">2 of 3 used</span><span data-when="unschedulable">0 of 3 used</span></dd>
+              <dt>Lease generation</dt><dd><span data-when="running cancel_requested offline">1</span><span data-when="failed">3</span><span data-when="succeeded">2</span><span data-when="unschedulable">none (not running)</span></dd>
+              <dt data-when="running cancel_requested offline">Lease expires in</dt><dd data-when="running cancel_requested"><span class="countdown" id="cd">24 s</span> <span class="meta">(<span class="mono">10:42:31Z</span>; counts down, not announced)</span></dd><dd data-when="offline"><span class="countdown">unknown while offline</span></dd>
+              <dt data-when="failed">Failure class</dt><dd data-when="failed">Retries exhausted <span class="meta">(retryable_exhausted)</span></dd>
+              <dt>Created</dt><dd><time datetime="2026-11-18T10:41:58Z" data-fmt>10:41:58 UTC</time></dd>
+              <dt>Available</dt><dd><time datetime="2026-11-18T10:41:58Z" data-fmt>10:41:58 UTC</time> <span class="meta">(run now)</span></dd>
+              <dt data-when="running cancel_requested offline failed succeeded">Started</dt><dd data-when="running cancel_requested offline failed succeeded"><time datetime="2026-11-18T10:42:01Z" data-fmt>10:42:01 UTC</time></dd>
+              <dt data-when="failed succeeded">Finished</dt><dd data-when="failed succeeded"><time datetime="2026-11-18T10:44:40Z" data-fmt>10:44:40 UTC</time></dd>
+              <dt>Hard deadline</dt><dd><time datetime="2026-11-18T10:52:01Z" data-fmt>10:52:01 UTC</time> <span class="meta">(attempt timeout 10 min)</span></dd>
+            </dl></div></section>
+
+          <section class="card" aria-labelledby="pl-h"><div class="card-h"><h2 id="pl-h">Payload and result</h2></div>
+            <div class="card-pad stack">
+              <div><p class="label">Payload</p>
+                <pre class="jsonblock" data-hide-role="viewer" tabindex="0" aria-label="Payload JSON">{
+  "image_url_ref": "assets/ab12",
+  "sizes": [128, 512],
+  "format": "webp"
+}</pre>
+                <p class="masked" data-role-only="viewer"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>Hidden for viewer role</p></div>
+              <div><p class="label">Result</p>
+                <p class="muted" data-when="running cancel_requested offline unschedulable">Not produced yet.</p>
+                <p class="muted" data-when="failed">No result: the job failed.</p>
+                <div data-when="succeeded"><pre class="jsonblock" data-hide-role="viewer" tabindex="0" aria-label="Result JSON">{ "variants": 2, "bytes": 18342 }</pre><p class="masked" data-role-only="viewer"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>Hidden for viewer role</p><p class="meta">Result 38 B of 128 KiB limit.</p></div></div>
+              <p class="meta">Masking happens on the server: a viewer's browser never receives these values.</p>
+            </div></section>
+        </div>
+
+        <section class="sect" aria-labelledby="at-h"><h2 id="at-h">Attempts</h2>
+          <div data-when="unschedulable" class="card empty"><h3>Not started</h3><p>No attempt exists yet. The job is waiting for a worker that can run it.</p></div>
+          <div data-when="running cancel_requested offline">
+            <article class="attempt" aria-labelledby="a1h"><header><h3 id="a1h" class="h3" style="font-size:var(--text-ui-lg)">Attempt 1</h3><span class="status" data-s="running"><svg class="icon" aria-hidden="true"><use href="#g-running"/></svg>Active</span><span class="meta">worker-003 · inc-1015 · started <time datetime="2026-11-18T10:42:01Z" data-fmt>10:42:01 UTC</time></span></header>
+              <div><p class="label">Log tail</p><pre class="logtail" tabindex="0" data-hide-role="viewer" aria-label="Log, last 16 KiB">10:42:02 resize 128 ok
+10:42:05 resize 512 started</pre><p class="masked" data-role-only="viewer"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>Hidden for viewer role</p></div></article>
+          </div>
+          <div data-when="failed viewer-ok">
+            <article class="attempt" aria-labelledby="f3h"><header><h3 id="f3h" class="h3" style="font-size:var(--text-ui-lg)">Attempt 3</h3><span class="status" data-s="failed"><svg class="icon" aria-hidden="true"><use href="#g-failed"/></svg>Failed</span><span class="badge">retryable</span><span class="meta">worker-006 · inc-1042 · attempts exhausted</span></header>
+              <div><p class="label">Error</p><p data-hide-role="viewer"><span class="mono">upstream_timeout</span>: object store did not answer in 20 s</p><p class="masked" data-role-only="viewer"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>Hidden for viewer role</p>
+              <p class="label" style="margin-top:var(--space-3)">Log tail</p><pre class="logtail" tabindex="0" data-hide-role="viewer" aria-label="Log, last 16 KiB">10:44:02 fetch assets/ab12
+10:44:22 timeout after 20s
+10:44:22 giving up (retryable)</pre><p class="masked" data-role-only="viewer"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>Hidden for viewer role</p></div></article>
+            <article class="attempt" aria-labelledby="f2h"><header><h3 id="f2h" class="h3" style="font-size:var(--text-ui-lg)">Attempt 2</h3><span class="status" data-s="failed"><svg class="icon" aria-hidden="true"><use href="#g-failed"/></svg>Failed</span><span class="badge">retryable</span><span class="meta">worker-003 · inc-1015</span></header>
+              <div><p class="label">Log tail</p><p class="muted">No log output.</p></div></article>
+            <article class="attempt" aria-labelledby="f1h"><header><h3 id="f1h" class="h3" style="font-size:var(--text-ui-lg)">Attempt 1</h3><span class="status" data-s="retry_wait"><svg class="icon" aria-hidden="true"><use href="#g-retry"/></svg>Lease expired</span><span class="meta">worker-004 · inc-1031 · consumed one attempt</span></header>
+              <div><p class="label">Log tail</p><p class="meta"><svg class="icon" style="display:inline;vertical-align:-3px" aria-hidden="true"><use href="#i-clock"/></svg> Log removed by the 7-day log retention. The attempt record remains.</p></div></article>
+          </div>
+          <div data-when="succeeded">
+            <article class="attempt" aria-labelledby="s2h"><header><h3 id="s2h" class="h3" style="font-size:var(--text-ui-lg)">Attempt 2</h3><span class="status" data-s="succeeded"><svg class="icon" aria-hidden="true"><use href="#g-succeeded"/></svg>Succeeded</span><span class="meta">worker-006 · inc-1042 · lease generation 2</span></header><div><p class="muted">Result committed <time datetime="2026-11-18T10:44:40Z" data-fmt>10:44:40 UTC</time>.</p></div></article>
+            <article class="attempt" aria-labelledby="s1h"><header><h3 id="s1h" class="h3" style="font-size:var(--text-ui-lg)">Attempt 1</h3><span class="status" data-s="retry_wait"><svg class="icon" aria-hidden="true"><use href="#g-retry"/></svg>Lease expired</span><span class="meta">worker-003 · inc-1015 · lease generation 1</span></header><div><p class="muted">The worker went silent; the lease expired at <time datetime="2026-11-18T10:42:31Z" data-fmt>10:42:31 UTC</time>.</p></div></article>
+          </div>
+        </section>
+
+        <section class="sect" aria-labelledby="ev-h"><h2 id="ev-h">Event timeline</h2>
+          <div class="card card-pad">
+            <p class="meta" style="margin-bottom:var(--space-3)">Versioned job events, oldest first. Times are UTC here; the product shows your local time with the zone and UTC on hover. <span data-hide-role="viewer">Diagnostic entries come from the audit log.</span></p>
+            <ol class="timeline" id="tl-run" data-when="running cancel_requested offline unschedulable">
+              <li data-kind="ok"><span class="t"><span class="tl-ver">v1</span><time datetime="2026-11-18T10:41:58Z" data-fmt>10:41:58 UTC</time></span><p><strong>admitted</strong> → <span data-when="unschedulable">queued</span><span data-when="running cancel_requested offline">queued</span> by user:sendiw</p></li>
+              <li data-when="running cancel_requested offline"><span class="t"><span class="tl-ver">v2</span><time datetime="2026-11-18T10:42:01Z" data-fmt>10:42:01 UTC</time></span><p><strong>claimed</strong> → running, attempt 1 by worker-003</p></li>
+              <li data-kind="warn" data-when="cancel_requested"><span class="t"><span class="tl-ver">v3</span><time datetime="2026-11-18T10:42:00Z" data-fmt>10:42:00 UTC</time></span><p><strong>cancel_requested</strong> by user:sendiw</p></li>
+            </ol>
+            <ol class="timeline" data-when="failed">
+              <li data-kind="ok"><span class="t"><span class="tl-ver">v1</span>10:41:58</span><p><strong>admitted</strong> → queued</p></li>
+              <li><span class="t"><span class="tl-ver">v2</span>10:42:01</span><p><strong>claimed</strong> → running, attempt 1 (worker-004)</p></li>
+              <li data-kind="warn"><span class="t"><span class="tl-ver">v3</span>10:42:31</span><p><strong>lease_expired</strong> → retry_wait <span class="meta">backoff 2.4 s</span></p></li>
+              <li><span class="t"><span class="tl-ver">v4</span>10:42:34</span><p><strong>promoted</strong> → queued <span class="meta">backoff elapsed</span></p></li>
+              <li><span class="t"><span class="tl-ver">v5</span>10:42:35</span><p><strong>claimed</strong> → running, attempt 2 (worker-003)</p></li>
+              <li data-kind="warn"><span class="t"><span class="tl-ver">v6</span>10:43:20</span><p><strong>failed_retryable</strong> → retry_wait <span class="meta">upstream_timeout · backoff 5.1 s</span></p></li>
+              <li><span class="t"><span class="tl-ver">v7</span>10:43:26</span><p><strong>promoted</strong> → queued</p></li>
+              <li><span class="t"><span class="tl-ver">v8</span>10:43:27</span><p><strong>claimed</strong> → running, attempt 3 (worker-006)</p></li>
+              <li data-kind="bad"><span class="t"><span class="tl-ver">v9</span>10:44:40</span><p><strong>attempts_exhausted</strong> → failed <span class="meta">failure class: retryable_exhausted</span></p></li>
+              <li class="tl-diag" data-hide-role="viewer"><span class="t">diagnostic · audit log · 10:44:51</span><p>Late report from worker-004 for attempt 1 was rejected (stale attempt).</p></li>
+              <li data-kind="ok"><span class="t">child job, 10:46:12</span><p>Lineage: <strong>retry_created</strong> was recorded on the new job <a href="job-detail.html">2d7e48aa</a></p></li>
+            </ol>
+            <ol class="timeline" data-when="succeeded">
+              <li data-kind="ok"><span class="t"><span class="tl-ver">v1</span>10:41:58</span><p><strong>admitted</strong> → queued</p></li>
+              <li><span class="t"><span class="tl-ver">v2</span>10:42:01</span><p><strong>claimed</strong> → running, attempt 1 (worker-003)</p></li>
+              <li data-kind="warn"><span class="t"><span class="tl-ver">v3</span>10:42:31</span><p><strong>lease_expired</strong> → retry_wait</p></li>
+              <li><span class="t"><span class="tl-ver">v5</span>10:42:34</span><p><strong>claimed</strong> → running, attempt 2 (worker-006)</p></li>
+              <li data-kind="ok"><span class="t"><span class="tl-ver">v6</span>10:44:40</span><p><strong>succeeded</strong> → succeeded, attempt 2</p></li>
+              <li class="tl-diag" data-hide-role="viewer"><span class="t">diagnostic · audit log · 10:44:55</span><p>Stale success from worker-003 (attempt 1, generation 1) rejected. The committed result is unchanged.</p></li>
+            </ol>
+            <p class="meta" style="margin-top:var(--space-3)"><button class="btn btn-sm" type="button" aria-disabled="true">Load older events <span class="meta">(none)</span></button></p>
+          </div>
+        </section>
+
+        <section class="sect" aria-labelledby="ln-h" data-when="failed succeeded running unschedulable cancel_requested offline"><h2 id="ln-h">Lineage</h2>
+          <div class="card card-pad"><p data-when="failed">Retried as <a href="job-detail.html" class="mono">2d7e48aa</a> (a new job with its own attempt budget). This failed job is unchanged.</p><p data-when="running succeeded unschedulable cancel_requested offline" class="muted">Not a retry, and not retried.</p></div></section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<dialog id="dlg-cancel" aria-labelledby="dc-h" aria-describedby="dc-d">
+  <div class="dlg-h"><h2 id="dc-h">Cancel this job?</h2></div>
+  <div class="dlg-b" id="dc-d">
+    <p data-when="unschedulable">The job has not started, so it is canceled immediately and cannot run later.</p>
+    <p data-when-not="unschedulable">This job is running. Cancellation is a request: the worker is asked to stop, and the lease is capped at 15 s. If the worker commits a success first, the job finishes as succeeded and the cancel has no effect.</p>
+  </div>
+  <div class="dlg-f"><button class="btn" type="button" data-close="cancel" autofocus>Keep running</button><button class="btn btn-danger-solid" type="button" id="do-cancel" data-close="confirm"><span class="lbl">Confirm cancellation</span></button></div>
+</dialog>
+<dialog id="dlg-retry" aria-labelledby="dr-h" aria-describedby="dr-d">
+  <div class="dlg-h"><h2 id="dr-h">Retry as a new job?</h2></div>
+  <div class="dlg-b" id="dr-d"><p>This creates a <strong>new job</strong> linked to this one, with a fresh budget of 3 attempts. This failed job stays exactly as it is. Pressing twice creates only one new job.</p></div>
+  <div class="dlg-f"><button class="btn" type="button" data-close="cancel" autofocus>Not now</button><button class="btn btn-primary" type="button" id="do-retry" data-close="confirm">Create new job</button></div>
+</dialog>
+<!--@include p-console-dialogs.html cur=jobs-->
+<!--@js-->
+<script>
+(function(){
+  var note=document.getElementById('result-note');
+  function show(msg,html){note.hidden=false;note.className='notice ok';note.innerHTML='<svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><div class="grow">'+msg+'</div>';CLX.say(note.textContent);}
+  document.getElementById('dlg-cancel').addEventListener('close',function(e){if(this.returnValue!=='confirm')return;
+    var st=document.documentElement.getAttribute('data-state');
+    if(st==='unschedulable'){show('<strong>Canceled.</strong> The job was waiting, so it ended immediately as canceled. <span class="meta">(prototype: state shown after the snapshot confirms)</span>');}
+    else{show('<strong>Cancellation requested.</strong> The job is still running until the worker stops or the lease ends. The status changes only when the server confirms.');document.getElementById('b-cancel').setAttribute('aria-disabled','true');document.getElementById('cancel-lbl').textContent='Cancellation requested';}});
+  document.getElementById('dlg-retry').addEventListener('close',function(){if(this.returnValue!=='confirm')return;show('<strong>New job created.</strong> <a href="job-detail.html">2d7e48aa</a> is queued with its own attempt budget. This job is unchanged.');});
+  /* illustrative lease countdown: text updates each second, never announced; paused offline */
+  var cd=document.getElementById('cd'),n=24;setInterval(function(){if(document.documentElement.getAttribute('data-state')==='offline'||document.hidden)return;n=Math.max(0,n-1);if(cd)cd.textContent=n>0?n+' s':'expired, recovery pending';},1000);
+})();
+</script>
+</body>
+</html>

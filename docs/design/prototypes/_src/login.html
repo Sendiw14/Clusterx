@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in: CLUSTERX (design prototype)</title>
+<!--@tokens-->
+<!--@css-->
+<style>
+.login{min-height:calc(100dvh - 8rem);display:grid;place-items:start center;padding:var(--space-8) var(--grid-margin) var(--space-9)}
+.login-card{width:100%;max-width:27rem}
+.login h1{font-family:var(--font-display);font-weight:400;font-size:var(--text-step-3);letter-spacing:var(--tracking-display);line-height:1.1;margin:var(--space-4) 0 var(--space-3)}
+.gh-btn{width:100%;min-height:3rem;font-size:var(--text-ui-lg)}
+.panel{margin-bottom:var(--space-5)}
+.fine-list{list-style:none;display:grid;gap:var(--space-2);margin-top:var(--space-5);padding-top:var(--space-5);border-top:1px solid var(--color-line);font-size:var(--text-ui-md);color:var(--color-ink-2)}
+.reqid{font-family:var(--font-mono);font-size:var(--text-ui-sm)}
+</style>
+</head>
+<body data-default-state="default">
+<!--@sprite-->
+<a class="skip" href="#main">Skip to content</a>
+<div class="proto-bar" role="region" aria-label="Prototype notice">
+  <b>design prototype — illustrative data</b>
+  <span class="proto-states" role="group" aria-label="Show outcome">
+    <button type="button" data-state-set="default" aria-pressed="true">default</button>
+    <button type="button" data-state-set="signed_out" aria-pressed="false">signed out</button>
+    <button type="button" data-state-set="session_expired" aria-pressed="false">session expired</button>
+    <button type="button" data-state-set="no_entitlement" aria-pressed="false">no entitlement</button>
+    <button type="button" data-state-set="user_disabled" aria-pressed="false">user disabled</button>
+    <button type="button" data-state-set="auth_error" aria-pressed="false">auth error</button>
+    <button type="button" data-state-set="provider_unavailable" aria-pressed="false">provider down</button>
+    <button type="button" data-state-set="upstream_auth" aria-pressed="false">upstream auth (502)</button>
+    <button type="button" data-state-set="bff_down" aria-pressed="false">BFF 503</button>
+    <button type="button" data-state-set="offline" aria-pressed="false">offline</button>
+  </span>
+</div>
+<!--@include p-public-header.html cur=login-->
+<div id="status-live" class="sr-only" role="status" aria-live="polite"></div>
+
+<main id="main" class="login" tabindex="-1">
+  <div class="login-card">
+    <p class="eyebrow">Console access</p>
+    <h1>Sign in to the console</h1>
+
+    <div class="panel" data-when="signed_out"><div class="notice info" role="status"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><div class="grow"><strong>You've been signed out.</strong> Your session was ended on this device.</div></div></div>
+    <div class="panel" data-when="session_expired"><div class="notice warn" role="status"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><div class="grow"><strong>Your session ended.</strong> Sign in to continue where you left off.</div></div></div>
+    <div class="panel" data-when="no_entitlement"><div class="notice err" role="alert" tabindex="-1" id="out"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg><div class="grow"><strong>This GitHub account isn't approved.</strong> Access is by approval: an operator adds your GitHub account to the allowlist. Signing in again will not change this. <div class="actions"><a class="btn btn-sm" href="#" data-nolink="/demo">Explore the demo instead</a></div></div></div></div>
+    <div class="panel" data-when="user_disabled"><div class="notice err" role="alert"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg><div class="grow"><strong>This account has been disabled.</strong> Ask an operator to re-enable it. No retry is offered because it would fail the same way.</div></div></div>
+    <div class="panel" data-when="auth_error"><div class="notice err" role="alert"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><div class="grow"><strong>Sign-in did not complete.</strong> GitHub declined the request, or the sign-in link expired. Start again from this page.</div></div></div>
+    <div class="panel" data-when="provider_unavailable"><div class="notice warn" role="alert"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><div class="grow"><strong>GitHub is not responding.</strong> Try again in a minute. Your access is unaffected.</div></div></div>
+    <div class="panel" data-when="upstream_auth"><div class="notice err" role="alert"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><div class="grow"><strong>The console could not reach its own API.</strong> This is an infrastructure fault, not a problem with your account, so you are not asked to sign in again. <p class="reqid" style="margin-top:var(--space-2)">Request ID <span id="rid">req_8d3f0a62b1</span> <button type="button" class="link-btn" data-copy="#rid">Copy</button></p></div></div></div>
+    <div class="panel" data-when="bff_down"><div class="notice err" role="alert"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><div class="grow"><strong>Sign-in is temporarily unavailable.</strong> The service answered 503 and asked clients to retry. <p class="reqid" style="margin-top:var(--space-2)">Request ID req_41c7e09d55 · retry after 30 s</p></div></div></div>
+    <div class="panel" data-when="offline"><div class="notice warn" role="status"><svg class="icon" aria-hidden="true"><use href="#i-signal-off"/></svg><div class="grow"><strong>You're offline.</strong> Reconnect to sign in. This page will enable the button when the connection returns.</div></div></div>
+
+    <p class="muted" data-when-not="no_entitlement user_disabled">Sign in with the GitHub account an operator approved. CLUSTERX has no passwords and no shared accounts.</p>
+    <div style="margin-top:var(--space-5)" data-when-not="user_disabled">
+      <button class="btn btn-primary gh-btn" type="button" id="signin" data-when-not="offline" data-nolink-btn><span class="lbl">Sign in with GitHub</span><span class="spin" aria-hidden="true"></span></button>
+      <button class="btn gh-btn" type="button" aria-disabled="true" data-when="offline" hidden>Sign in with GitHub (unavailable offline)</button>
+    </div>
+    <ul class="fine-list">
+      <li>Read-only <strong>viewer</strong> and <strong>operator</strong> roles are assigned by an operator, not chosen at sign-in.</li>
+      <li>Just looking around? <a href="#" data-nolink="/demo">Open the demo</a>. It uses fixture data and never touches a running system.</li>
+      <li><a href="#" data-nolink="/docs/security">How access and roles work</a></li>
+    </ul>
+  </div>
+</main>
+<!--@include p-public-footer.html-->
+<!--@js-->
+<script>
+/* prototype only: demonstrates S-PENDING on the sign-in button, then reverts (a real flow navigates to GitHub) */
+(function(){var b=document.getElementById('signin');if(!b)return;b.addEventListener('click',function(){if(b.getAttribute('data-pending')==='true')return;b.setAttribute('data-pending','true');b.setAttribute('aria-disabled','true');b.querySelector('.lbl').textContent='Redirecting to GitHub';window.CLX.say('Redirecting to GitHub');setTimeout(function(){b.removeAttribute('data-pending');b.removeAttribute('aria-disabled');b.querySelector('.lbl').textContent='Sign in with GitHub';window.CLX.toast('Prototype: a real build navigates to GitHub here.');},2200);});
+window.CLX.onState=function(st){var out=document.querySelector('.panel:not([hidden]) [role=alert]');if(out&&st!=='default'&&document.activeElement===document.body){/* focus moves to the outcome panel when present (a11y plan) */out.setAttribute('tabindex','-1');}};})();
+</script>
+</body>
+</html>

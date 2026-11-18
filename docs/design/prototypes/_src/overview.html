@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview: CLUSTERX console (design prototype)</title>
+<!--@tokens-->
+<!--@css-->
+<style>
+.chart-wrap{padding:var(--space-3) var(--space-4) 0}
+.mark-succ{stroke:var(--chart-succeeded);fill:var(--chart-succeeded)}
+.mark-fail{stroke:var(--chart-failed);fill:var(--color-white)}
+.kpi-v[data-gap]::after{content:attr(data-gap);font-size:var(--text-ui-sm);color:var(--color-ink-3);font-weight:400;margin-left:6px}
+.att{list-style:none;display:grid;gap:0}
+.att li{display:flex;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-top:1px solid var(--color-line);align-items:flex-start}
+.att li:first-child{border-top:0}
+.att .icon{margin-top:3px;color:var(--color-warning)}
+.cta-grid{display:grid;gap:var(--space-3);grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))}
+.cta-grid a.card{display:flex;gap:var(--space-3);align-items:center;padding:var(--space-4);text-decoration:none;color:var(--color-ink);transition:border-color var(--duration-hover) var(--ease-out)}
+.cta-grid a.card:hover{border-color:var(--color-ink)}
+.cta-grid small{display:block;color:var(--color-ink-2)}
+.sel-detail{padding:var(--space-3) var(--space-4);border-top:1px solid var(--color-line);font-size:var(--text-ui-sm);color:var(--color-ink-2);min-height:3rem}
+</style>
+</head>
+<body class="console" data-default-state="loaded" data-live-map="stale:stale,offline:offline,loading:reconnecting">
+<!--@sprite-->
+<a class="skip" href="#main">Skip to content</a>
+<div class="proto-bar" role="region" aria-label="Prototype notice">
+  <b>design prototype — illustrative data</b>
+  <span class="proto-states" role="group" aria-label="Show state">
+    <button type="button" data-state-set="loaded" aria-pressed="true">loaded</button>
+    <button type="button" data-state-set="loading" aria-pressed="false">loading</button>
+    <button type="button" data-state-set="first_use" aria-pressed="false">first use</button>
+    <button type="button" data-state-set="no_worker" aria-pressed="false">no worker</button>
+    <button type="button" data-state-set="no_metrics" aria-pressed="false">no metrics</button>
+    <button type="button" data-state-set="stale" aria-pressed="false">503 stale</button>
+    <button type="button" data-state-set="offline" aria-pressed="false">offline</button>
+    <button type="button" data-role-set="operator" aria-pressed="true">role: operator</button>
+    <button type="button" data-role-set="viewer" aria-pressed="false">role: viewer</button>
+  </span>
+</div>
+<div class="shell">
+  <aside class="side" aria-label="Sidebar"><div class="side-in"><!--@include p-console-side.html cur=overview--></div></aside>
+  <div>
+    <header class="top">
+      <button class="icon-btn menu-btn" type="button" data-open="#app-drawer" aria-label="Open menu" aria-haspopup="dialog"><svg class="icon icon-md" aria-hidden="true"><use href="#i-menu"/></svg></button>
+      <nav aria-label="Breadcrumb"><ol class="crumbs"><li><a href="overview.html">Console</a></li><li><span aria-current="page">Overview</span></li></ol></nav>
+      <span class="grow"></span>
+      <!--@include p-console-tools.html-->
+    </header>
+    <div id="status-live" class="sr-only" role="status" aria-live="polite"></div>
+    <main id="main" class="main" tabindex="-1">
+      <div class="page-h">
+        <div><h1>Overview</h1><p>Persisted cluster state. As of <time datetime="2026-11-18T10:42:07Z" data-fmt>10:42:07 UTC</time> <span class="meta">(<span class="mono">10:42:07Z</span>)</span></p></div>
+        <div class="toolbar">
+          <button class="btn" type="button" id="refresh"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
+          <a class="btn btn-primary" href="#" data-nolink="/app/jobs/new" data-hide-role="viewer"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Submit job</a>
+        </div>
+      </div>
+
+      <div data-when="stale" class="notice err" role="alert" style="margin-bottom:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><div class="grow"><strong>The coordinator is not ready (503).</strong> Showing the last good data from 10:41:52 UTC and retrying in 12 s. Mutations are disabled. <span class="mono meta">request id req_77b1c0e4a9</span><div class="actions"><button class="btn btn-sm" type="button">Retry now</button><a class="btn btn-sm" href="#" data-nolink="/docs/reliability">What this means</a></div></div></div>
+      <div data-when="offline" class="notice warn" role="status" style="margin-bottom:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-signal-off"/></svg><div class="grow"><strong>You're offline.</strong> Data below is as of 10:41:52 UTC and will refresh when the connection returns.</div></div>
+      <div data-when="no_worker" class="notice warn" style="margin-bottom:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><div class="grow"><strong>3 jobs are waiting with no eligible worker.</strong> They stay visible as queued with a reason. <div class="actions"><a class="btn btn-sm" href="jobs.html#state=unschedulable">See unschedulable jobs</a><a class="btn btn-sm" href="workers.html">Open workers</a></div></div></div>
+
+      <section class="sect is-stale-target" aria-labelledby="kpi-h" style="margin-top:0">
+        <h2 id="kpi-h" class="sr-only">Key figures</h2>
+        <div data-when="loading" aria-busy="true"><div class="skel" style="height:7rem"></div><p class="sr-only">Loading key figures</p></div>
+        <ul class="kpis" data-when-not="loading">
+          <li><span class="kpi-l"><svg class="icon" style="color:var(--color-neutral)" aria-hidden="true"><use href="#g-scheduled"/></svg>Scheduled</span><span class="kpi-v" data-when-not="first_use">4</span><span class="kpi-v" data-when="first_use">0</span><span class="kpi-n">waiting for their start time</span></li>
+          <li><span class="kpi-l"><svg class="icon" style="color:var(--color-neutral)" aria-hidden="true"><use href="#g-queued"/></svg>Queued</span><span class="kpi-v" data-when-not="first_use no_worker">18</span><span class="kpi-v" data-when="no_worker">21</span><span class="kpi-v" data-when="first_use">0</span><span class="kpi-n">eligible to claim</span></li>
+          <li><span class="kpi-l"><svg class="icon" style="color:var(--color-accent)" aria-hidden="true"><use href="#g-running"/></svg>Running</span><span class="kpi-v" data-when-not="first_use no_worker">7</span><span class="kpi-v" data-when="no_worker">0</span><span class="kpi-v" data-when="first_use">0</span><span class="kpi-n">holding a lease</span></li>
+          <li><span class="kpi-l"><svg class="icon" style="color:var(--color-warning)" aria-hidden="true"><use href="#g-retry"/></svg>Retry wait</span><span class="kpi-v" data-when-not="first_use">2</span><span class="kpi-v" data-when="first_use">0</span><span class="kpi-n">in backoff</span></li>
+          <li><span class="kpi-l"><svg class="icon" style="color:var(--color-ink-2)" aria-hidden="true"><use href="#i-clock"/></svg>Oldest queued</span><span class="kpi-v" data-when-not="first_use no_worker">14 s</span><span class="kpi-v" data-when="no_worker">9 min</span><span class="kpi-v" data-when="first_use" data-gap="none queued">&mdash;</span><span class="kpi-n">age of the oldest queued job</span></li>
+          <li><span class="kpi-l"><svg class="icon" style="color:var(--color-success)" aria-hidden="true"><use href="#g-succeeded"/></svg>Succeeded</span><span class="kpi-v" data-when-not="first_use">1,204</span><span class="kpi-v" data-when="first_use">0</span><span class="kpi-n">last 30 days (retention window)</span></li>
+          <li><span class="kpi-l"><svg class="icon" style="color:var(--color-danger)" aria-hidden="true"><use href="#g-failed"/></svg>Failed</span><span class="kpi-v" data-when-not="first_use">9</span><span class="kpi-v" data-when="first_use">0</span><span class="kpi-n">last 30 days <a href="jobs.html#preset=failed">view</a></span></li>
+          <li><span class="kpi-l"><svg class="icon" style="color:var(--color-neutral)" aria-hidden="true"><use href="#g-canceled"/></svg>Canceled</span><span class="kpi-v" data-when-not="first_use">3</span><span class="kpi-v" data-when="first_use">0</span><span class="kpi-n">last 30 days</span></li>
+          <li><span class="kpi-l"><svg class="icon" style="color:var(--color-success)" aria-hidden="true"><use href="#g-online"/></svg>Workers</span><span class="kpi-v" data-when-not="first_use no_worker">3</span><span class="kpi-v" data-when="no_worker">0</span><span class="kpi-v" data-when="first_use">0</span><span class="kpi-n"><span data-when-not="first_use no_worker">3 online · 1 stale · 0 draining</span><span data-when="no_worker">0 online · 3 stale · 0 draining</span><span data-when="first_use">none registered yet</span></span></li>
+          <li><span class="kpi-l"><svg class="icon" style="color:var(--color-warning)" aria-hidden="true"><use href="#i-alert"/></svg>Unschedulable</span><span class="kpi-v" data-when-not="no_worker">0</span><span class="kpi-v" data-when="no_worker">3</span><span class="kpi-n">queued with no capable worker</span></li>
+        </ul>
+        <p class="meta" style="margin-top:var(--space-2)" data-when-not="loading">Counts update from snapshots, not animated. A dash means unknown, never zero.</p>
+      </section>
+
+      <section class="sect" aria-labelledby="att-h" data-when-not="loading first_use">
+        <h2 id="att-h">Needs attention</h2>
+        <div class="card"><ul class="att">
+          <li data-when="no_worker"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><span>3 jobs are queued and no worker can run them. <a href="jobs.html#state=unschedulable">Review jobs</a></span></li>
+          <li data-when="loaded stale offline no_metrics"><svg class="icon" aria-hidden="true"><use href="#g-stale"/></svg><span>1 worker has not sent a heartbeat for 94 s. <a href="workers.html">Open workers</a></span></li>
+          <li data-when="no_worker"><svg class="icon" aria-hidden="true"><use href="#g-stale"/></svg><span>3 workers are stale; none is online. <a href="workers.html#state=none">Open workers</a></span></li>
+          <li><svg class="icon" style="color:var(--color-danger)" aria-hidden="true"><use href="#g-failed"/></svg><span>9 jobs failed in the last 30 days. <a href="jobs.html#preset=failed">Open failed jobs</a></span></li>
+        </ul></div>
+        <p class="meta" style="margin-top:var(--space-2)">These are raw facts from the overview. The console applies no thresholds of its own.</p>
+      </section>
+
+      <div class="two sect">
+        <section aria-labelledby="chart-h" class="card is-stale-target">
+          <div class="card-h"><h2 id="chart-h">Jobs finished per hour</h2>
+            <div class="seg" role="group" aria-label="Chart or table" data-panel-group><button type="button" aria-pressed="true" data-panel="#chart-view"><svg class="icon" aria-hidden="true"><use href="#i-graph"/></svg>Chart</button><button type="button" aria-pressed="false" data-panel="#chart-table"><svg class="icon" aria-hidden="true"><use href="#i-list"/></svg>Table</button></div></div>
+          <div data-when="loading" aria-busy="true" class="card-pad"><div class="skel" style="height:14rem"></div></div>
+          <div data-when="no_metrics" class="empty"><svg class="icon icon-md" aria-hidden="true"><use href="#i-info"/></svg><h3>No jobs finished in this range</h3><p>Nothing reached a final state in the last 24 hours. A gap is shown as a gap, not as zero.</p></div>
+          <div data-when="first_use" class="empty"><h3>No jobs yet</h3><p>Charts appear after the first job finishes.</p><a class="btn btn-primary" href="#" data-nolink="/app/jobs/new" data-hide-role="viewer">Submit a job</a><a href="#" data-nolink="/docs/quickstart">Read the quickstart</a></div>
+          <div data-when="loaded stale offline">
+            <div id="chart-view" class="chart chart-wrap is-stale-target"></div>
+            <div id="chart-table" class="tbl-wrap" hidden><table class="tbl"><caption>Jobs finished per hour, last 12 hours (UTC)</caption><thead><tr><th scope="col">Hour (UTC)</th><th scope="col" class="num">Succeeded</th><th scope="col" class="num">Failed</th></tr></thead><tbody id="chart-rows"></tbody></table></div>
+            <ul class="chart-legend" aria-label="Chart legend">
+              <li><svg width="36" height="12" aria-hidden="true"><path d="M2 6h32" stroke="var(--chart-succeeded)" stroke-width="2"/><circle cx="18" cy="6" r="3.5" fill="var(--chart-succeeded)"/></svg>Succeeded (solid, circle)</li>
+              <li><svg width="36" height="12" aria-hidden="true"><path d="M2 6h32" stroke="var(--chart-failed)" stroke-width="2" stroke-dasharray="6 3"/><rect x="14.500" y="2.500" width="7" height="7" fill="var(--color-white)" stroke="var(--chart-failed)" stroke-width="2"/></svg>Failed (dashed, square)</li>
+            </ul>
+            <p class="meta" style="padding:0 var(--space-4) var(--space-3)">Derived from job events. As of 10:42:07Z. Buckets after that time are absent, not zero. Not a measure of host load.</p>
+          </div>
+        </section>
+
+        <section aria-labelledby="topo-h" class="topo">
+          <div class="card-h"><h2 id="topo-h">Workers</h2>
+            <div class="seg" role="group" aria-label="Topology or list" data-panel-group><button type="button" aria-pressed="true" data-panel="#topo-view"><svg class="icon" aria-hidden="true"><use href="#i-graph"/></svg>Graph</button><button type="button" aria-pressed="false" data-panel="#topo-list"><svg class="icon" aria-hidden="true"><use href="#i-list"/></svg>List</button></div></div>
+          <div data-when="loading" aria-busy="true" class="card-pad"><div class="skel" style="height:14rem"></div></div>
+          <div data-when="first_use" class="empty"><h3>No workers registered</h3><p>Workers appear here after they register with an enrolled credential.</p><a href="#" data-nolink="/docs/workers">Read how to run a worker</a><a href="#" data-nolink="/app/settings/tokens" data-hide-role="viewer">Create a worker credential</a></div>
+          <div data-when="loaded stale offline no_worker no_metrics">
+            <div id="topo-view" class="topo-view is-stale-target"></div>
+            <div id="topo-list" class="tbl-wrap" hidden><table class="tbl" id="wt"><caption>Workers, <span class="n">10</span> shown</caption><thead><tr><th scope="col">Worker</th><th scope="col">State</th><th scope="col">Handler</th><th scope="col" class="num">Active</th></tr></thead><tbody></tbody></table></div>
+            <div class="topo-tools" role="group" aria-label="Zoom and pan"><button class="icon-btn" type="button" data-topo="in" aria-label="Zoom in"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></button><button class="icon-btn" type="button" data-topo="out" aria-label="Zoom out"><svg class="icon" aria-hidden="true"><use href="#i-minus"/></svg></button><button class="icon-btn" type="button" data-topo="left" aria-label="Pan left"><svg class="icon" aria-hidden="true"><use href="#i-chev-l"/></svg></button><button class="icon-btn" type="button" data-topo="up" aria-label="Pan up"><svg class="icon" aria-hidden="true"><use href="#i-up"/></svg></button><button class="icon-btn" type="button" data-topo="down" aria-label="Pan down"><svg class="icon" aria-hidden="true"><use href="#i-down"/></svg></button><button class="icon-btn" type="button" data-topo="right" aria-label="Pan right"><svg class="icon" aria-hidden="true"><use href="#i-chev-r"/></svg></button><button class="btn btn-sm btn-ghost" type="button" data-topo="reset">Reset view</button></div>
+            <div class="sel-detail" id="sel" role="status" aria-live="polite">Select a worker to see its detail. Use arrow keys to move between workers.</div>
+            <ul class="legend" aria-label="Worker state legend"><li><svg class="icon" style="color:var(--color-success)" aria-hidden="true"><use href="#g-online"/></svg>Online</li><li><svg class="icon" style="color:var(--color-warning)" aria-hidden="true"><use href="#g-stale"/></svg>Stale (dashed outline)</li><li><svg class="icon" style="color:var(--color-warning)" aria-hidden="true"><use href="#g-draining"/></svg>Draining</li><li><svg class="icon" style="color:var(--color-danger)" aria-hidden="true"><use href="#g-revoked"/></svg>Revoked</li></ul>
+          </div>
+        </section>
+      </div>
+
+      <section class="sect" aria-labelledby="rec-h">
+        <h2 id="rec-h">Recent jobs</h2>
+        <div class="card">
+          <div data-when="loading" aria-busy="true"><div class="skel skel-row"></div><div class="skel skel-row"></div><div class="skel skel-row"></div></div>
+          <div data-when="first_use" class="empty"><h3>No jobs yet</h3><p>Jobs you or your services submit will appear here with their attempts.</p><a class="btn btn-primary" href="#" data-nolink="/app/jobs/new" data-hide-role="viewer">Submit a job</a></div>
+          <div class="tbl-wrap is-stale-target" data-when="loaded stale offline no_worker no_metrics">
+            <table class="tbl"><caption>Most recent 5 jobs</caption>
+              <thead><tr><th scope="col">Job</th><th scope="col">Handler</th><th scope="col">Status</th><th scope="col" class="num">Attempts</th><th scope="col">Created (UTC)</th></tr></thead>
+              <tbody>
+                <tr><td data-label="Job" data-primary><a class="id" href="job-detail.html">3f9a21c4</a></td><td data-label="Handler">thumbnail@2</td><td data-label="Status"><div class="cell"><span class="status" data-s="running"><svg class="icon" aria-hidden="true"><use href="#g-running"/></svg>Running</span></div></td><td data-label="Attempts" class="num">1 of 3</td><td data-label="Created"><time datetime="2026-11-18T10:41:58Z" data-fmt>10:41:58 UTC</time></td></tr>
+                <tr><td data-label="Job" data-primary><a class="id" href="job-detail.html#state=failed">b07d5e19</a></td><td data-label="Handler">export@3</td><td data-label="Status"><div class="cell"><span class="status" data-s="failed"><svg class="icon" aria-hidden="true"><use href="#g-failed"/></svg>Failed</span> <span class="meta">retries exhausted</span></div></td><td data-label="Attempts" class="num">3 of 3</td><td data-label="Created"><time datetime="2026-11-18T10:39:12Z" data-fmt>10:39:12 UTC</time></td></tr>
+                <tr><td data-label="Job" data-primary><a class="id" href="job-detail.html">e2a6c880</a></td><td data-label="Handler">digest@1</td><td data-label="Status"><div class="cell"><span class="status" data-s="retry_wait"><svg class="icon" aria-hidden="true"><use href="#g-retry"/></svg>Retry wait</span></div></td><td data-label="Attempts" class="num">1 of 3</td><td data-label="Created"><time datetime="2026-11-18T10:38:40Z" data-fmt>10:38:40 UTC</time></td></tr>
+                <tr><td data-label="Job" data-primary><a class="id" href="job-detail.html">9c1e4f02</a></td><td data-label="Handler">ocr@1</td><td data-label="Status"><div class="cell"><span class="status" data-s="succeeded"><svg class="icon" aria-hidden="true"><use href="#g-succeeded"/></svg>Succeeded</span></div></td><td data-label="Attempts" class="num">2 of 3</td><td data-label="Created"><time datetime="2026-11-18T10:36:05Z" data-fmt>10:36:05 UTC</time></td></tr>
+                <tr><td data-label="Job" data-primary><a class="id" href="job-detail.html#state=unschedulable">41d8a7ee</a></td><td data-label="Handler">transcode@1</td><td data-label="Status"><div class="cell"><span class="status" data-s="queued"><svg class="icon" aria-hidden="true"><use href="#g-queued"/></svg>Queued</span> <span class="chip chip-reason"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>No capable worker</span></div></td><td data-label="Attempts" class="num">0 of 3</td><td data-label="Created"><time datetime="2026-11-18T10:33:20Z" data-fmt>10:33:20 UTC</time></td></tr>
+              </tbody></table>
+          </div>
+          <div class="pager" data-when-not="loading first_use"><span class="meta">Showing the first page of <a href="jobs.html">Jobs</a></span><a class="btn btn-sm" href="jobs.html">Open all jobs</a></div>
+        </div>
+      </section>
+
+      <section class="sect" aria-labelledby="cta-h" data-when-not="loading">
+        <h2 id="cta-h">Shortcuts</h2>
+        <div class="cta-grid">
+          <a class="card" href="jobs.html#preset=failed"><svg class="icon icon-md" style="color:var(--color-danger)" aria-hidden="true"><use href="#g-failed"/></svg><span>Review failed jobs<small>Dead-letter view: status failed</small></span></a>
+          <a class="card" href="workers.html"><svg class="icon icon-md" style="color:var(--color-success)" aria-hidden="true"><use href="#g-online"/></svg><span>Inspect workers<small>Liveness, capacity, drain state</small></span></a>
+          <a class="card" href="#" data-nolink="/app/jobs/new" data-hide-role="viewer"><svg class="icon icon-md" aria-hidden="true"><use href="#i-plus"/></svg><span>Submit a job<small>Typed handler, bounded payload</small></span></a>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+<!--@include p-console-dialogs.html cur=overview-->
+<!--@js-->
+<script>
+(function(){
+  var W=CLX.workers(10), tb=document.querySelector('#wt tbody');
+  W.forEach(function(w){var tr=document.createElement('tr');tr.setAttribute('data-key',w.id);
+    tr.innerHTML='<td data-label="Worker" data-primary><a class="id mono" href="workers.html">'+w.name+'</a></td><td data-label="State"><span class="status" data-s="'+(w.st==='online'?'online':w.st==='revoked'?'revoked':w.st==='stale'?'stale':'draining')+'"><svg class="icon" aria-hidden="true"><use href="#'+CLX.STATE_GLYPH[w.st]+'"/></svg>'+CLX.STATE_LABEL[w.st]+'</span></td><td data-label="Handler">'+w.handler+'@'+w.ver+'</td><td data-label="Active" class="num">'+w.active+'/'+w.cap+'</td>';tb.appendChild(tr);
+    tr.addEventListener('click',function(e){if(e.target.tagName!=='A'){CLX.topoSelect(w.id,false);}});});
+  var sel=document.getElementById('sel');
+  CLX.topology(document.getElementById('topo-view'),W,{label:'Worker topology: 10 workers connected to the coordinator. The List view has the same entries.',onSelect:function(key,fromGraph){
+    var w=W.filter(function(x){return x.id===key;})[0]; if(!w)return;
+    Array.prototype.forEach.call(tb.children,function(r){r.style.background=r.getAttribute('data-key')===key?'var(--color-accent-tint)':'';});
+    sel.textContent=w.name+': '+CLX.STATE_LABEL[w.st]+'. Runs '+w.handler+'@'+w.ver+'. '+w.active+' of '+w.cap+' slots active. Last heartbeat '+w.hb+' s ago (as of 10:42:07Z).';}});
+  /* chart: 12 hourly buckets, deterministic; the last bucket is missing (after as_of) */
+  var succ=[84,91,77,102,96,110,98,87,121,115,104,63], fail=[1,0,2,0,1,3,0,1,0,2,1,0];
+  var host=document.getElementById('chart-view'), NS='http://www.w3.org/2000/svg';
+  var Wd=640,Ht=250,m={l:44,r:14,t:14,b:30},max=140;
+  function X(i){return m.l+i*(Wd-m.l-m.r)/11;} function Y(v){return m.t+(1-v/max)*(Ht-m.t-m.b);}
+  var h='<svg viewBox="0 0 '+Wd+' '+Ht+'" role="img" aria-labelledby="ct ci"><title id="ct">Jobs finished per hour, last 12 hours</title><desc id="ci">Succeeded jobs range from 63 to 121 per hour; failures stay between 0 and 3 per hour, on the same axis. The table view lists every value.</desc><g class="grid axis">';
+  [0,35,70,105,140].forEach(function(v){h+='<line x1="'+m.l+'" x2="'+(Wd-m.r)+'" y1="'+Y(v)+'" y2="'+Y(v)+'"/><text x="'+(m.l-8)+'" y="'+(Y(v)+4)+'" text-anchor="end">'+v+'</text>';});
+  for(var i=0;i<12;i+=2){h+='<text x="'+X(i)+'" y="'+(Ht-8)+'" text-anchor="middle">'+String(i).padStart(2,'0')+':00</text>';}
+  h+='</g>';
+  var ps=succ.map(function(v,i){return X(i)+','+Y(v);}).join(' ');h+='<polyline points="'+ps+'" fill="none" stroke="var(--chart-succeeded)" stroke-width="2.25" stroke-linejoin="round"/>';
+  succ.forEach(function(v,i){if(i%2===0||i===11)h+='<circle cx="'+X(i)+'" cy="'+Y(v)+'" r="3.5" fill="var(--chart-succeeded)"/>';});
+  var pf=fail.map(function(v,i){return X(i)+','+Y(v);}).join(' ');
+  h+='<polyline points="'+pf+'" fill="none" stroke="var(--chart-failed)" stroke-width="2.25" stroke-dasharray="6 3" stroke-linejoin="round"/>';
+  fail.forEach(function(v,i){if(i%2===0)h+='<rect x="'+(X(i)-3.5)+'" y="'+(Y(v)-3.5)+'" width="7" height="7" fill="var(--color-white)" stroke="var(--chart-failed)" stroke-width="2"/>';});
+  h+='<text x="'+X(8)+'" y="'+(Y(succ[8])-12)+'" text-anchor="middle" style="font-size:11px;fill:var(--color-success-ink);font-family:var(--font-sans)">succeeded</text><text x="'+(X(5)+8)+'" y="'+(Y(0)-10)+'" style="font-size:11px;fill:var(--color-danger-ink);font-family:var(--font-sans)">failed</text></svg>';
+  host.innerHTML=h;
+  var rows=document.getElementById('chart-rows');succ.forEach(function(v,i){var tr=document.createElement('tr');tr.innerHTML='<td data-label="Hour (UTC)">'+String(i).padStart(2,'0')+':00</td><td data-label="Succeeded" class="num">'+v+'</td><td data-label="Failed" class="num">'+fail[i]+'</td>';rows.appendChild(tr);});
+  document.getElementById('refresh').addEventListener('click',function(){CLX.say('Refreshed. Data as of 10:42:07 UTC.');var r=document.querySelector('.tbl tbody tr');if(r){r.classList.remove('upd');void r.offsetWidth;r.classList.add('upd');}});
+})();
+</script>
+</body>
+</html>

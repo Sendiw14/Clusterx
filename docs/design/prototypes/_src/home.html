@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLUSTERX: jobs that outlive their workers (design prototype)</title>
+<meta name="description" content="Design prototype of the CLUSTERX home route. Illustrative data.">
+<!--@tokens-->
+<!--@css-->
+<style>
+.hero{padding-block:clamp(2.5rem,1rem + 6vw,6rem) var(--section-gap)}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-7);align-items:end}
+.hero-grid>*{min-width:0}
+@media (min-width:1024px){.hero-grid{grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:var(--space-8)}}
+.hero h1{max-width:14ch}
+.hero .lede{margin-top:var(--space-5)}
+.cta-row{display:flex;flex-wrap:wrap;gap:var(--space-3);margin-top:var(--space-6)}
+@media (max-width:479px){.cta-row .btn{width:100%}}
+.hero-note{margin-top:var(--space-4);font-size:var(--text-ui-sm);color:var(--color-ink-2);max-width:34rem}
+.plate{border:1px solid var(--color-ink);border-radius:var(--radius-sm);background:var(--color-white);position:relative}
+.plate::before{content:"";position:absolute;inset:6px -6px -6px 6px;border:1px solid var(--color-line-strong);border-radius:var(--radius-sm);z-index:-1}
+.plate-h{display:flex;justify-content:space-between;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-ink);font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:.06em;text-transform:uppercase}
+.ledger{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:var(--text-ui-sm)}
+.ledger th{text-align:left;font-weight:500;color:var(--color-ink-2);padding:var(--space-2) var(--space-4);font-size:var(--text-ui-xs);letter-spacing:.06em;text-transform:uppercase}
+.ledger td{padding:var(--space-2) var(--space-4);border-top:1px solid var(--color-line);vertical-align:top}
+.ledger td:first-child{color:var(--color-ink-2);white-space:nowrap}
+.ledger tr.rej td{background:var(--color-danger-tint)}
+.ledger .who{color:var(--color-ink-2)}
+.plate-f{padding:var(--space-3) var(--space-4);border-top:1px solid var(--color-line);font-size:var(--text-ui-sm);color:var(--color-ink-2)}
+.sec-h{display:grid;gap:var(--space-4);margin-bottom:var(--space-7);max-width:44rem}
+.pillars{display:grid;gap:0;border:1px solid var(--color-ink);border-radius:var(--radius-sm);background:var(--color-white)}
+@media (min-width:900px){.pillars{grid-template-columns:repeat(3,1fr)}.pillars>*+*{border-left:1px solid var(--color-line-strong)}}
+.pillars>*{padding:var(--space-6) var(--space-5)}
+@media (max-width:899px){.pillars>*+*{border-top:1px solid var(--color-line-strong)}}
+.pillars .no{font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:var(--tracking-label);color:var(--color-ink-2)}
+.pillars h3{margin:var(--space-3) 0 var(--space-3);font-size:var(--text-step-1)}
+.pillars p{color:var(--color-ink-2)}
+.pillars .proof{margin-top:var(--space-4);font-family:var(--font-mono);font-size:var(--text-ui-sm);color:var(--color-ink)}
+
+/* Atlas */
+.atlas-card{border:1px solid var(--color-ink);border-radius:var(--radius-sm);background:var(--color-white)}
+.atlas-h{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-4);justify-content:space-between;align-items:center;padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-ink)}
+.atlas-h .tag{font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--color-ink);padding:1px 8px;border-radius:var(--radius-xs)}
+.atlas-body{display:grid}
+@media (min-width:1100px){.atlas-body{grid-template-columns:minmax(0,1fr) 17rem}.atlas-body .steps{border-left:1px solid var(--color-line);border-top:0}}
+.atlas-stage{overflow-x:auto;padding:var(--space-3)}
+.atlas-stage svg{min-width:680px;width:100%;height:auto}
+@media (max-width:479px){.atlas-stage{display:none}}
+.atlas-stage:focus-visible{outline-offset:-2px}
+.steps{border-top:1px solid var(--color-line);padding:var(--space-4);display:grid;gap:var(--space-3);align-content:start}
+.steps ol{list-style:none;display:grid;gap:2px;counter-reset:s}
+.steps li{counter-increment:s;display:grid;grid-template-columns:1.75rem 1fr;gap:var(--space-2);padding:6px var(--space-2);border-radius:var(--radius-sm);font-size:var(--text-ui-md)}
+.steps li::before{content:counter(s,decimal-leading-zero);font-family:var(--font-mono);font-size:var(--text-ui-xs);color:var(--color-ink-2);padding-top:3px}
+.steps li[aria-current="step"]{background:var(--color-accent-tint);box-shadow:inset 2px 0 0 var(--color-accent)}
+.steps li strong{display:block;font-weight:600}
+.steps li span{color:var(--color-ink-2);font-size:var(--text-ui-sm)}
+.atlas-ctl{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center;padding:var(--space-3) var(--space-4);border-top:1px solid var(--color-line)}
+.atlas-cap{padding:var(--space-3) var(--space-4) var(--space-4);border-top:1px solid var(--color-line);min-height:5.5rem}
+.atlas-cap b{display:block;font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--color-ink-2);margin-bottom:var(--space-1)}
+.atlas-legend{display:grid;gap:var(--space-3) var(--space-5);grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));list-style:none;padding:var(--space-4);border-top:1px solid var(--color-line);font-size:var(--text-ui-sm);color:var(--color-ink-2)}
+.atlas-legend li{display:flex;align-items:center;gap:var(--space-3)}
+.atlas-legend svg{width:44px;height:24px;flex:none}
+.atlas-legend strong{color:var(--color-ink);font-weight:600}
+/* svg parts */
+#atlas text{font-family:var(--font-sans);font-size:16px;fill:var(--color-ink)}
+#atlas .sub{font-family:var(--font-mono);font-size:13.5px;fill:var(--color-ink-2)}
+#atlas .strong{font-weight:600}
+#atlas .body{fill:var(--color-white);stroke:var(--color-ink);stroke-width:1.5;transition:stroke var(--duration-atlas-step) var(--ease-out),fill var(--duration-atlas-step) var(--ease-out)}
+#atlas .g{transition:opacity var(--duration-atlas-step) var(--ease-out)}
+#atlas .g.is-off{opacity:0}
+#atlas .g.is-dim{opacity:.38}
+#atlas .g.is-hl .body{stroke:var(--color-accent);stroke-width:2.5;fill:var(--color-accent-tint)}
+#atlas .g.is-ok .body{stroke:var(--color-success);stroke-width:2.5;fill:var(--color-success-tint)}
+#atlas .g.is-bad .body{stroke:var(--color-danger);stroke-width:2.5;fill:var(--color-danger-tint)}
+#atlas .dorm .body{stroke:var(--color-line-strong)}
+#atlas .edge{fill:none;stroke:var(--color-ink);stroke-width:1.75}
+#atlas .edge.renew{stroke:var(--color-accent);stroke-dasharray:5 4}
+#atlas .edge.fail{stroke:var(--color-danger);stroke-dasharray:5 4}
+#atlas .ring{fill:none;stroke:var(--color-accent);stroke-width:3;stroke-linecap:round;transform:rotate(-90deg);transform-box:fill-box;transform-origin:center;transition:stroke-dasharray var(--duration-atlas-step) linear}
+#atlas .ringbase{fill:none;stroke:var(--color-line);stroke-width:3}
+#atlas .token{fill:var(--color-accent);stroke:var(--color-white);stroke-width:1.5}
+#atlas .tag{font-family:var(--font-mono);font-size:12.5px;fill:var(--color-ink-2)}
+#atlas .clock{font-family:var(--font-mono);font-size:15px;fill:var(--color-ink)}
+.faq details{border-top:1px solid var(--color-line-strong);padding:var(--space-4) 0}
+.faq details:last-child{border-bottom:1px solid var(--color-line-strong)}
+.faq summary{cursor:pointer;font-weight:600;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:var(--space-4);min-height:2rem}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font-family:var(--font-mono);font-size:1.25rem;line-height:1}
+.faq details[open] summary::after{content:"\2212"}
+.faq p{margin-top:var(--space-3);color:var(--color-ink-2);max-width:44rem}
+.arch{display:grid;gap:0;border:1px solid var(--color-ink);border-radius:var(--radius-sm);background:var(--color-white);counter-reset:a}
+@media (min-width:900px){.arch{grid-template-columns:repeat(5,1fr)}.arch>li+li{border-left:1px solid var(--color-ink)}}
+.arch>li{list-style:none;padding:var(--space-4);position:relative;counter-increment:a}
+@media (max-width:899px){.arch>li+li{border-top:1px solid var(--color-ink)}}
+.arch .tier{font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--color-ink-2)}
+.arch h3{font-size:var(--text-step-0);margin:var(--space-2) 0}
+.arch p{font-size:var(--text-ui-md);color:var(--color-ink-2)}
+.arch .trust{display:inline-block;margin-top:var(--space-3);font-family:var(--font-mono);font-size:var(--text-ui-xs);border:1px dashed var(--color-line-strong);padding:1px 6px;border-radius:var(--radius-xs);color:var(--color-ink-2)}
+.preview{border:1px solid var(--color-ink);border-radius:var(--radius-sm);overflow:hidden;background:var(--color-canvas)}
+.preview-bar{display:flex;gap:var(--space-3);align-items:center;padding:var(--space-2) var(--space-4);border-bottom:1px solid var(--color-line);background:var(--color-white);font-family:var(--font-mono);font-size:var(--text-ui-xs);color:var(--color-ink-2);flex-wrap:wrap}
+.preview-in{padding:var(--space-4);display:grid;gap:var(--space-4)}
+.story{display:grid;gap:var(--space-6)}
+@media (min-width:900px){.story{grid-template-columns:minmax(0,4fr) minmax(0,6fr);align-items:start}}
+.cta-band{background:var(--color-ink);color:var(--color-white);padding-block:var(--space-8);border-radius:0}
+.cta-band .h2{color:var(--color-white);max-width:20ch}
+.cta-band .btn{border-color:var(--color-white)}
+.cta-band .btn-primary{background:var(--color-white);color:var(--color-ink)}
+.cta-band .btn-primary:hover{background:var(--color-accent-tint);color:var(--color-ink)}
+.cta-band .btn:not(.btn-primary){background:transparent;color:var(--color-white)}
+.cta-band :focus-visible{outline-color:var(--color-focus-on-dark)}
+</style>
+</head>
+<body data-default-state="loaded">
+<!--@sprite-->
+<a class="skip" href="#main">Skip to content</a>
+<div class="proto-bar" role="region" aria-label="Prototype notice"><b>design prototype — illustrative data</b><span>Route: / (home). Fonts shown are system fallbacks. Links to routes outside this set are inert by design.</span></div>
+<!--@include p-public-header.html-->
+<div id="status-live" class="sr-only" role="status" aria-live="polite"></div>
+
+<main id="main" tabindex="-1">
+  <section class="hero" aria-labelledby="hero-h">
+    <div class="wrap hero-grid">
+      <div class="hero-in">
+        <p class="eyebrow" style="--i:0">Open-source distributed job engine · self-hosted</p>
+        <h1 id="hero-h" class="display" style="--i:1;margin-top:var(--space-5)">Jobs that outlive their <em>workers.</em></h1>
+        <p class="lede" style="--i:2">CLUSTERX runs every job at least once. Leases and fencing make sure a worker that vanished, and then came back, cannot overwrite what happened while it was gone.</p>
+        <div class="cta-row" style="--i:3">
+          <a class="btn btn-primary btn-lg" href="#" data-nolink="/demo">Explore the demo</a>
+          <a class="btn btn-lg" href="#" data-nolink="/docs/quickstart">Read the quickstart</a>
+        </div>
+        <p class="hero-note" style="--i:3">At-least-once, not exactly-once: a handler can run twice, so side effects need to be idempotent. The engine guarantees only that the database never records a stale result.</p>
+      </div>
+      <figure class="plate reveal" style="margin:0" aria-labelledby="plate-cap">
+        <div class="plate-h"><span>Fig. 1 · one job, two workers</span><span>Illustrative, scripted</span></div>
+        <div class="tbl-wrap">
+        <table class="ledger">
+          <caption class="sr-only">Ledger of the scripted example: time, event, resulting status</caption>
+          <thead><tr><th scope="col">Time</th><th scope="col">Event</th><th scope="col">Status</th></tr></thead>
+          <tbody>
+            <tr><td>t+00.0 s</td><td>admit <span class="who">· committed</span></td><td>queued</td></tr>
+            <tr><td>t+00.4 s</td><td>claim, lease gen 1 <span class="who">· worker A</span></td><td>running</td></tr>
+            <tr><td>t+30.4 s</td><td>lease expired</td><td>retry_wait</td></tr>
+            <tr><td>t+32.9 s</td><td>claim, lease gen 2 <span class="who">· worker B</span></td><td>running</td></tr>
+            <tr><td>t+34.1 s</td><td>result committed</td><td>succeeded</td></tr>
+            <tr class="rej"><td>t+41.7 s</td><td>late report from worker A <span class="who">· rejected</span></td><td>succeeded <span class="who">(unchanged)</span></td></tr>
+          </tbody>
+        </table></div>
+        <figcaption id="plate-cap" class="plate-f">Worker A went silent, B finished the job, and A's late report was fenced off. The handler ran twice; the record is still single and coherent.</figcaption>
+      </figure>
+    </div>
+    <div class="wrap" aria-hidden="true"><hr class="tick-rule" style="margin-top:var(--space-7)"></div>
+  </section>
+
+  <section class="section" aria-labelledby="atlas-h" style="padding-top:0">
+    <div class="wrap">
+      <div class="sec-h reveal"><p class="eyebrow">The Execution Atlas</p><h2 id="atlas-h" class="h2">Follow one job through a worker failure.</h2><p class="lede">Eight steps, scripted and deterministic. Nothing on this diagram is live telemetry; the real console draws the same shapes from persisted state.</p></div>
+      <div class="atlas-card reveal" role="group" aria-labelledby="atlas-h">
+        <div class="atlas-h"><span class="tag">Illustrative, scripted</span><span class="meta" style="font-size:var(--text-ui-sm)" id="atlas-clock-t">Step 0 of 8</span></div>
+        <div class="atlas-body">
+          <div>
+            <div class="atlas-stage" tabindex="0" role="region" aria-label="Execution Atlas diagram (scrolls horizontally on narrow screens)">
+<svg id="atlas" viewBox="0 0 1000 500" role="img" aria-describedby="atlas-desc" focusable="false">
+  <title>Execution Atlas: one job, a lease expiry and a rejected late result</title>
+  <desc id="atlas-desc">A job is admitted into a queue. Worker A claims it as attempt 1 under a 30 second lease and renews it, then goes silent. The lease expires, a recovery step puts the job back in the queue, and worker B claims it as attempt 2. Worker B commits the result. A late report from worker A is rejected because its attempt is stale. The same eight steps are listed beside the diagram.</desc>
+  <defs>
+    <marker id="ah-ink" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1.5L8.500 5 1 8.500z" fill="var(--color-ink)"/></marker>
+    <marker id="ah-acc" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1.500L8.500 5 1 8.500z" fill="var(--color-accent)"/></marker>
+    <marker id="ah-red" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1.500L8.500 5 1 8.500z" fill="var(--color-danger)"/></marker>
+  </defs>
+  <text id="clk" class="clock" x="20" y="30">t+00 s</text>
+
+  <!-- edges (behind nodes) -->
+  <g class="g is-off" data-vis="1-8"><path id="e1" class="edge" d="M130 220 L212 220" marker-end="url(#ah-ink)"/><text class="sub" x="171" y="198" text-anchor="middle">admit</text><text class="tag" x="171" y="244" text-anchor="middle">committed</text></g>
+  <g class="g is-off" data-vis="2-8"><path id="e2" class="edge" d="M355 204 C395 204 395 112 420 108" marker-end="url(#ah-ink)"/><text class="sub" x="372" y="146" text-anchor="end">claim</text><text class="tag" x="372" y="162" text-anchor="end">gen 1</text></g>
+  <g class="g is-off" data-vis="3-3"><path id="e5" class="edge renew" d="M580 77 C560 34 468 34 455 70" marker-end="url(#ah-acc)"/><text class="sub" x="518" y="26" text-anchor="middle">renew · +30 s</text></g>
+  <g class="g is-off" data-vis="5-8"><path id="e6" class="edge fail" d="M625 133 C675 176 715 204 748 214" marker-end="url(#ah-red)"/><text class="sub" x="705" y="168" style="fill:var(--color-danger-ink)">lease expired</text></g>
+  <g class="g is-off" data-vis="6-8"><path id="e7" class="edge" d="M768 246 C735 505 285 505 285 254" marker-end="url(#ah-ink)"/><text class="sub" x="520" y="488" text-anchor="middle">retry_wait, then queued after backoff</text></g>
+  <g class="g is-off" data-vis="6-8"><path id="e3" class="edge" d="M355 236 C395 236 395 332 420 336" marker-end="url(#ah-ink)"/><text class="sub" x="372" y="296" text-anchor="end">claim</text><text class="tag" x="372" y="312" text-anchor="end">gen 2</text></g>
+  <g class="g is-off" data-vis="7-8"><path id="e9" class="edge" d="M672 344 C800 344 890 306 920 258" marker-end="url(#ah-ink)"/><text class="sub" x="800" y="326">result committed</text></g>
+  <g class="g is-off" data-vis="8-8"><path id="e8" class="edge fail" d="M672 108 C800 92 890 130 920 186" marker-end="url(#ah-red)"/>
+    <circle cx="806" cy="106" r="12" fill="var(--color-white)" stroke="var(--color-danger)" stroke-width="2"/><path d="M797.500 114.500 L814.500 97.500" stroke="var(--color-danger)" stroke-width="2" stroke-linecap="round"/>
+    <text class="sub" x="806" y="74" text-anchor="middle" style="fill:var(--color-danger-ink)">stale report · fenced off</text></g>
+
+  <!-- job -->
+  <g id="n-job" class="g dorm" data-hl="1"><rect class="body" x="20" y="192" width="110" height="56" rx="6"/><text class="strong" x="75" y="215" text-anchor="middle">job</text><text class="sub" x="75" y="235" text-anchor="middle">9c1e4f02</text><text id="job-status" class="sub" x="75" y="270" text-anchor="middle">&#8203;</text></g>
+  <!-- queue -->
+  <g id="n-queue" class="g dorm" data-hl="1,6"><rect class="body" x="215" y="190" width="140" height="60" rx="6"/><rect x="227" y="203" width="28" height="34" rx="3" fill="none" stroke="var(--color-line-strong)"/><rect x="261" y="203" width="28" height="34" rx="3" fill="none" stroke="var(--color-line-strong)"/><rect x="295" y="203" width="28" height="34" rx="3" fill="none" stroke="var(--color-line-strong)"/><text class="sub" x="285" y="180" text-anchor="middle">queue</text></g>
+  <!-- attempt 1 + lease -->
+  <g class="g is-off" data-vis="2-8" data-dim="6-8"><circle class="ringbase" cx="455" cy="105" r="30"/>
+    <circle id="ring1" class="ring" cx="455" cy="105" r="30" pathLength="100" stroke-dasharray="0 100"/>
+    <circle id="a1" class="body" cx="455" cy="105" r="19"/><text class="strong" x="455" y="111" text-anchor="middle">1</text><text class="sub" x="455" y="152" text-anchor="middle">attempt 1</text><text class="tag" x="455" y="168" text-anchor="middle">lease gen 1</text><line x1="474" y1="105" x2="515" y2="105" stroke="var(--color-ink-2)" stroke-width="1.5"/></g>
+  <!-- worker A -->
+  <g id="n-wa" class="g dorm" data-hl="2,3" data-dim="4-8"><polygon class="body" points="515,77 655,77 671,93 671,133 531,133 515,117"/><text class="strong" x="593" y="102" text-anchor="middle">worker A</text><text class="sub" x="593" y="121" text-anchor="middle">inc-3e8</text></g>
+  <g class="g is-off" data-vis="4-5"><text class="sub" x="593" y="66" text-anchor="middle" style="fill:var(--color-danger-ink)">silent: no renewals</text></g>
+  <!-- attempt 2 + lease -->
+  <g class="g is-off" data-vis="6-8"><circle class="ringbase" cx="455" cy="335" r="30"/>
+    <circle id="ring2" class="ring" cx="455" cy="335" r="30" pathLength="100" stroke-dasharray="0 100"/>
+    <circle id="a2" class="body" cx="455" cy="335" r="19"/><text class="strong" x="455" y="341" text-anchor="middle">2</text><text class="sub" x="455" y="382" text-anchor="middle">attempt 2</text><text class="tag" x="455" y="398" text-anchor="middle">lease gen 2</text><line x1="474" y1="335" x2="515" y2="335" stroke="var(--color-ink-2)" stroke-width="1.5"/></g>
+  <!-- worker B -->
+  <g id="n-wb" class="g dorm" data-hl="6,7"><polygon class="body" points="515,307 655,307 671,323 671,363 531,363 515,347"/><text class="strong" x="593" y="332" text-anchor="middle">worker B</text><text class="sub" x="593" y="351" text-anchor="middle">inc-91c</text></g>
+  <!-- recovery -->
+  <g id="n-rec" class="g is-off" data-vis="5-8" data-hl="5,6"><polygon class="body" points="790,172 840,220 790,268 740,220"/><text class="strong" x="790" y="218" text-anchor="middle" style="font-size:14px">recover</text><text class="tag" x="790" y="290" text-anchor="middle">if budget left</text></g>
+  <!-- result -->
+  <g id="n-res" class="g dorm" data-hl="" data-ok="7-8"><rect class="body" x="860" y="192" width="120" height="60" rx="6" transform="translate(-0,0)"/><rect x="860" y="192" width="8" height="60" rx="3" fill="var(--color-ink)"/><text class="strong" x="926" y="217" text-anchor="middle">result</text><text id="res-status" class="sub" x="926" y="236" text-anchor="middle">&#8203;</text></g>
+  <circle id="token" class="token" r="6" cx="-20" cy="-20" opacity="0"/>
+</svg>
+            </div>
+            <div class="atlas-ctl" role="group" aria-label="Atlas controls">
+              <button class="btn btn-sm" type="button" id="at-play" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg><span>Play</span></button>
+              <button class="btn btn-sm" type="button" id="at-step"><svg class="icon" aria-hidden="true"><use href="#i-step"/></svg>Step</button>
+              <button class="btn btn-sm" type="button" id="at-reset"><svg class="icon" aria-hidden="true"><use href="#i-reset"/></svg>Reset</button>
+              <span class="meta" style="margin-left:auto">Plays once on first view, then rests. Reduced motion: step through only.</span>
+            </div>
+            <div class="atlas-cap" id="atlas-cap" role="status" aria-live="polite"><b>Step 0 of 8</b><span>Press Play or Step. The steps are listed alongside; the diagram only mirrors them.</span></div>
+          </div>
+          <div class="steps">
+            <h3 class="h3" style="font-size:var(--text-ui-lg)">The eight steps</h3>
+            <ol id="atlas-steps">
+              <li><div><strong>Admit</strong><span>Committed before the API answers.</span></div></li>
+              <li><div><strong>Claim</strong><span>Attempt 1, lease generation 1.</span></div></li>
+              <li><div><strong>Renew</strong><span>Worker A extends its lease.</span></div></li>
+              <li><div><strong>Silence</strong><span>Worker A stops renewing.</span></div></li>
+              <li><div><strong>Expire</strong><span>Lease ends on the database clock.</span></div></li>
+              <li><div><strong>Recover</strong><span>Back to queued; worker B claims it.</span></div></li>
+              <li><div><strong>Commit</strong><span>Worker B's result is accepted.</span></div></li>
+              <li><div><strong>Fence</strong><span>Worker A's late report is rejected.</span></div></li>
+            </ol>
+          </div>
+        </div>
+        <ul class="atlas-legend" aria-label="Atlas legend">
+          <li><svg viewBox="0 0 44 24" aria-hidden="true"><rect x="4" y="5" width="36" height="14" rx="3" fill="none" stroke="var(--color-ink)" stroke-width="1.5"/></svg><span><strong>Job</strong> rounded block, status written beneath</span></li>
+          <li><svg viewBox="0 0 44 24" aria-hidden="true"><rect x="3" y="4" width="38" height="16" rx="3" fill="none" stroke="var(--color-ink)" stroke-width="1.5"/><path d="M15 8v8M27 8v8" stroke="var(--color-line-strong)" stroke-width="1.5"/></svg><span><strong>Queue</strong> slotted block, depth shown by filled slots</span></li>
+          <li><svg viewBox="0 0 44 24" aria-hidden="true"><circle cx="22" cy="12" r="6" fill="none" stroke="var(--color-ink)" stroke-width="1.5"/></svg><span><strong>Attempt</strong> numbered circle, one per claim</span></li>
+          <li><svg viewBox="0 0 44 24" aria-hidden="true"><circle cx="22" cy="12" r="9" fill="none" stroke="var(--color-accent)" stroke-width="3" stroke-dasharray="40 17" stroke-linecap="round"/></svg><span><strong>Lease</strong> ring around an attempt; arc length is time left</span></li>
+          <li><svg viewBox="0 0 44 24" aria-hidden="true"><polygon points="6,5 34,5 40,10 40,19 12,19 6,14" fill="none" stroke="var(--color-ink)" stroke-width="1.5"/></svg><span><strong>Worker</strong> chamfered block, with its incarnation</span></li>
+          <li><svg viewBox="0 0 44 24" aria-hidden="true"><polygon points="22,2 36,12 22,22 8,12" fill="none" stroke="var(--color-ink)" stroke-width="1.5"/></svg><span><strong>Recovery</strong> diamond: the engine decides retry or fail</span></li>
+          <li><svg viewBox="0 0 44 24" aria-hidden="true"><rect x="4" y="5" width="36" height="14" rx="3" fill="none" stroke="var(--color-ink)" stroke-width="1.5"/><rect x="4" y="5" width="6" height="14" rx="2" fill="var(--color-ink)"/></svg><span><strong>Result</strong> block with a solid spine</span></li>
+          <li><svg viewBox="0 0 44 24" aria-hidden="true"><path d="M3 12h34" stroke="var(--color-ink)" stroke-width="1.75" marker-end="url(#ah-ink)"/><path d="M3 20h30" stroke="var(--color-accent)" stroke-width="1.75" stroke-dasharray="5 4"/><path d="M3 5h30" stroke="var(--color-danger)" stroke-width="1.75" stroke-dasharray="5 4"/></svg><span><strong>Edges</strong> solid committed, blue dashed renewal, red dashed rejected</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section alt" aria-labelledby="pill-h">
+    <div class="wrap">
+      <div class="sec-h reveal"><p class="eyebrow">Three things it does</p><h2 id="pill-h" class="h2">Small surface. Stated guarantees.</h2></div>
+      <div class="pillars reveal">
+        <article><p class="no">01 / Admission</p><h3>Acknowledged means committed.</h3><p>A job gets a success response only after its transaction commits in PostgreSQL. A coordinator restart does not lose acknowledged work.</p><p class="proof">POST /jobs → 201 after commit</p></article>
+        <article><p class="no">02 / Execution</p><h3>Leases and fencing.</h3><p>Every claim creates an attempt and a lease generation in one transaction. Reports from a stale attempt, generation, or revoked credential are refused.</p><p class="proof">attempt + generation + incarnation</p></article>
+        <article><p class="no">03 / Operation</p><h3>A console that shows persisted state.</h3><p>Queue age, workers, attempts and events come from the database. When the live channel drops, the screen says so and reconciles from a snapshot.</p><p class="proof">live hint → snapshot → render</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="arch-h">
+    <div class="wrap">
+      <div class="sec-h reveal"><p class="eyebrow">Architecture</p><h2 id="arch-h" class="h2">One coordinator, one database, workers that pull.</h2><p class="lede">Workers never touch the database. They ask the coordinator for work and report back over authenticated gRPC.</p></div>
+      <ol class="arch reveal" aria-label="Architecture layers, left to right">
+        <li><p class="tier">Layer 1</p><h3>Browser</h3><p>Console and public site over HTTPS. Holds no API or worker tokens.</p><span class="trust">session cookie only</span></li>
+        <li><p class="tier">Layer 2</p><h3>Next.js server</h3><p>Human sessions and the server-side proxy. Signs short-lived service assertions.</p><span class="trust">trust boundary</span></li>
+        <li><p class="tier">Layer 3</p><h3>Go coordinator</h3><p>REST, gRPC, scheduler and authorization on every call.</p><span class="trust">enforces roles</span></li>
+        <li><p class="tier">Layer 4</p><h3>PostgreSQL</h3><p>The only authoritative store for jobs, attempts, leases and events.</p><span class="trust">single source of truth</span></li>
+        <li><p class="tier">Layer 5</p><h3>Workers</h3><p>Trusted, precompiled handlers. Pull work, renew leases, report results.</p><span class="trust">credential per worker</span></li>
+      </ol>
+      <p style="margin-top:var(--space-4)"><a href="#" data-nolink="/architecture">Read the full architecture, trade-offs and failure domains</a></p>
+    </div>
+  </section>
+
+  <section class="section alt" aria-labelledby="story-h">
+    <div class="wrap story">
+      <div class="sec-h reveal" style="margin-bottom:0"><p class="eyebrow">The worker-failure story</p><h2 id="story-h" class="h2">What happens when a worker dies mid-job.</h2><p class="lede">The same eight steps, in plain terms: no retry is hidden, no result is overwritten.</p></div>
+      <ol class="timeline reveal" aria-label="Worker failure timeline">
+        <li><span class="t">t+00 s</span><p><strong>Claimed.</strong> Worker A holds attempt 1 under a 30 s lease.</p></li>
+        <li data-kind="warn"><span class="t">t+30 s</span><p><strong>Lease expires.</strong> The database clock decides, not the worker. Attempt 1 counts against the job's budget.</p></li>
+        <li><span class="t">t+32 s</span><p><strong>Retried.</strong> With budget left the job goes back to the queue; worker B claims attempt 2.</p></li>
+        <li data-kind="ok"><span class="t">t+34 s</span><p><strong>Committed.</strong> Worker B's result is recorded with its attempt and generation.</p></li>
+        <li data-kind="bad"><span class="t">t+41 s</span><p><strong>Rejected.</strong> Worker A reports late. The result is refused and a diagnostic event is kept. The job still says succeeded.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="prev-h">
+    <div class="wrap">
+      <div class="sec-h reveal"><p class="eyebrow">Console</p><h2 id="prev-h" class="h2">Open a job and see every attempt.</h2></div>
+      <figure class="preview reveal" style="margin:0" aria-labelledby="prev-cap">
+        <div class="preview-bar"><span>/app/jobs</span><span>design prototype preview — illustrative data, not a capture of shipped software</span></div>
+        <div class="preview-in">
+          <div class="card tbl-wrap"><table class="tbl"><caption>Jobs, 4 shown</caption>
+            <thead><tr><th scope="col">Job</th><th scope="col">Handler</th><th scope="col">Status</th><th scope="col">Attempts</th></tr></thead>
+            <tbody>
+              <tr><td data-label="Job"><span class="mono">3f9a21c4</span></td><td data-label="Handler">thumbnail@2</td><td data-label="Status"><span class="status" data-s="running"><svg class="icon" aria-hidden="true"><use href="#g-running"/></svg>Running</span></td><td data-label="Attempts">1 of 3</td></tr>
+              <tr><td data-label="Job"><span class="mono">9c1e4f02</span></td><td data-label="Handler">ocr@1</td><td data-label="Status"><span class="status" data-s="succeeded"><svg class="icon" aria-hidden="true"><use href="#g-succeeded"/></svg>Succeeded</span></td><td data-label="Attempts">2 of 3</td></tr>
+              <tr><td data-label="Job"><span class="mono">b07d5e19</span></td><td data-label="Handler">export@3</td><td data-label="Status"><span class="status" data-s="failed"><svg class="icon" aria-hidden="true"><use href="#g-failed"/></svg>Failed</span></td><td data-label="Attempts">3 of 3</td></tr>
+              <tr><td data-label="Job"><span class="mono">e2a6c880</span></td><td data-label="Handler">digest@1</td><td data-label="Status"><span class="status" data-s="retry_wait"><svg class="icon" aria-hidden="true"><use href="#g-retry"/></svg>Retry wait</span></td><td data-label="Attempts">1 of 3</td></tr>
+            </tbody></table></div>
+        </div>
+        <figcaption id="prev-cap" class="plate-f" style="background:var(--color-white)">A final screenshot from shipped software replaces this preview at M7 and will be captioned with the version it was captured from.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section alt" aria-labelledby="qs-h">
+    <div class="wrap grid12" style="row-gap:var(--space-6)">
+      <div class="reveal" style="grid-column:1/-1"><p class="eyebrow">Quickstart</p><h2 id="qs-h" class="h2" style="margin-top:var(--space-4)">Three workers on your machine.</h2></div>
+      <div class="reveal" style="grid-column:1/-1;max-width:48rem">
+        <div class="notice warn" style="margin-bottom:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><div class="grow"><strong>Not yet verified from a clean checkout.</strong> These commands are an example of the intended flow. The verification stamp appears here only after the clean-checkout run has passed.</div></div>
+        <div class="code">
+          <div class="code-h"><span>Shell · example</span><button class="btn btn-sm" type="button" data-copy="#qs-code"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg><span class="cl">Copy</span></button></div>
+          <pre tabindex="0" aria-label="Quickstart commands"><code id="qs-code"><span class="c"># clone and start the coordinator, database, console and three workers</span>
+git clone &lt;repository-url&gt; clusterx &amp;&amp; cd clusterx
+docker compose up --build
+
+<span class="c"># submit a job, then watch it in the console</span>
+curl -X POST http://localhost:8080/api/v1/jobs \
+  -H "Idempotency-Key: demo-1" \
+  -H "Authorization: Bearer $CLUSTERX_TOKEN" \
+  -d '{"handler_name":"thumbnail","handler_version":2,"payload":{}}'</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="faq-h">
+    <div class="wrap grid12" style="row-gap:var(--space-6)">
+      <div class="reveal" style="grid-column:1/-1"><p class="eyebrow">Limitations and questions</p><h2 id="faq-h" class="h2" style="margin-top:var(--space-4)">What it does not promise.</h2></div>
+      <div class="faq reveal" style="grid-column:1/-1;max-width:48rem">
+        <details><summary>Is processing exactly-once?</summary><p>No. Execution is at-least-once. If a worker loses its lease while a handler is still running, the handler may run again on another worker. The database only records a result from the current attempt, so make external side effects idempotent.</p></details>
+        <details><summary>Can the engine stop a handler that ignores cancellation?</summary><p>No. Deadlines and cancellation are cooperative: they stop the engine from accepting results, not a goroutine from running. Handlers should honor their context.</p></details>
+        <details><summary>What if the coordinator goes down?</summary><p>There is one coordinator. While it is down, no new claims or reports happen; workers must not assume a lease still holds. Processing resumes from PostgreSQL when it returns.</p></details>
+        <details><summary>Is job order strict FIFO?</summary><p>No. Eligible jobs are claimed by priority, due time and creation time, but concurrent claimers can see rows out of strict order.</p></details>
+        <details><summary>Does the demo show real data?</summary><p>No. The public demo is seeded fixture data in your browser, with no connection to a running system. The real engine runs locally with Docker Compose.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-band" aria-labelledby="cta-h">
+    <div class="wrap" style="display:grid;gap:var(--space-5)">
+      <h2 id="cta-h" class="h2">Run it, break a worker, read the record.</h2>
+      <div class="cta-row" style="margin-top:0">
+        <a class="btn btn-primary btn-lg" href="#" data-nolink="/docs/quickstart">Quickstart</a>
+        <a class="btn btn-lg" href="#" data-nolink="GitHub repository">Source on GitHub <svg class="icon" aria-hidden="true"><use href="#i-ext"/></svg><span class="sr-only">(external)</span></a>
+      </div>
+    </div>
+  </section>
+</main>
+<!--@include p-public-footer.html-->
+
+<script>
+/* Execution Atlas controller (prototype). Deterministic script, no timers simulating telemetry. */
+(function () {
+  var svg = document.getElementById('atlas'); if (!svg) return;
+  var S = [
+    { t: 't+00 s', job: 'queued', title: 'Admit', text: 'The API commits the job to PostgreSQL, then answers. Nothing is acknowledged before commit. Status: queued.', path: ['e1'] },
+    { t: 't+00.4 s', job: 'running', title: 'Claim', text: 'Worker A asks the coordinator for work. One transaction creates attempt 1 and lease generation 1, valid for 30 s. Status: running.', path: ['e2'], ring: ['ring1', 100] },
+    { t: 't+12 s', job: 'running', title: 'Renew', text: 'While the handler runs, worker A renews the lease before it runs out. The liveness heartbeat and the lease renewal are separate signals.', path: ['e5'], ring: ['ring1', 100] },
+    { t: 't+14 s', job: 'running', title: 'Silence', text: 'Worker A crashes or is cut off. Renewals stop. Its handler may still be running somewhere; the engine cannot know that.', ring: ['ring1', 55] },
+    { t: 't+30.4 s', job: 'retry_wait', title: 'Expire', text: 'The lease runs out on the database clock. Attempt 1 is marked lease_expired and counts against the job\'s attempt budget. Status: retry_wait.', ring: ['ring1', 0] },
+    { t: 't+32.9 s', job: 'running', title: 'Recover', text: 'Budget remains, so the job returns to the queue after backoff and worker B claims it: attempt 2, lease generation 2. Status: running.', path: ['e7', 'e3'], ring: ['ring2', 100] },
+    { t: 't+34.1 s', job: 'succeeded', res: 'committed', title: 'Commit', text: 'Worker B reports success. The coordinator accepts it because the attempt, generation and worker identity are all current. Status: succeeded.', path: ['e9'], ring: ['ring2', 100] },
+    { t: 't+41.7 s', job: 'succeeded', res: 'committed', title: 'Fence', text: 'Worker A returns and reports a result for attempt 1. The fence rejects it: that attempt is stale. The committed result stands. The handler ran twice; the record was never overwritten.', path: ['e8'], ring: ['ring2', 100] }
+  ];
+  var cur = 0, timer = null, playing = false, raf = 0;
+  var $ = function (s) { return document.querySelector(s); };
+  var token = $('#token'), cap = $('#atlas-cap'), list = $('#atlas-steps').children, clkT = $('#atlas-clock-t'), clk = $('#clk');
+  var playBtn = $('#at-play');
+  var rm = function () { return document.documentElement.getAttribute('data-rm') === '1'; };
+  function inRange(r, n) { var p = r.split('-'); return n >= +p[0] && n <= +p[1]; }
+  function render(n) {
+    cur = n; svg.setAttribute('data-step', n);
+    var gs = svg.querySelectorAll('.g');
+    for (var i = 0; i < gs.length; i++) {
+      var g = gs[i], vis = g.getAttribute('data-vis'), hl = g.getAttribute('data-hl'), dim = g.getAttribute('data-dim'), ok = g.getAttribute('data-ok');
+      if (vis) g.classList.toggle('is-off', !(n > 0 && inRange(vis, n)));
+      g.classList.toggle('is-hl', !!hl && hl.split(',').indexOf(String(n)) > -1);
+      g.classList.toggle('is-dim', !!dim && n > 0 && inRange(dim, n));
+      g.classList.toggle('is-ok', !!ok && n > 0 && inRange(ok, n));
+    }
+    var s = S[n - 1];
+    $('#job-status').textContent = s ? s.job : '​';
+    $('#res-status').textContent = s && s.res ? s.res : '​';
+    clk.textContent = s ? s.t : 't+00 s';
+    if (s && s.ring) { var rings = ['ring1', 'ring2']; var el = document.getElementById(s.ring[0]); el.setAttribute('stroke-dasharray', s.ring[1] + ' ' + (100 - s.ring[1])); }
+    if (n === 0) { document.getElementById('ring1').setAttribute('stroke-dasharray', '0 100'); document.getElementById('ring2').setAttribute('stroke-dasharray', '0 100'); }
+    for (var j = 0; j < list.length; j++) { if (j === n - 1) list[j].setAttribute('aria-current', 'step'); else list[j].removeAttribute('aria-current'); }
+    clkT.textContent = 'Step ' + n + ' of 8';
+    cap.innerHTML = ''; var b = document.createElement('b'); b.textContent = 'Step ' + n + ' of 8' + (s ? ' · ' + s.title : ''); var sp = document.createElement('span'); sp.textContent = s ? s.text : 'Press Play or Step. The steps are listed alongside; the diagram only mirrors them.'; cap.appendChild(b); cap.appendChild(sp);
+  }
+  function travel(ids, done) {
+    cancelAnimationFrame(raf); token.setAttribute('opacity', 0);
+    if (!ids || !ids.length) { done && done(); return; }
+    var paths = ids.map(function (id) { return document.getElementById(id); });
+    if (rm()) { var last = paths[paths.length - 1], L = last.getTotalLength(), p = last.getPointAtLength(L); token.setAttribute('cx', p.x); token.setAttribute('cy', p.y); token.setAttribute('opacity', 1); done && done(); return; }
+    var dur = 600 * paths.length, t0 = null;
+    token.setAttribute('opacity', 1);
+    function frame(t) {
+      if (t0 === null) t0 = t; var k = Math.min(1, (t - t0) / dur), idx = Math.min(paths.length - 1, Math.floor(k * paths.length)), local = k * paths.length - idx; if (k === 1) local = 1;
+      var pa = paths[idx], p = pa.getPointAtLength(pa.getTotalLength() * Math.min(1, local));
+      token.setAttribute('cx', p.x); token.setAttribute('cy', p.y);
+      if (k < 1) raf = requestAnimationFrame(frame); else done && done();
+    }
+    raf = requestAnimationFrame(frame);
+  }
+  function go(n) { render(n); var s = S[n - 1]; travel(s && s.path); }
+  function stop() { playing = false; clearTimeout(timer); playBtn.setAttribute('aria-pressed', 'false'); playBtn.querySelector('span').textContent = cur >= 8 ? 'Replay' : 'Play'; playBtn.querySelector('use').setAttribute('href', '#i-play'); }
+  function tick() { if (!playing) return; if (cur >= 8) { stop(); return; } go(cur + 1); timer = setTimeout(tick, rm() ? 2600 : 2400); }
+  function play() { if (cur >= 8) { go(0); render(0); cur = 0; } playing = true; playBtn.setAttribute('aria-pressed', 'true'); playBtn.querySelector('span').textContent = 'Pause'; playBtn.querySelector('use').setAttribute('href', '#i-pause'); tick(); }
+  playBtn.addEventListener('click', function () { playing ? stop() : play(); });
+  $('#at-step').addEventListener('click', function () { stop(); go(cur >= 8 ? 1 : cur + 1); stop(); });
+  $('#at-reset').addEventListener('click', function () { stop(); cancelAnimationFrame(raf); token.setAttribute('opacity', 0); render(0); playBtn.querySelector('span').textContent = 'Play'; });
+  document.addEventListener('visibilitychange', function () { if (document.hidden && playing) stop(); });
+  render(0);
+  /* auto-play once on first view, never when reduced motion */
+  var once = false;
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(function (es, o) { es.forEach(function (e) { if (e.isIntersecting && !once && !rm() && !location.hash.match(/noauto/)) { once = true; o.disconnect(); play(); } }); }, { threshold: 0.6 }).observe(svg);
+  }
+  window.CLX = window.CLX || {}; window.CLX.atlasGo = function (n) { stop(); render(n); var s = S[n - 1]; if (s && s.path) { var last = document.getElementById(s.path[s.path.length - 1]); var p = last.getPointAtLength(last.getTotalLength()); token.setAttribute('cx', p.x); token.setAttribute('cy', p.y); token.setAttribute('opacity', 1); } };
+})();
+</script>
+<!--@js-->
+</body>
+</html>

@@ -1,0 +1,1077 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job detail: CLUSTERX console (design prototype)</title>
+<style id="tokens">
+/*
+ * CLUSTERX design tokens: "Precision Under Motion" (white-first).
+ * Source of truth for color, type, space, shape, motion. M2 design artifact (TASK-M2-FE-01).
+ * Names follow Tailwind CSS 4 theme namespaces (--color-*, --font-*, --text-*, --radius-*,
+ * --shadow-*, --ease-*, --breakpoint-*) so the same file can be imported into a Tailwind 4
+ * `@theme` block at M6. Adoption method is NOT YET VERIFIED against an installed Tailwind
+ * (no Tailwind in M2). See docs/design/brand-and-tokens.md.
+ *
+ * Every text/surface pair used by the design is measured by docs/design/tools/contrast.mjs,
+ * which reads THIS file. Change a color here and rerun it. Do not copy hex values elsewhere.
+ */
+:root {
+  /* ---- Surfaces ---- */
+  --color-white: #FFFFFF;        /* primary surface */
+  --color-canvas: #F7F9FC;       /* page background behind white cards */
+  --color-panel: #EEF2F7;        /* subtle panels, table header, code well on light */
+
+  /* ---- Ink (text) ---- */
+  --color-ink: #111827;          /* primary text */
+  --color-ink-2: #475569;        /* secondary text */
+  --color-ink-3: #5B6678;        /* tertiary / meta text; still >= 4.5:1 on white, canvas, panel */
+  --color-ink-disabled: #8A94A6; /* disabled controls only (WCAG exempts inactive components) */
+
+  /* ---- Lines ---- */
+  --color-line: #E2E8F0;         /* decorative dividers and card borders (never the only boundary of a control) */
+  --color-line-strong: #7C8A9E;  /* control boundaries, focus-free affordances: >= 3:1 on white/canvas/panel */
+
+  /* ---- Accent: cobalt ---- */
+  --color-accent: #2457E7;       /* primary actions, links, focus ring */
+  --color-accent-ink: #1B46C2;   /* accent text on tinted surfaces, hover state */
+  --color-accent-tint: #E8EEFD;
+
+  /* ---- Status: base = graphics/icons/bars (>= 3:1); ink = text (>= 4.5:1 on white and on its tint) ---- */
+  --color-success: #0C8A63;      /* graphical use only: icon strokes, bars, chart lines */
+  --color-success-ink: #0A7050;  /* text */
+  --color-success-tint: #E5F4EE;
+  --color-warning: #A96B08;      /* graphical use only */
+  --color-warning-ink: #8A5806;  /* text */
+  --color-warning-tint: #FBF0DC;
+  --color-danger: #C33444;       /* graphical; also passes as text on white/canvas */
+  --color-danger-ink: #A82A39;   /* text on tints and panel */
+  --color-danger-tint: #FBE8EA;
+  --color-neutral: #64748B;      /* neutral state glyphs (scheduled, queued, canceled) */
+  --color-neutral-tint: #EEF2F7;
+
+  /* ---- Focus ---- */
+  --color-focus: #2457E7;        /* 2 px ring + 2 px offset on light surfaces */
+  --color-focus-on-dark: #9DB7FF;
+
+  /* ---- Code (deliberate dark contrast block, not a theme) ---- */
+  --color-code-bg: #0F172A;
+  --color-code-ink: #E2E8F0;
+  --color-code-mute: #94A3B8;
+  --color-code-key: #9DB7FF;
+  --color-code-str: #7FD6B0;
+  --color-code-num: #F2C57C;
+  --color-code-err: #FF9AA5;
+
+  /* ---- Chart encoding (color is never the only channel: also dash + marker + direct label) ---- */
+  --chart-succeeded: var(--color-success);   /* solid line, circle marker */
+  --chart-failed: var(--color-danger);       /* dashed 6 3, square marker */
+  --chart-canceled: var(--color-neutral);    /* dotted 1 3, triangle marker */
+  --chart-single: var(--color-accent);       /* one-series charts: solid, diamond marker */
+  --chart-grid: var(--color-line);
+  --chart-axis: var(--color-ink-2);
+  --chart-stale-opacity: 0.45;               /* dimmed when S-STALE / S-OFFLINE */
+
+  /* ---- Fonts (self-host later; files not bundled in M2, see brand-and-tokens.md) ---- */
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-display: "Newsreader", ui-serif, "New York", Georgia, "Times New Roman", serif; /* public hero/page titles only */
+
+  /* ---- Fluid type scale: 320 px to 1440 px viewport, public + docs ---- */
+  --text-step--1: clamp(0.8125rem, 0.793rem + 0.1vw, 0.875rem);   /* 13 to 14 */
+  --text-step-0: clamp(1rem, 0.975rem + 0.12vw, 1.0625rem);       /* 16 to 17 */
+  --text-step-1: clamp(1.125rem, 1.07rem + 0.27vw, 1.3125rem);    /* 18 to 21 */
+  --text-step-2: clamp(1.3125rem, 1.2rem + 0.55vw, 1.75rem);      /* 21 to 28 */
+  --text-step-3: clamp(1.625rem, 1.4rem + 1.1vw, 2.5rem);         /* 26 to 40 */
+  --text-step-4: clamp(2rem, 1.6rem + 2vw, 3.5rem);               /* 32 to 56 */
+  --text-step-5: clamp(2.5rem, 1.75rem + 3.7vw, 5rem);            /* 40 to 80, hero */
+  --leading-tight: 1.04;
+  --leading-heading: 1.18;
+  --leading-body: 1.6;
+  --leading-ui: 1.4;
+  --tracking-display: -0.028em;
+  --tracking-heading: -0.014em;
+  --tracking-label: 0.08em;    /* mono uppercase micro-labels */
+
+  /* ---- Fixed type scale: console (density over fluidity) ---- */
+  --text-ui-xs: 0.75rem;   /* 12, mono micro-labels only */
+  --text-ui-sm: 0.8125rem; /* 13, table meta */
+  --text-ui-md: 0.875rem;  /* 14, console body and table cells */
+  --text-ui-lg: 1rem;      /* 16, inputs (avoids iOS zoom), form labels */
+  --text-ui-h3: 1.125rem; /* 18: section and card titles, 1.29x body */
+  --text-ui-h2: 1.25rem;
+  --text-ui-h1: 1.75rem;  /* 28: console page title, 2.0x body */
+
+  /* ---- Spacing: 4 px base, Tailwind 4 `--spacing` convention plus named steps ---- */
+  --spacing: 0.25rem;
+  --space-1: 0.25rem;  --space-2: 0.5rem;   --space-3: 0.75rem;  --space-4: 1rem;
+  --space-5: 1.5rem;   --space-6: 2rem;     --space-7: 3rem;     --space-8: 4rem;
+  --space-9: 6rem;     --space-10: 8rem;
+  --section-gap: clamp(3rem, 2rem + 5vw, 7rem);   /* editorial vertical rhythm between public sections */
+
+  /* ---- Grid ---- */
+  --grid-cols: 12;
+  --grid-gutter: clamp(1rem, 0.6rem + 1.6vw, 2rem);
+  --grid-margin: clamp(1rem, 0.4rem + 3vw, 3rem);
+  --max-width-marketing: 75rem;   /* 1200 */
+  --max-width-console: 90rem;     /* 1440 */
+  --max-width-prose: 42.5rem;     /* about 68 characters at step-0 */
+  --sidebar-width: 15rem;
+  --topbar-height: 3.5rem;
+
+  /* ---- Breakpoints (constants for Tailwind and tests; custom properties cannot drive @media) ---- */
+  --breakpoint-xs: 30rem;   /* 480 */
+  --breakpoint-sm: 40rem;   /* 640, table to stacked cards below this */
+  --breakpoint-md: 48rem;   /* 768 */
+  --breakpoint-lg: 64rem;   /* 1024, console sidebar docks */
+  --breakpoint-2xl: 90rem;  /* 1440 */
+
+  /* ---- Shape ---- */
+  --border-width: 1px;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;        /* default card and control radius: precise, not pillowy */
+  --radius-lg: 10px;
+  --radius-full: 999px;    /* status chips only */
+
+  /* ---- Depth: understated; borders carry structure, shadows only lift overlays ---- */
+  --shadow-xs: 0 1px 0 rgb(17 24 39 / 0.04);
+  --shadow-sm: 0 1px 2px rgb(17 24 39 / 0.06);
+  --shadow-overlay: 0 12px 32px -8px rgb(17 24 39 / 0.18), 0 2px 6px rgb(17 24 39 / 0.08);
+
+  /* ---- Icons ---- */
+  --icon-stroke: 1.5;      /* SVG stroke-width at 16/20 px, round caps/joins */
+  --icon-size-sm: 1rem;
+  --icon-size-md: 1.25rem;
+  --icon-size-lg: 1.5rem;
+
+  /* ---- Density (table rows / controls) ---- */
+  --row-comfortable: 2.75rem;   /* 44 */
+  --row-compact: 2rem;          /* 32, still above the 24 px WCAG 2.5.8 minimum */
+  --control-height: 2.5rem;     /* 40 */
+  --control-height-sm: 2rem;    /* 32 */
+  --target-min: 1.5rem;         /* 24, WCAG 2.5.8 floor */
+
+  /* ---- Motion (values from route-inventory section 1.7, within MASTER section 9 budgets) ---- */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-hover: 150ms;
+  --duration-section: 260ms;
+  --duration-overlay-in: 200ms;
+  --duration-overlay-out: 160ms;
+  --duration-route: 180ms;
+  --duration-hero: 560ms;
+  --duration-live: 400ms;
+  --duration-atlas-step: 600ms;
+  --duration-topo-pulse: 1200ms;
+}
+
+/* Reduced motion: collapse every duration. Components additionally remove translate/scale, see motion-and-assets.md. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-hover: 0ms;
+    --duration-section: 0ms;
+    --duration-overlay-in: 0ms;
+    --duration-overlay-out: 0ms;
+    --duration-route: 0ms;
+    --duration-hero: 0ms;
+    --duration-live: 0ms;
+    --duration-atlas-step: 0ms;
+    --duration-topo-pulse: 0ms;
+  }
+}
+</style>
+<style id="shared">
+/* CLUSTERX design prototype styles (shared). Uses tokens.css variables only; no hex literals except where a token cannot express it. */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-padding-top:calc(var(--topbar-height) + 1rem);scroll-padding-bottom:4rem}
+body{margin:0;font-family:var(--font-sans);font-size:var(--text-step-0);line-height:var(--leading-body);color:var(--color-ink);background:var(--color-white);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body.console{background:var(--color-canvas);font-size:var(--text-ui-md);line-height:var(--leading-ui)}
+img,svg{display:block;max-width:100%}
+a{color:var(--color-accent);text-decoration-thickness:1px;text-underline-offset:.18em}
+a:hover{color:var(--color-accent-ink)}
+h1,h2,h3,h4{margin:0;font-weight:600;letter-spacing:var(--tracking-heading);line-height:var(--leading-heading);text-wrap:balance}
+p{margin:0}
+ul,ol{margin:0;padding:0}
+code,kbd,samp,.mono{font-family:var(--font-mono);font-size:.92em}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--color-focus);outline-offset:2px;border-radius:var(--radius-xs)}
+.dark :focus-visible,.code :focus-visible{outline-color:var(--color-focus-on-dark)}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+[hidden]{display:none!important}
+.icon{width:var(--icon-size-sm);height:var(--icon-size-sm);flex:none;fill:none}
+.icon-md{width:var(--icon-size-md);height:var(--icon-size-md)}
+
+/* skip link */
+.skip{position:absolute;left:var(--space-3);top:-4rem;z-index:100;background:var(--color-ink);color:var(--color-white);padding:var(--space-2) var(--space-4);border-radius:var(--radius-md);text-decoration:none}
+.skip:focus{top:var(--space-3)}
+
+/* prototype label bar (not sticky: must never obscure focus) */
+.proto-bar{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-4);align-items:center;justify-content:space-between;background:var(--color-ink);color:var(--color-white);font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:.04em;padding:var(--space-2) var(--grid-margin);min-height:2rem}
+.proto-bar b{font-weight:500;color:var(--color-white)}
+.proto-bar .proto-states{display:flex;flex-wrap:wrap;gap:var(--space-1)}
+.proto-bar button{background:transparent;border:1px solid var(--color-code-mute);color:var(--color-white);border-radius:var(--radius-sm);padding:2px var(--space-2);font:inherit;cursor:pointer;min-height:1.5rem}
+.proto-bar button[aria-pressed="true"]{background:var(--color-white);color:var(--color-ink);border-color:var(--color-white)}
+.proto-bar :focus-visible{outline-color:var(--color-focus-on-dark)}
+
+/* layout */
+.wrap{max-width:var(--max-width-marketing);margin-inline:auto;padding-inline:var(--grid-margin)}
+.wrap-wide{max-width:var(--max-width-console);margin-inline:auto;padding-inline:var(--grid-margin)}
+.grid12{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:var(--grid-gutter)}
+.section{padding-block:var(--section-gap)}
+.section.alt{background:var(--color-canvas);border-block:1px solid var(--color-line)}
+.stack>*+*{margin-top:var(--stack,var(--space-4))}
+
+/* editorial type */
+.display{font-family:var(--font-display);font-weight:400;font-size:var(--text-step-5);line-height:var(--leading-tight);letter-spacing:var(--tracking-display)}
+.display em{font-style:italic;color:var(--color-accent-ink)}
+.h2{font-family:var(--font-display);font-weight:400;font-size:var(--text-step-3);letter-spacing:var(--tracking-display);line-height:1.1}
+.h3{font-size:var(--text-step-1);font-weight:600}
+.lede{font-size:var(--text-step-1);line-height:1.5;color:var(--color-ink-2);max-width:38rem}
+.eyebrow{font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--color-ink-2);display:flex;align-items:center;gap:var(--space-3)}
+.eyebrow::before{content:"";width:1.5rem;height:1px;background:var(--color-ink);flex:none}
+.muted{color:var(--color-ink-2)}
+.meta{color:var(--color-ink-3);font-size:var(--text-ui-sm)}
+.tick-rule{height:9px;border:0;background:
+  repeating-linear-gradient(90deg,var(--color-line-strong) 0 1px,transparent 1px 8px) bottom/100% 5px no-repeat,
+  linear-gradient(var(--color-ink),var(--color-ink)) bottom/100% 1px no-repeat}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);min-height:var(--control-height);padding:0 var(--space-4);border-radius:var(--radius-md);border:1px solid var(--color-line-strong);background:var(--color-white);color:var(--color-ink);font-weight:500;font-size:var(--text-ui-md);text-decoration:none;cursor:pointer;transition:background-color var(--duration-hover) var(--ease-out),border-color var(--duration-hover) var(--ease-out),color var(--duration-hover) var(--ease-out);white-space:nowrap}
+.btn:hover{background:var(--color-panel);color:var(--color-ink)}
+.btn-primary{background:var(--color-accent);border-color:var(--color-accent);color:var(--color-white)}
+.btn-primary:hover{background:var(--color-accent-ink);border-color:var(--color-accent-ink);color:var(--color-white)}
+.btn-danger{background:var(--color-white);border-color:var(--color-danger);color:var(--color-danger-ink)}
+.btn-danger:hover{background:var(--color-danger-tint);color:var(--color-danger-ink)}
+.btn-danger-solid{background:var(--color-danger);border-color:var(--color-danger);color:var(--color-white)}
+.btn-danger-solid:hover{background:var(--color-danger-ink);border-color:var(--color-danger-ink);color:var(--color-white)}
+.btn-ghost{border-color:transparent;background:transparent}
+.btn-sm{min-height:var(--control-height-sm);padding:0 var(--space-3);font-size:var(--text-ui-sm)}
+.btn-lg{min-height:3rem;padding:0 var(--space-5);font-size:var(--text-ui-lg)}
+.btn[aria-disabled="true"],.btn:disabled{color:var(--color-ink-disabled);border-color:var(--color-line);background:var(--color-panel);cursor:not-allowed}
+.btn[data-pending="true"]{cursor:progress}
+.btn .spin{display:none;width:1em;height:1em;border:2px solid currentColor;border-right-color:transparent;border-radius:50%}
+.btn[data-pending="true"] .spin{display:inline-block;animation:spin 800ms linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.icon-btn{display:inline-grid;place-items:center;min-width:var(--control-height-sm);min-height:var(--control-height-sm);padding:0;border:1px solid transparent;background:transparent;border-radius:var(--radius-md);cursor:pointer;color:var(--color-ink-2)}
+.icon-btn:hover{background:var(--color-panel);color:var(--color-ink)}
+.link-btn{background:none;border:0;padding:0;color:var(--color-accent);text-decoration:underline;text-underline-offset:.18em;cursor:pointer}
+
+/* chips and status */
+.status{display:inline-flex;align-items:center;gap:6px;padding:2px 8px 2px 6px;border-radius:var(--radius-full);font-size:var(--text-ui-sm);font-weight:500;line-height:1.35;white-space:nowrap;background:var(--color-neutral-tint);color:var(--color-ink)}
+.status .icon{color:var(--color-neutral)}
+.status[data-s="running"]{background:var(--color-accent-tint)}.status[data-s="running"] .icon{color:var(--color-accent)}
+.status[data-s="retry_wait"],.status[data-s="stale"],.status[data-s="draining"]{background:var(--color-warning-tint)}
+.status[data-s="retry_wait"] .icon,.status[data-s="stale"] .icon,.status[data-s="draining"] .icon{color:var(--color-warning)}
+.status[data-s="succeeded"],.status[data-s="online"]{background:var(--color-success-tint)}
+.status[data-s="succeeded"] .icon,.status[data-s="online"] .icon{color:var(--color-success)}
+.status[data-s="failed"],.status[data-s="revoked"]{background:var(--color-danger-tint)}
+.status[data-s="failed"] .icon,.status[data-s="revoked"] .icon{color:var(--color-danger)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border:1px solid var(--color-line-strong);border-radius:var(--radius-sm);font-size:var(--text-ui-sm);background:var(--color-white);color:var(--color-ink);min-height:1.5rem}
+.chip button{background:none;border:0;padding:0;display:inline-grid;place-items:center;min-width:1.5rem;min-height:1.5rem;margin-right:-6px;cursor:pointer;color:var(--color-ink-2)}
+.chip-reason{border-color:var(--color-warning);background:var(--color-warning-tint);color:var(--color-warning-ink)}
+.chip-reason .icon{color:var(--color-warning)}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:var(--text-ui-xs);font-family:var(--font-mono);letter-spacing:.03em;padding:1px 6px;border-radius:var(--radius-xs);border:1px solid var(--color-line-strong);background:var(--color-white);color:var(--color-ink-2);text-transform:uppercase}
+.masked{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border:1px dashed var(--color-line-strong);border-radius:var(--radius-sm);background:var(--color-panel);color:var(--color-ink-2);font-size:var(--text-ui-sm)}
+
+/* forms */
+.field{display:grid;gap:6px}
+.field label,.label{font-weight:500;font-size:var(--text-ui-sm)}
+.input,.select{min-height:var(--control-height);padding:0 var(--space-3);border:1px solid var(--color-line-strong);border-radius:var(--radius-md);background:var(--color-white);font-size:var(--text-ui-lg);width:100%}
+.select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--color-ink-2) 50%),linear-gradient(135deg,var(--color-ink-2) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:2rem}
+.input:hover,.select:hover{border-color:var(--color-ink-2)}
+.help{font-size:var(--text-ui-sm);color:var(--color-ink-2)}
+@media (min-width:768px){.input,.select{font-size:var(--text-ui-md)}}
+
+/* cards and panels */
+.card{background:var(--color-white);border:1px solid var(--color-line);border-radius:var(--radius-md);box-shadow:var(--shadow-xs)}
+.card-pad{padding:var(--space-4)}
+.card-h{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--space-2) var(--space-4);padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-line)}
+.card-h h2,.card-h h3{font-size:var(--text-ui-h3)}
+.dl{display:grid;grid-template-columns:minmax(7rem,max-content) 1fr;gap:var(--space-2) var(--space-4);margin:0}
+.dl dt{color:var(--color-ink-2)}.dl dd{margin:0;min-width:0;overflow-wrap:anywhere}
+@media (max-width:479px){.dl{grid-template-columns:1fr;gap:0}.dl dd{margin-bottom:var(--space-3)}}
+
+/* notices */
+.notice{display:flex;gap:var(--space-3);align-items:flex-start;padding:var(--space-3) var(--space-4);border-radius:var(--radius-md);border:1px solid var(--color-line);background:var(--color-panel);font-size:var(--text-ui-md)}
+.notice .icon{margin-top:2px;color:var(--color-ink-2)}
+.notice .grow{flex:1;min-width:0}
+.notice.warn{background:var(--color-warning-tint);border-color:var(--color-warning)}.notice.warn .icon{color:var(--color-warning)}
+.notice.err{background:var(--color-danger-tint);border-color:var(--color-danger)}.notice.err .icon{color:var(--color-danger)}
+.notice.ok{background:var(--color-success-tint);border-color:var(--color-success)}.notice.ok .icon{color:var(--color-success)}
+.notice.info{background:var(--color-accent-tint);border-color:var(--color-accent)}.notice.info .icon{color:var(--color-accent)}
+.notice strong{font-weight:600}
+.actions{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-2)}
+
+/* empty state */
+.empty{display:grid;justify-items:start;gap:var(--space-3);padding:var(--space-7) var(--space-5);max-width:34rem}
+.empty h3{font-size:var(--text-ui-h2)}
+.empty p{color:var(--color-ink-2)}
+
+/* tables */
+.tbl-wrap{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:var(--text-ui-md)}
+.tbl caption{text-align:left;padding:var(--space-3) var(--space-4);color:var(--color-ink-2);font-size:var(--text-ui-sm)}
+.tbl th{font-weight:500;text-align:left;font-size:var(--text-ui-sm);color:var(--color-ink-2);background:var(--color-panel);padding:var(--space-2) var(--space-4);border-block:1px solid var(--color-line);white-space:nowrap}
+.tbl td{padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-line);vertical-align:middle;height:var(--row-comfortable)}
+.tbl tbody tr:hover{background:var(--color-canvas)}
+.tbl .num{font-variant-numeric:tabular-nums}
+.tbl td a.id{font-family:var(--font-mono);font-size:var(--text-ui-sm);font-weight:500}
+.tbl tr.upd td{animation:rowflash var(--duration-live) var(--ease-out)}
+@keyframes rowflash{from{background:var(--color-accent-tint)}to{background:transparent}}
+.sortbtn{background:none;border:0;padding:0;font:inherit;color:inherit;display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+@media (max-width:639px){
+  .tbl thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .tbl,.tbl tbody,.tbl tr,.tbl td{display:block;width:100%}
+  .tbl tr{padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-line)}
+  .tbl td{display:grid;grid-template-columns:7.25rem 1fr;gap:var(--space-3);border:0;padding:3px 0;height:auto;min-height:1.5rem}
+  .tbl td::before{content:attr(data-label);color:var(--color-ink-2);font-size:var(--text-ui-sm)}
+  .tbl td[data-label=""]::before{display:none}
+  .tbl td[data-primary]{order:-1;display:flex;flex-wrap:wrap;gap:var(--space-2);padding-bottom:var(--space-2)}
+  .tbl td[data-primary]::before{display:none}
+  .tbl tbody{display:flex;flex-direction:column}
+  .tbl caption{display:block;width:100%}
+  .cell{min-width:0}
+}
+
+/* skeleton */
+.skel{display:block;border-radius:var(--radius-sm);background:var(--color-panel);animation:skel 1s ease-in-out 10;min-height:1rem}
+@keyframes skel{50%{opacity:.5}}
+.skel-row{height:var(--row-comfortable);margin:var(--space-2) var(--space-4)}
+
+/* code */
+.code{background:var(--color-code-bg);color:var(--color-code-ink);border-radius:var(--radius-md);font-family:var(--font-mono);font-size:var(--text-ui-sm);line-height:1.65}
+.code-h{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);padding:var(--space-2) var(--space-4);border-bottom:1px solid rgb(148 163 184 / .25);color:var(--color-code-mute);font-size:var(--text-ui-xs);letter-spacing:.06em;text-transform:uppercase}
+.code pre{margin:0;padding:var(--space-4);overflow:auto;tab-size:2}
+.code .k{color:var(--color-code-key)}.code .s{color:var(--color-code-str)}.code .n{color:var(--color-code-num)}.code .c{color:var(--color-code-mute)}.code .e{color:var(--color-code-err)}
+.code .btn{min-height:1.75rem;background:transparent;border-color:var(--color-code-mute);color:var(--color-code-ink);text-transform:none;letter-spacing:0;font-size:var(--text-ui-sm)}
+.code .btn:hover{background:rgb(148 163 184 / .18);color:var(--color-white)}
+.jsonblock{font-family:var(--font-mono);font-size:var(--text-ui-sm);background:var(--color-panel);border:1px solid var(--color-line);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);overflow:auto;max-height:14rem;margin:0}
+
+/* dialogs */
+dialog{border:1px solid var(--color-line);border-radius:var(--radius-lg);box-shadow:var(--shadow-overlay);padding:0;max-width:min(32rem,calc(100vw - 2rem));width:100%;color:var(--color-ink);background:var(--color-white)}
+dialog::backdrop{background:rgb(17 24 39 / .45)}
+dialog[open]{animation:dlg var(--duration-overlay-in) var(--ease-out)}
+@keyframes dlg{from{opacity:0;transform:scale(.98)}}
+.dlg-h{padding:var(--space-4) var(--space-5) 0}.dlg-h h2{font-size:var(--text-ui-h3)}
+.dlg-b{padding:var(--space-3) var(--space-5);display:grid;gap:var(--space-3)}
+.dlg-f{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:var(--space-2);padding:var(--space-3) var(--space-5) var(--space-4)}
+dialog.drawer{margin:0 auto 0 0;height:100dvh;max-height:100dvh;max-width:min(20rem,calc(100vw - 3rem));border-radius:0;border-width:0 1px 0 0}
+dialog.drawer[open]{animation:drawer var(--duration-overlay-in) var(--ease-out)}
+@keyframes drawer{from{opacity:0;transform:translateX(-16px)}}
+dialog.cmd{margin-top:10vh}
+
+/* live indicator */
+.live{display:inline-flex;align-items:center;gap:6px;padding:2px 10px 2px 8px;border:1px solid var(--color-line-strong);border-radius:var(--radius-full);font-size:var(--text-ui-sm);background:var(--color-white);min-height:1.75rem;cursor:default}
+.live[data-live="live"] .icon{color:var(--color-success)}
+.live[data-live="reconnecting"] .icon,.live[data-live="polling"] .icon,.live[data-live="stale"] .icon{color:var(--color-warning)}
+.live[data-live="offline"] .icon{color:var(--color-danger)}
+.live[data-live="paused"] .icon{color:var(--color-neutral)}
+.live[data-live="demo"] .icon{color:var(--color-accent)}
+
+/* reveal (M-SECTION) and hero (M-HERO) */
+.js .reveal{opacity:0;transform:translateY(8px)}
+.js .reveal.in{opacity:1;transform:none;transition:opacity var(--duration-section) var(--ease-out),transform var(--duration-section) var(--ease-out)}
+.hero-in>*{animation:heroin var(--duration-hero) var(--ease-out) both;animation-delay:calc(var(--i,0) * 60ms)}
+@keyframes heroin{from{opacity:0;transform:translateY(12px)}}
+@media (prefers-reduced-motion:reduce){
+  .js .reveal{opacity:1;transform:none}
+  .hero-in>*,dialog[open],.skel,.tbl tr.upd td{animation:none!important}
+  *{scroll-behavior:auto!important}
+}
+html[data-rm="1"] .js .reveal{opacity:1;transform:none}
+html[data-rm="1"] .hero-in>*,html[data-rm="1"] dialog[open],html[data-rm="1"] .skel{animation:none!important}
+
+/* ---------- public shell ---------- */
+.pub-h{border-bottom:1px solid var(--color-line);background:var(--color-white)}
+.pub-h .in{display:flex;align-items:center;gap:var(--space-5);min-height:4rem}
+.wordmark{display:inline-flex;align-items:center;gap:10px;font-weight:600;letter-spacing:.14em;font-size:var(--text-ui-md);color:var(--color-ink);text-decoration:none}
+.wordmark:hover{color:var(--color-ink)}
+.wordmark .icon{width:24px;height:24px;color:var(--color-accent)}
+.pub-nav{display:none;gap:var(--space-1);margin-left:auto;align-items:center}
+.pub-nav a{padding:6px var(--space-3);color:var(--color-ink-2);text-decoration:none;border-radius:var(--radius-sm);min-height:2rem;display:inline-flex;align-items:center;font-size:var(--text-ui-md);transition:color var(--duration-hover) var(--ease-out),background-color var(--duration-hover) var(--ease-out)}
+.pub-nav a:hover{color:var(--color-ink);background:var(--color-panel)}
+.pub-nav a[aria-current="page"]{color:var(--color-ink);box-shadow:inset 0 -2px 0 var(--color-accent);border-radius:0}
+.pub-menu-btn{margin-left:auto}
+@media (min-width:768px){.pub-nav{display:flex}.pub-menu-btn{display:none}}
+.drawer-nav{display:grid;padding:var(--space-3)}
+.drawer-nav a{padding:var(--space-3);min-height:2.75rem;display:flex;align-items:center;color:var(--color-ink);text-decoration:none;border-bottom:1px solid var(--color-line)}
+.pub-f{background:var(--color-canvas);border-top:1px solid var(--color-line);padding-block:var(--space-8) var(--space-6);font-size:var(--text-ui-md)}
+.pub-f .cols{display:grid;gap:var(--space-6);grid-template-columns:repeat(auto-fit,minmax(10rem,1fr))}
+.pub-f h2{font-family:var(--font-mono);font-size:var(--text-ui-xs);text-transform:uppercase;letter-spacing:var(--tracking-label);font-weight:500;color:var(--color-ink-2);margin-bottom:var(--space-3)}
+.pub-f ul{list-style:none;display:grid;gap:var(--space-2)}
+.pub-f a{color:var(--color-ink);text-decoration:none}.pub-f a:hover{text-decoration:underline}
+.pub-f .fine{margin-top:var(--space-7);padding-top:var(--space-4);border-top:1px solid var(--color-line);display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-5);justify-content:space-between;color:var(--color-ink-2);font-size:var(--text-ui-sm)}
+
+/* ---------- console shell ---------- */
+.shell{display:grid;grid-template-columns:minmax(0,1fr);min-height:100dvh}
+.side{display:none}
+@media (min-width:1024px){
+  .shell{grid-template-columns:var(--sidebar-width) minmax(0,1fr)}
+  .side{display:flex;flex-direction:column;border-right:1px solid var(--color-line);background:var(--color-white);position:sticky;top:0;height:100dvh;align-self:start}
+  .menu-btn{display:none}
+}
+.side-in{display:flex;flex-direction:column;height:100%;padding:var(--space-4) var(--space-3)}
+.side .wordmark{padding:var(--space-2) var(--space-3) var(--space-4)}
+.nav{list-style:none;display:grid;gap:2px}
+.nav a{display:flex;align-items:center;gap:var(--space-3);padding:0 var(--space-3);min-height:2.25rem;border-radius:var(--radius-md);color:var(--color-ink-2);text-decoration:none;font-weight:500;transition:background-color var(--duration-hover) var(--ease-out),color var(--duration-hover) var(--ease-out)}
+.nav a:hover{background:var(--color-panel);color:var(--color-ink)}
+.nav a[aria-current="page"]{background:var(--color-accent-tint);color:var(--color-accent-ink);box-shadow:inset 2px 0 0 var(--color-accent)}
+.nav .sub{padding-left:var(--space-6);font-weight:400}
+.nav-sep{margin:var(--space-4) var(--space-3) var(--space-2);font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--color-ink-3)}
+.side-foot{margin-top:auto;border-top:1px solid var(--color-line);padding:var(--space-3) var(--space-3) 0;display:grid;gap:var(--space-2);font-size:var(--text-ui-sm)}
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:var(--space-3);min-height:var(--topbar-height);padding:var(--space-2) var(--grid-margin);background:rgb(255 255 255 / .96);border-bottom:1px solid var(--color-line);flex-wrap:wrap}
+.crumbs{display:flex;flex-wrap:wrap;gap:var(--space-1);align-items:center;list-style:none;font-size:var(--text-ui-sm);color:var(--color-ink-2);min-width:0}
+.crumbs li+li::before{content:"/";margin-right:var(--space-1);color:var(--color-ink-3)}
+.crumbs a{color:var(--color-ink-2)}
+.crumbs [aria-current]{color:var(--color-ink);font-weight:500}
+.top .grow{flex:1}
+.cmd-btn{display:inline-flex;align-items:center;gap:var(--space-2);min-height:var(--control-height-sm);padding:0 var(--space-3);border:1px solid var(--color-line-strong);border-radius:var(--radius-md);background:var(--color-white);color:var(--color-ink-2);cursor:pointer;font-size:var(--text-ui-sm)}
+.cmd-btn kbd{font-size:var(--text-ui-xs);border:1px solid var(--color-line);border-radius:var(--radius-xs);padding:0 4px;background:var(--color-panel)}
+.cmd-btn .long{display:none}
+@media (min-width:640px){.cmd-btn .long{display:inline}}
+.role-banner{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:var(--radius-sm);background:var(--color-warning-tint);color:var(--color-warning-ink);border:1px solid var(--color-warning);font-size:var(--text-ui-sm);font-weight:500}
+.main{padding:var(--space-6) var(--grid-margin) var(--space-9);max-width:var(--max-width-console);width:100%}
+.page-h{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:var(--space-3) var(--space-5);margin-bottom:var(--space-5)}
+.page-h h1{font-size:var(--text-ui-h1);letter-spacing:var(--tracking-heading)}
+.page-h p{color:var(--color-ink-2);margin-top:var(--space-1)}
+.toolbar{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.sect{margin-top:var(--space-6)}
+.sect>h2{font-size:var(--text-ui-h3);margin-bottom:var(--space-3)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(10.5rem,1fr));gap:0;list-style:none;border:1px solid var(--color-line);border-radius:var(--radius-md);background:var(--color-white);overflow:hidden}
+.kpis li{padding:var(--space-4);border-right:1px solid var(--color-line);border-bottom:1px solid var(--color-line);margin:0 -1px -1px 0;display:grid;gap:2px;align-content:start}
+.kpi-v{font-size:2rem;font-weight:500;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi-l{color:var(--color-ink-2);font-size:var(--text-ui-sm);display:flex;align-items:center;gap:6px}
+.kpi-n{color:var(--color-ink-3);font-size:var(--text-ui-sm)}
+.two{display:grid;gap:var(--space-5)}
+@media (min-width:1024px){.two{grid-template-columns:minmax(0,3fr) minmax(0,2fr)}.two.even{grid-template-columns:1fr 1fr}}
+.filters{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:flex-end}
+.filters .field{min-width:9rem;flex:1 1 9rem;max-width:14rem}
+.chips{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.pager{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-top:1px solid var(--color-line)}
+.seg{display:inline-flex;border:1px solid var(--color-line-strong);border-radius:var(--radius-md);overflow:hidden;background:var(--color-white)}
+.seg button{border:0;background:transparent;min-height:var(--control-height-sm);padding:0 var(--space-3);cursor:pointer;display:inline-flex;gap:6px;align-items:center;font-size:var(--text-ui-sm);color:var(--color-ink-2)}
+.seg button+button{border-left:1px solid var(--color-line-strong)}
+.seg button[aria-pressed="true"]{background:var(--color-ink);color:var(--color-white)}
+.seg :focus-visible{outline-offset:-2px}
+
+/* topology */
+.topo{border:1px solid var(--color-line);border-radius:var(--radius-md);background:var(--color-white)}
+.topo-view{overflow:hidden;background:
+  linear-gradient(var(--color-white),var(--color-white));position:relative;min-height:16rem}
+.topo-view>svg{width:100%;height:auto;max-height:26rem}
+.topo .node{cursor:pointer}
+.topo .node rect.body{fill:var(--color-white);stroke:var(--color-line-strong);stroke-width:1.25}
+.topo .node[data-sel="1"] rect.body{stroke:var(--color-accent);stroke-width:2.5}
+.topo .node text{font-family:var(--font-sans);font-size:11px;fill:var(--color-ink)}
+.topo .node .sub{fill:var(--color-ink-2);font-family:var(--font-mono);font-size:10px}
+.topo .node[data-live="stale"] rect.body{stroke-dasharray:4 3;stroke:var(--color-warning)}
+.topo .node[data-live="off"] rect.body{stroke-dasharray:1 3}
+.topo .node:focus-visible{outline:none}
+.topo .node:focus-visible rect.body{stroke:var(--color-focus);stroke-width:3}
+.topo .pulse{fill:none;stroke:var(--color-accent);stroke-width:1.5;opacity:0;animation:pulse var(--duration-topo-pulse) var(--ease-in-out) 3}
+@keyframes pulse{0%{opacity:.7;transform:scale(1)}100%{opacity:0;transform:scale(1.25)}}
+.topo-view.is-stale>svg{opacity:var(--chart-stale-opacity)}
+.topo-tools{display:flex;gap:var(--space-1);flex-wrap:wrap;align-items:center;padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--color-line)}
+.legend{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-4);list-style:none;font-size:var(--text-ui-sm);color:var(--color-ink-2);padding:var(--space-3) var(--space-4);border-top:1px solid var(--color-line)}
+.legend li{display:inline-flex;align-items:center;gap:6px}
+
+/* chart */
+.chart{position:relative}
+.chart svg{width:100%;height:auto}
+.chart .grid line{stroke:var(--chart-grid)}
+.chart .axis text{font-size:11px;fill:var(--chart-axis);font-family:var(--font-mono)}
+.chart.is-stale svg{opacity:var(--chart-stale-opacity)}
+.chart-legend{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-5);list-style:none;padding:var(--space-2) var(--space-4) var(--space-3);font-size:var(--text-ui-sm)}
+.chart-legend li{display:inline-flex;align-items:center;gap:8px}
+
+/* timeline / attempts */
+.timeline{list-style:none;position:relative;display:grid;gap:var(--space-4);padding-left:var(--space-5)}
+.timeline::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:1px;background:var(--color-line-strong)}
+.timeline li{position:relative}
+.timeline li::before{content:"";position:absolute;left:calc(-1 * var(--space-5));top:6px;width:11px;height:11px;border-radius:50%;background:var(--color-white);border:2px solid var(--color-line-strong)}
+.timeline li[data-kind="ok"]::before{border-color:var(--color-success)}
+.timeline li[data-kind="bad"]::before{border-color:var(--color-danger);border-radius:2px}
+.timeline li[data-kind="warn"]::before{border-color:var(--color-warning);border-radius:0;transform:rotate(45deg)}
+.timeline .t{font-family:var(--font-mono);font-size:var(--text-ui-xs);color:var(--color-ink-2)}
+.attempt{border:1px solid var(--color-line);border-radius:var(--radius-md);background:var(--color-white)}
+.attempt+.attempt{margin-top:var(--space-3)}
+.attempt>header{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-4);align-items:center;padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-line)}
+.attempt>div{padding:var(--space-3) var(--space-4)}
+.logtail{font-family:var(--font-mono);font-size:var(--text-ui-xs);background:var(--color-code-bg);color:var(--color-code-ink);border-radius:var(--radius-sm);padding:var(--space-3);overflow:auto;max-height:9rem;margin:var(--space-2) 0 0;white-space:pre}
+
+/* misc */
+.pill-demo{display:inline-flex;gap:6px;align-items:center;font-family:var(--font-mono);font-size:var(--text-ui-xs);border:1px solid var(--color-accent);color:var(--color-accent-ink);border-radius:var(--radius-full);padding:1px 8px}
+.toast-live{position:fixed;left:50%;bottom:var(--space-5);transform:translateX(-50%);background:var(--color-ink);color:var(--color-white);padding:var(--space-3) var(--space-4);border-radius:var(--radius-md);box-shadow:var(--shadow-overlay);z-index:60;font-size:var(--text-ui-sm);max-width:calc(100vw - 2rem)}
+@media (forced-colors:active){
+  .status,.chip,.live,.badge,.masked{border:1px solid CanvasText}
+  :focus-visible{outline:2px solid Highlight}
+}
+@media print{.proto-bar,.top,.side{display:none}}
+</style>
+<style>
+.hdr{display:flex;flex-wrap:wrap;gap:var(--space-3) var(--space-5);align-items:center;justify-content:space-between}
+.hdr h1{display:flex;flex-wrap:wrap;gap:var(--space-3);align-items:center;font-size:var(--text-ui-h1)}
+.hdr h1 .mono{font-weight:600}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-5)}
+.grid2>*{min-width:0}
+@media (min-width:1024px){.grid2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.tl-ver{font-family:var(--font-mono);font-size:var(--text-ui-xs);background:var(--color-panel);border:1px solid var(--color-line);border-radius:var(--radius-xs);padding:0 5px;margin-right:6px;color:var(--color-ink-2)}
+.tl-diag{border-left:2px dashed var(--color-line-strong);padding-left:var(--space-3);color:var(--color-ink-2)}
+.countdown{font-variant-numeric:tabular-nums;font-weight:500}
+.warnbox{border-left:4px solid var(--color-warning)}
+</style>
+</head>
+<body class="console" data-default-state="running" data-live-map="offline:offline">
+<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <!-- CLUSTERX icon sprite. 16 px grid, 1.5 px stroke, round caps/joins. Original geometry (primitive shapes), authored in-repo.
+       Status glyphs differ by SILHOUETTE, not color: dashed circle, stacked bars, half-filled circle, cyclic arrow, check circle, square cross, slashed circle. -->
+  <defs>
+    <symbol id="mark" viewBox="0 0 24 24">
+      <rect x="2" y="2" width="8" height="8" rx="1.5" fill="currentColor"/>
+      <rect x="12" y="2" width="8" height="8" rx="1.5" fill="currentColor"/>
+      <rect x="2" y="12" width="8" height="8" rx="1.5" fill="currentColor"/>
+      <rect x="14.75" y="12.75" width="7.5" height="7.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 2"/>
+    </symbol>
+
+    <!-- job state glyphs -->
+    <symbol id="g-scheduled" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2.2 2"/><path d="M8 4.8V8l2.2 1.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-queued" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 6h6M5 8.5h4M5 11h2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="g-running" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2.75a5.25 5.25 0 0 1 0 10.5z" fill="currentColor"/></symbol>
+    <symbol id="g-retry" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.7-3.76" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M13 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-succeeded" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.2 8.2l2 2 3.6-4.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-failed" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="g-canceled" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.8 12.2l8.4-8.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+
+    <!-- worker state glyphs -->
+    <symbol id="g-online" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.5" fill="currentColor"/><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+    <symbol id="g-stale" viewBox="0 0 16 16"><path d="M8 2.5l6 10.5H2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.8v2.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".5" fill="currentColor"/></symbol>
+    <symbol id="g-draining" viewBox="0 0 16 16"><path d="M3 12.5h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 3v6.5M5.2 7l2.8 2.8L10.8 7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="g-off" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 8h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="g-revoked" viewBox="0 0 16 16"><path d="M8 2l5 1.8v3.9c0 3-2 5.1-5 6.3-3-1.2-5-3.3-5-6.3V3.8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M6 6.2l4 4M10 6.2l-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+
+    <!-- general icons -->
+    <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.2 7V5a2.8 2.8 0 0 1 5.6 0v2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 3.5v-.5A1 1 0 0 0 9.500 2H3.500A1 1 0 0 0 2.500 3v6A1 1 0 0 0 3.500 10H4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5L14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 16 16"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-x" viewBox="0 0 16 16"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-chev-d" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-chev-r" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-chev-l" viewBox="0 0 16 16"><path d="M10 4L6 8l4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-ext" viewBox="0 0 16 16"><path d="M9 3h4v4M13 3L7.500 8.500M11 9.500V12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h2.500" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2V11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="5" r=".6" fill="currentColor"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 16 16"><path d="M8 2.200l6 10.600H2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.500v3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.200" r=".6" fill="currentColor"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13.500 8a5.500 5.500 0 1 1-1.700-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M13.500 2.500V5H11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 16 16"><path d="M3 8h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-play" viewBox="0 0 16 16"><path d="M5 3.500v9l7.500-4.500z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 16 16"><path d="M5.500 3.500v9M10.500 3.500v9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-step" viewBox="0 0 16 16"><path d="M3.500 3.500v9l6-4.500z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 3.500v9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 16 16"><path d="M3 8a5 5 0 1 0 1.700-3.760" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M3 2.500v3h3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-up" viewBox="0 0 16 16"><path d="M8 13V3M4 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-down" viewBox="0 0 16 16"><path d="M8 3v10M4 9l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-list" viewBox="0 0 16 16"><path d="M5.500 4h8M5.500 8h8M5.500 12h8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="2.500" cy="4" r=".8" fill="currentColor"/><circle cx="2.500" cy="8" r=".8" fill="currentColor"/><circle cx="2.500" cy="12" r=".8" fill="currentColor"/></symbol>
+    <symbol id="i-graph" viewBox="0 0 16 16"><circle cx="3.500" cy="8" r="1.800" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12.500" cy="3.500" r="1.800" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12.500" cy="12.500" r="1.800" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.100 7.200l5.800-2.900M5.100 8.800l5.800 2.900" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 16 16"><path d="M2.500 3.500h11L9.500 8.500v4l-3 1v-5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+    <symbol id="i-signal-off" viewBox="0 0 16 16"><path d="M2.500 6.500a8 8 0 0 1 11 0M5 9a4.500 4.500 0 0 1 6 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="12" r=".9" fill="currentColor"/><path d="M2.500 2.500l11 11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.800V8l2.200 1.400" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-dot" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3" fill="currentColor"/></symbol>
+    <symbol id="i-pausebar" viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6.500 6v4M9.500 6v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-arrows" viewBox="0 0 16 16"><path d="M8 2v12M2 8h12M8 2L6 4M8 2l2 2M8 14l-2-2M8 14l2-2M2 8l2-2M2 8l2 2M14 8l-2-2M14 8l-2 2" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></symbol>
+  </defs>
+</svg>
+
+<a class="skip" href="#main">Skip to content</a>
+<div class="proto-bar" role="region" aria-label="Prototype notice">
+  <b>design prototype — illustrative data</b>
+  <span class="proto-states" role="group" aria-label="Show state">
+    <button type="button" data-state-set="running" aria-pressed="true">running</button>
+    <button type="button" data-state-set="cancel_requested" aria-pressed="false">cancel requested</button>
+    <button type="button" data-state-set="failed" aria-pressed="false">failed (3 attempts)</button>
+    <button type="button" data-state-set="succeeded" aria-pressed="false">succeeded (stale rejected)</button>
+    <button type="button" data-state-set="unschedulable" aria-pressed="false">unschedulable</button>
+    <button type="button" data-state-set="expired" aria-pressed="false">expired (410)</button>
+    <button type="button" data-state-set="notfound" aria-pressed="false">not found (404)</button>
+    <button type="button" data-state-set="offline" aria-pressed="false">offline</button>
+    <button type="button" data-role-set="operator" aria-pressed="true">role: operator</button>
+    <button type="button" data-role-set="viewer" aria-pressed="false">role: viewer</button>
+  </span>
+</div>
+<div class="shell">
+  <aside class="side" aria-label="Sidebar"><div class="side-in"><a class="wordmark" href="home.html"><svg class="icon" aria-hidden="true"><use href="#mark"/></svg>CLUSTERX</a>
+<nav aria-label="Console">
+  <ul class="nav">
+    <li><a href="overview.html" data-nav="overview">Overview</a></li>
+    <li><a href="jobs.html" data-nav="jobs" aria-current="page">Jobs</a></li>
+    <li><a href="workers.html" data-nav="workers">Workers</a></li>
+    <li><a href="#" data-nolink="/app/observability" data-nav="observability">Observability</a></li>
+    <li><a href="#" data-nolink="/app/activity" data-nav="activity">Activity</a></li>
+  </ul>
+  <p class="nav-sep" aria-hidden="true">Settings</p>
+  <ul class="nav">
+    <li><a href="#" data-nolink="/app/settings" data-nav="settings">Configuration</a></li>
+    <li data-hide-role="viewer"><a href="#" data-nolink="/app/settings/tokens" data-nav="tokens">Tokens and credentials</a></li>
+    <li><a href="#" data-nolink="/app/settings/preferences" data-nav="prefs">Preferences</a></li>
+  </ul>
+</nav>
+<div class="side-foot">
+  <span><strong>@sendiw</strong> <span class="meta" data-role-only="operator">operator</span><span class="meta" data-role-only="viewer">viewer</span></span>
+  <a href="login.html#reason=signed_out">Sign out</a>
+</div>
+</div></aside>
+  <div>
+    <header class="top">
+      <button class="icon-btn menu-btn" type="button" data-open="#app-drawer" aria-label="Open menu" aria-haspopup="dialog"><svg class="icon icon-md" aria-hidden="true"><use href="#i-menu"/></svg></button>
+      <nav aria-label="Breadcrumb"><ol class="crumbs"><li><a href="overview.html">Console</a></li><li><a href="jobs.html">Jobs</a></li><li><span aria-current="page" class="mono" id="crumb-id">3f9a21c4</span></li></ol></nav>
+      <span class="grow"></span>
+      <button class="cmd-btn" type="button" data-open="#cmd" aria-label="Jump to a job or worker by ID"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><span class="long">Jump to ID</span><kbd>Ctrl K</kbd></button>
+<span class="live" role="status" data-live="live" aria-label="Live connection state"><svg class="icon" aria-hidden="true"><use href="#g-online"/></svg><span class="live-t">Live</span></span>
+<span class="role-banner" data-role-only="viewer"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>Read-only access (viewer)</span>
+
+    </header>
+    <div id="status-live" class="sr-only" role="status" aria-live="polite"></div>
+    <main id="main" class="main" tabindex="-1">
+
+      <!-- 404 / 410 -->
+      <div data-when="notfound"><h1 style="font-size:var(--text-ui-h1)">Job not found</h1><div class="notice" style="margin-top:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><div class="grow"><strong>No job has this ID.</strong> Check the ID, or open the jobs list and search from there. <div class="actions"><a class="btn btn-sm" href="jobs.html">Back to jobs</a></div></div></div></div>
+      <div data-when="expired"><h1 style="font-size:var(--text-ui-h1)">Job <span class="mono">8e22b9d0</span> has expired</h1><div class="notice warn" style="margin-top:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg><div class="grow"><strong>This job was removed by retention.</strong> It existed, but finished jobs are kept for 30 days, then deleted. This is not a "not found" error.
+        <dl class="dl" style="margin-top:var(--space-3)"><dt>Finished</dt><dd><time datetime="2026-10-12T08:14:51Z" data-fmt>08:14:51 UTC</time> <span class="meta">(12 Oct 2026)</span></dd><dt>Removed</dt><dd><time datetime="2026-11-11T08:20:00Z" data-fmt>08:20:00 UTC</time> <span class="meta">(11 Nov 2026)</span></dd><dt>Retention</dt><dd>30 days (configured)</dd></dl>
+        <div class="actions"><a class="btn btn-sm" href="jobs.html">Back to jobs</a><a class="btn btn-sm" href="#" data-nolink="/docs/concepts">How retention works</a></div></div></div></div>
+
+      <div data-when="running cancel_requested failed succeeded unschedulable offline">
+        <div data-when="offline" class="notice warn" role="status" style="margin-bottom:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-signal-off"/></svg><div class="grow"><strong>You're offline.</strong> This page is as of 10:42:07 UTC. Actions are disabled, and the lease countdown is paused because it cannot be known offline.</div></div>
+
+        <div class="hdr">
+          <div>
+            <h1><span>Job</span> <span class="mono" id="jid">3f9a21c4</span>
+              <button class="icon-btn" type="button" data-copy="3f9a21c4" aria-label="Copy job ID"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg></button>
+              <span class="status" data-s="running" data-when="running offline"><svg class="icon" aria-hidden="true"><use href="#g-running"/></svg>Running</span>
+              <span class="status" data-s="running" data-when="cancel_requested"><svg class="icon" aria-hidden="true"><use href="#g-running"/></svg>Running, cancellation requested</span>
+              <span class="status" data-s="failed" data-when="failed"><svg class="icon" aria-hidden="true"><use href="#g-failed"/></svg>Failed</span>
+              <span class="status" data-s="succeeded" data-when="succeeded"><svg class="icon" aria-hidden="true"><use href="#g-succeeded"/></svg>Succeeded</span>
+              <span class="status" data-s="queued" data-when="unschedulable"><svg class="icon" aria-hidden="true"><use href="#g-queued"/></svg>Queued</span>
+            </h1>
+            <p class="muted" style="margin-top:var(--space-1)"><span id="hname">thumbnail@2</span> · priority <span id="hpri">5</span> · namespace default · version <span id="hver">14</span></p>
+          </div>
+          <div class="toolbar" data-hide-role="viewer">
+            <button class="btn btn-danger" type="button" data-open="#dlg-cancel" data-when="running cancel_requested" id="b-cancel"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg><span id="cancel-lbl">Request cancellation</span></button>
+            <button class="btn btn-danger" type="button" data-open="#dlg-cancel" data-when="unschedulable"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>Cancel job</button>
+            <button class="btn btn-primary" type="button" data-open="#dlg-retry" data-when="failed"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>Retry as new job</button>
+            <span class="meta" data-when="offline">Actions unavailable offline</span>
+          </div>
+        </div>
+
+        <div id="result-note" class="notice ok" role="status" hidden style="margin-top:var(--space-4)"></div>
+        <div data-when="cancel_requested" class="notice warn" style="margin-top:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><div class="grow"><strong>Cancellation requested</strong> at <time datetime="2026-11-18T10:42:00Z" data-fmt>10:42:00 UTC</time>. The worker stops cooperatively. If it commits a success before the cancel is recorded, the job finishes as succeeded; otherwise it finishes as canceled. The lease is capped at 15 s.</div></div>
+        <div data-when="unschedulable" class="notice warn warnbox" style="margin-top:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><div class="grow"><strong>No capable worker.</strong> This job needs <span class="mono">transcode@1</span>. Two workers advertise it, but neither has sent a heartbeat for over 60 s. The job stays queued and visible; it is not lost. <div class="actions"><a class="btn btn-sm" href="workers.html">See workers that run transcode@1</a></div><p class="meta" style="margin-top:var(--space-2)">Reason: capable_workers_offline · since <time datetime="2026-11-18T10:33:20Z" data-fmt>10:33:20 UTC</time></p></div></div>
+        <div data-when="succeeded" class="notice info" style="margin-top:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><div class="grow"><strong>A late result was rejected.</strong> Worker <span class="mono">worker-003</span> reported attempt 1 after attempt 2 had already succeeded. The committed result was not changed. See the timeline.</div></div>
+
+        <div class="grid2" style="margin-top:var(--space-5)">
+          <section class="card" aria-labelledby="st-h"><div class="card-h"><h2 id="st-h">State</h2><span class="meta">As of <time datetime="2026-11-18T10:42:07Z" data-fmt>10:42:07 UTC</time></span></div>
+            <div class="card-pad"><dl class="dl">
+              <dt>Attempts</dt><dd><span data-when="running cancel_requested offline">1 of 3 used</span><span data-when="failed">3 of 3 used</span><span data-when="succeeded">2 of 3 used</span><span data-when="unschedulable">0 of 3 used</span></dd>
+              <dt>Lease generation</dt><dd><span data-when="running cancel_requested offline">1</span><span data-when="failed">3</span><span data-when="succeeded">2</span><span data-when="unschedulable">none (not running)</span></dd>
+              <dt data-when="running cancel_requested offline">Lease expires in</dt><dd data-when="running cancel_requested"><span class="countdown" id="cd">24 s</span> <span class="meta">(<span class="mono">10:42:31Z</span>; counts down, not announced)</span></dd><dd data-when="offline"><span class="countdown">unknown while offline</span></dd>
+              <dt data-when="failed">Failure class</dt><dd data-when="failed">Retries exhausted <span class="meta">(retryable_exhausted)</span></dd>
+              <dt>Created</dt><dd><time datetime="2026-11-18T10:41:58Z" data-fmt>10:41:58 UTC</time></dd>
+              <dt>Available</dt><dd><time datetime="2026-11-18T10:41:58Z" data-fmt>10:41:58 UTC</time> <span class="meta">(run now)</span></dd>
+              <dt data-when="running cancel_requested offline failed succeeded">Started</dt><dd data-when="running cancel_requested offline failed succeeded"><time datetime="2026-11-18T10:42:01Z" data-fmt>10:42:01 UTC</time></dd>
+              <dt data-when="failed succeeded">Finished</dt><dd data-when="failed succeeded"><time datetime="2026-11-18T10:44:40Z" data-fmt>10:44:40 UTC</time></dd>
+              <dt>Hard deadline</dt><dd><time datetime="2026-11-18T10:52:01Z" data-fmt>10:52:01 UTC</time> <span class="meta">(attempt timeout 10 min)</span></dd>
+            </dl></div></section>
+
+          <section class="card" aria-labelledby="pl-h"><div class="card-h"><h2 id="pl-h">Payload and result</h2></div>
+            <div class="card-pad stack">
+              <div><p class="label">Payload</p>
+                <pre class="jsonblock" data-hide-role="viewer" tabindex="0" aria-label="Payload JSON">{
+  "image_url_ref": "assets/ab12",
+  "sizes": [128, 512],
+  "format": "webp"
+}</pre>
+                <p class="masked" data-role-only="viewer"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>Hidden for viewer role</p></div>
+              <div><p class="label">Result</p>
+                <p class="muted" data-when="running cancel_requested offline unschedulable">Not produced yet.</p>
+                <p class="muted" data-when="failed">No result: the job failed.</p>
+                <div data-when="succeeded"><pre class="jsonblock" data-hide-role="viewer" tabindex="0" aria-label="Result JSON">{ "variants": 2, "bytes": 18342 }</pre><p class="masked" data-role-only="viewer"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>Hidden for viewer role</p><p class="meta">Result 38 B of 128 KiB limit.</p></div></div>
+              <p class="meta">Masking happens on the server: a viewer's browser never receives these values.</p>
+            </div></section>
+        </div>
+
+        <section class="sect" aria-labelledby="at-h"><h2 id="at-h">Attempts</h2>
+          <div data-when="unschedulable" class="card empty"><h3>Not started</h3><p>No attempt exists yet. The job is waiting for a worker that can run it.</p></div>
+          <div data-when="running cancel_requested offline">
+            <article class="attempt" aria-labelledby="a1h"><header><h3 id="a1h" class="h3" style="font-size:var(--text-ui-lg)">Attempt 1</h3><span class="status" data-s="running"><svg class="icon" aria-hidden="true"><use href="#g-running"/></svg>Active</span><span class="meta">worker-003 · inc-1015 · started <time datetime="2026-11-18T10:42:01Z" data-fmt>10:42:01 UTC</time></span></header>
+              <div><p class="label">Log tail</p><pre class="logtail" tabindex="0" data-hide-role="viewer" aria-label="Log, last 16 KiB">10:42:02 resize 128 ok
+10:42:05 resize 512 started</pre><p class="masked" data-role-only="viewer"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>Hidden for viewer role</p></div></article>
+          </div>
+          <div data-when="failed viewer-ok">
+            <article class="attempt" aria-labelledby="f3h"><header><h3 id="f3h" class="h3" style="font-size:var(--text-ui-lg)">Attempt 3</h3><span class="status" data-s="failed"><svg class="icon" aria-hidden="true"><use href="#g-failed"/></svg>Failed</span><span class="badge">retryable</span><span class="meta">worker-006 · inc-1042 · attempts exhausted</span></header>
+              <div><p class="label">Error</p><p data-hide-role="viewer"><span class="mono">upstream_timeout</span>: object store did not answer in 20 s</p><p class="masked" data-role-only="viewer"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>Hidden for viewer role</p>
+              <p class="label" style="margin-top:var(--space-3)">Log tail</p><pre class="logtail" tabindex="0" data-hide-role="viewer" aria-label="Log, last 16 KiB">10:44:02 fetch assets/ab12
+10:44:22 timeout after 20s
+10:44:22 giving up (retryable)</pre><p class="masked" data-role-only="viewer"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>Hidden for viewer role</p></div></article>
+            <article class="attempt" aria-labelledby="f2h"><header><h3 id="f2h" class="h3" style="font-size:var(--text-ui-lg)">Attempt 2</h3><span class="status" data-s="failed"><svg class="icon" aria-hidden="true"><use href="#g-failed"/></svg>Failed</span><span class="badge">retryable</span><span class="meta">worker-003 · inc-1015</span></header>
+              <div><p class="label">Log tail</p><p class="muted">No log output.</p></div></article>
+            <article class="attempt" aria-labelledby="f1h"><header><h3 id="f1h" class="h3" style="font-size:var(--text-ui-lg)">Attempt 1</h3><span class="status" data-s="retry_wait"><svg class="icon" aria-hidden="true"><use href="#g-retry"/></svg>Lease expired</span><span class="meta">worker-004 · inc-1031 · consumed one attempt</span></header>
+              <div><p class="label">Log tail</p><p class="meta"><svg class="icon" style="display:inline;vertical-align:-3px" aria-hidden="true"><use href="#i-clock"/></svg> Log removed by the 7-day log retention. The attempt record remains.</p></div></article>
+          </div>
+          <div data-when="succeeded">
+            <article class="attempt" aria-labelledby="s2h"><header><h3 id="s2h" class="h3" style="font-size:var(--text-ui-lg)">Attempt 2</h3><span class="status" data-s="succeeded"><svg class="icon" aria-hidden="true"><use href="#g-succeeded"/></svg>Succeeded</span><span class="meta">worker-006 · inc-1042 · lease generation 2</span></header><div><p class="muted">Result committed <time datetime="2026-11-18T10:44:40Z" data-fmt>10:44:40 UTC</time>.</p></div></article>
+            <article class="attempt" aria-labelledby="s1h"><header><h3 id="s1h" class="h3" style="font-size:var(--text-ui-lg)">Attempt 1</h3><span class="status" data-s="retry_wait"><svg class="icon" aria-hidden="true"><use href="#g-retry"/></svg>Lease expired</span><span class="meta">worker-003 · inc-1015 · lease generation 1</span></header><div><p class="muted">The worker went silent; the lease expired at <time datetime="2026-11-18T10:42:31Z" data-fmt>10:42:31 UTC</time>.</p></div></article>
+          </div>
+        </section>
+
+        <section class="sect" aria-labelledby="ev-h"><h2 id="ev-h">Event timeline</h2>
+          <div class="card card-pad">
+            <p class="meta" style="margin-bottom:var(--space-3)">Versioned job events, oldest first. Times are UTC here; the product shows your local time with the zone and UTC on hover. <span data-hide-role="viewer">Diagnostic entries come from the audit log.</span></p>
+            <ol class="timeline" id="tl-run" data-when="running cancel_requested offline unschedulable">
+              <li data-kind="ok"><span class="t"><span class="tl-ver">v1</span><time datetime="2026-11-18T10:41:58Z" data-fmt>10:41:58 UTC</time></span><p><strong>admitted</strong> → <span data-when="unschedulable">queued</span><span data-when="running cancel_requested offline">queued</span> by user:sendiw</p></li>
+              <li data-when="running cancel_requested offline"><span class="t"><span class="tl-ver">v2</span><time datetime="2026-11-18T10:42:01Z" data-fmt>10:42:01 UTC</time></span><p><strong>claimed</strong> → running, attempt 1 by worker-003</p></li>
+              <li data-kind="warn" data-when="cancel_requested"><span class="t"><span class="tl-ver">v3</span><time datetime="2026-11-18T10:42:00Z" data-fmt>10:42:00 UTC</time></span><p><strong>cancel_requested</strong> by user:sendiw</p></li>
+            </ol>
+            <ol class="timeline" data-when="failed">
+              <li data-kind="ok"><span class="t"><span class="tl-ver">v1</span>10:41:58</span><p><strong>admitted</strong> → queued</p></li>
+              <li><span class="t"><span class="tl-ver">v2</span>10:42:01</span><p><strong>claimed</strong> → running, attempt 1 (worker-004)</p></li>
+              <li data-kind="warn"><span class="t"><span class="tl-ver">v3</span>10:42:31</span><p><strong>lease_expired</strong> → retry_wait <span class="meta">backoff 2.4 s</span></p></li>
+              <li><span class="t"><span class="tl-ver">v4</span>10:42:34</span><p><strong>promoted</strong> → queued <span class="meta">backoff elapsed</span></p></li>
+              <li><span class="t"><span class="tl-ver">v5</span>10:42:35</span><p><strong>claimed</strong> → running, attempt 2 (worker-003)</p></li>
+              <li data-kind="warn"><span class="t"><span class="tl-ver">v6</span>10:43:20</span><p><strong>failed_retryable</strong> → retry_wait <span class="meta">upstream_timeout · backoff 5.1 s</span></p></li>
+              <li><span class="t"><span class="tl-ver">v7</span>10:43:26</span><p><strong>promoted</strong> → queued</p></li>
+              <li><span class="t"><span class="tl-ver">v8</span>10:43:27</span><p><strong>claimed</strong> → running, attempt 3 (worker-006)</p></li>
+              <li data-kind="bad"><span class="t"><span class="tl-ver">v9</span>10:44:40</span><p><strong>attempts_exhausted</strong> → failed <span class="meta">failure class: retryable_exhausted</span></p></li>
+              <li class="tl-diag" data-hide-role="viewer"><span class="t">diagnostic · audit log · 10:44:51</span><p>Late report from worker-004 for attempt 1 was rejected (stale attempt).</p></li>
+              <li data-kind="ok"><span class="t">child job, 10:46:12</span><p>Lineage: <strong>retry_created</strong> was recorded on the new job <a href="job-detail.html">2d7e48aa</a></p></li>
+            </ol>
+            <ol class="timeline" data-when="succeeded">
+              <li data-kind="ok"><span class="t"><span class="tl-ver">v1</span>10:41:58</span><p><strong>admitted</strong> → queued</p></li>
+              <li><span class="t"><span class="tl-ver">v2</span>10:42:01</span><p><strong>claimed</strong> → running, attempt 1 (worker-003)</p></li>
+              <li data-kind="warn"><span class="t"><span class="tl-ver">v3</span>10:42:31</span><p><strong>lease_expired</strong> → retry_wait</p></li>
+              <li><span class="t"><span class="tl-ver">v5</span>10:42:34</span><p><strong>claimed</strong> → running, attempt 2 (worker-006)</p></li>
+              <li data-kind="ok"><span class="t"><span class="tl-ver">v6</span>10:44:40</span><p><strong>succeeded</strong> → succeeded, attempt 2</p></li>
+              <li class="tl-diag" data-hide-role="viewer"><span class="t">diagnostic · audit log · 10:44:55</span><p>Stale success from worker-003 (attempt 1, generation 1) rejected. The committed result is unchanged.</p></li>
+            </ol>
+            <p class="meta" style="margin-top:var(--space-3)"><button class="btn btn-sm" type="button" aria-disabled="true">Load older events <span class="meta">(none)</span></button></p>
+          </div>
+        </section>
+
+        <section class="sect" aria-labelledby="ln-h" data-when="failed succeeded running unschedulable cancel_requested offline"><h2 id="ln-h">Lineage</h2>
+          <div class="card card-pad"><p data-when="failed">Retried as <a href="job-detail.html" class="mono">2d7e48aa</a> (a new job with its own attempt budget). This failed job is unchanged.</p><p data-when="running succeeded unschedulable cancel_requested offline" class="muted">Not a retry, and not retried.</p></div></section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<dialog id="dlg-cancel" aria-labelledby="dc-h" aria-describedby="dc-d">
+  <div class="dlg-h"><h2 id="dc-h">Cancel this job?</h2></div>
+  <div class="dlg-b" id="dc-d">
+    <p data-when="unschedulable">The job has not started, so it is canceled immediately and cannot run later.</p>
+    <p data-when-not="unschedulable">This job is running. Cancellation is a request: the worker is asked to stop, and the lease is capped at 15 s. If the worker commits a success first, the job finishes as succeeded and the cancel has no effect.</p>
+  </div>
+  <div class="dlg-f"><button class="btn" type="button" data-close="cancel" autofocus>Keep running</button><button class="btn btn-danger-solid" type="button" id="do-cancel" data-close="confirm"><span class="lbl">Confirm cancellation</span></button></div>
+</dialog>
+<dialog id="dlg-retry" aria-labelledby="dr-h" aria-describedby="dr-d">
+  <div class="dlg-h"><h2 id="dr-h">Retry as a new job?</h2></div>
+  <div class="dlg-b" id="dr-d"><p>This creates a <strong>new job</strong> linked to this one, with a fresh budget of 3 attempts. This failed job stays exactly as it is. Pressing twice creates only one new job.</p></div>
+  <div class="dlg-f"><button class="btn" type="button" data-close="cancel" autofocus>Not now</button><button class="btn btn-primary" type="button" id="do-retry" data-close="confirm">Create new job</button></div>
+</dialog>
+<dialog id="app-drawer" class="drawer" aria-label="Console menu">
+  <div class="side-in"><button class="icon-btn" type="button" data-close aria-label="Close menu" style="align-self:flex-end"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  <a class="wordmark" href="home.html"><svg class="icon" aria-hidden="true"><use href="#mark"/></svg>CLUSTERX</a>
+<nav aria-label="Console">
+  <ul class="nav">
+    <li><a href="overview.html" data-nav="overview">Overview</a></li>
+    <li><a href="jobs.html" data-nav="jobs" aria-current="page">Jobs</a></li>
+    <li><a href="workers.html" data-nav="workers">Workers</a></li>
+    <li><a href="#" data-nolink="/app/observability" data-nav="observability">Observability</a></li>
+    <li><a href="#" data-nolink="/app/activity" data-nav="activity">Activity</a></li>
+  </ul>
+  <p class="nav-sep" aria-hidden="true">Settings</p>
+  <ul class="nav">
+    <li><a href="#" data-nolink="/app/settings" data-nav="settings">Configuration</a></li>
+    <li data-hide-role="viewer"><a href="#" data-nolink="/app/settings/tokens" data-nav="tokens">Tokens and credentials</a></li>
+    <li><a href="#" data-nolink="/app/settings/preferences" data-nav="prefs">Preferences</a></li>
+  </ul>
+</nav>
+<div class="side-foot">
+  <span><strong>@sendiw</strong> <span class="meta" data-role-only="operator">operator</span><span class="meta" data-role-only="viewer">viewer</span></span>
+  <a href="login.html#reason=signed_out">Sign out</a>
+</div>
+
+  </div>
+</dialog>
+<dialog id="cmd" class="cmd" aria-label="Jump to">
+  <div class="dlg-b" style="padding-top:var(--space-4)">
+    <div class="field"><label for="cmd-in">Jump to a page, or enter an exact job or worker ID</label><input id="cmd-in" class="input" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. 3f9a21c4" aria-describedby="cmd-empty"></div>
+    <ul id="cmd-list" class="nav" style="list-style:none">
+      <li><a href="overview.html">Overview</a></li><li><a href="jobs.html">Jobs</a></li><li><a href="workers.html">Workers</a></li>
+      <li data-id-result hidden><a href="job-detail.html">Open job</a></li>
+    </ul>
+    <p id="cmd-empty" class="help" role="status" hidden></p>
+    <p class="help">Search is by exact ID only: the API has no free-text search. Press Esc to close.</p>
+  </div>
+</dialog>
+
+<script>
+/* CLUSTERX design prototype behavior (shared). Vanilla JS, no network. Every control in the prototypes is wired here or omitted. */
+(function () {
+  'use strict';
+  var root = document.documentElement;
+  root.classList.add('js');
+  var mq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false, addEventListener: function () {} };
+  var reduced = function () { return mq.matches || root.getAttribute('data-rm') === '1'; };
+  root.setAttribute('data-rm', mq.matches ? '1' : '0');
+  if (mq.addEventListener) mq.addEventListener('change', function () { root.setAttribute('data-rm', mq.matches ? '1' : '0'); });
+
+  var $ = function (s, c) { return (c || document).querySelector(s); };
+  var $$ = function (s, c) { return Array.prototype.slice.call((c || document).querySelectorAll(s)); };
+  var CLX = (window.CLX = window.CLX || {});
+
+  /* polite status region (one per page) */
+  var status = $('#status-live');
+  function say(msg) { if (status) { status.textContent = ''; setTimeout(function () { status.textContent = msg; }, 30); } }
+  CLX.say = say;
+  var toastTimer;
+  function toast(msg) {
+    var t = $('#toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; t.className = 'toast-live'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+    t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 3800);
+  }
+  CLX.toast = toast;
+
+  /* ---- hash state: #state=empty&role=viewer ---- */
+  function params() { var o = {}; (location.hash || '').replace(/^#/, '').split('&').forEach(function (p) { var kv = p.split('='); if (kv[0]) o[kv[0]] = decodeURIComponent(kv[1] || ''); }); return o; }
+  function setParams(o) { var cur = params(); for (var k in o) cur[k] = o[k]; location.hash = Object.keys(cur).map(function (k) { return k + '=' + encodeURIComponent(cur[k]); }).join('&'); }
+  CLX.params = params; CLX.setParams = setParams;
+  var LIVE = {
+    live: ['g-online', 'Live'], reconnecting: ['i-refresh', 'Reconnecting'], polling: ['i-refresh', 'Polling every 15 s'],
+    stale: ['g-stale', 'Stale'], offline: ['i-signal-off', 'Offline'], paused: ['i-pausebar', 'Paused (tab hidden)'], demo: ['i-dot', 'Demo data']
+  };
+  function setLive(kind) {
+    $$('.live').forEach(function (el) {
+      var d = LIVE[kind] || LIVE.live; el.setAttribute('data-live', kind);
+      var use = $('use', el); if (use) use.setAttribute('href', '#' + d[0]);
+      var t = $('.live-t', el); if (t) t.textContent = d[1];
+    });
+  }
+  CLX.setLive = setLive;
+  function applyState() {
+    var p = params();
+    var st = p.state || document.body.getAttribute('data-default-state') || 'loaded';
+    var role = p.role || 'operator';
+    root.setAttribute('data-state', st); root.setAttribute('data-role', role);
+    $$('[data-when]').forEach(function (el) { el.hidden = el.getAttribute('data-when').split(' ').indexOf(st) < 0; });
+    $$('[data-when-not]').forEach(function (el) { el.hidden = el.getAttribute('data-when-not').split(' ').indexOf(st) >= 0; });
+    $$('[data-role-only]').forEach(function (el) { el.hidden = el.getAttribute('data-role-only') !== role; });
+    $$('[data-hide-role]').forEach(function (el) { el.hidden = el.getAttribute('data-hide-role') === role; });
+    $$('[data-state-set]').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-state-set') === st ? 'true' : 'false'); });
+    $$('[data-role-set]').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-role-set') === role ? 'true' : 'false'); });
+    var map = (document.body.getAttribute('data-live-map') || '').split(',').reduce(function (a, s) { var kv = s.split(':'); if (kv[0]) a[kv[0]] = kv[1]; return a; }, {});
+    if ($('.live')) setLive(map[st] || 'live');
+    $$('.is-stale-target').forEach(function (el) { el.classList.toggle('is-stale', st === 'stale' || st === 'offline'); });
+    var h1 = $('h1[data-state-title]'); if (h1) { var tt = h1.getAttribute('data-state-title'); }
+    if (window.CLX.onState) window.CLX.onState(st, role);
+  }
+  window.addEventListener('hashchange', applyState);
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-state-set]'); if (b) { setParams({ state: b.getAttribute('data-state-set') }); say('Prototype state: ' + b.textContent.trim()); return; }
+    var r = e.target.closest('[data-role-set]'); if (r) { setParams({ role: r.getAttribute('data-role-set') }); say('Prototype role: ' + r.textContent.trim()); }
+  });
+
+  /* ---- dialogs ---- */
+  document.addEventListener('click', function (e) {
+    var o = e.target.closest('[data-open]');
+    if (o) { var d = $(o.getAttribute('data-open')); if (d && d.showModal) { d.showModal(); var f = $('[autofocus]', d); if (f) f.focus(); } return; }
+    var c = e.target.closest('[data-close]');
+    if (c) { var dd = c.closest('dialog'); if (dd) dd.close(c.getAttribute('data-close')); return; }
+    var dlg = e.target; if (dlg.tagName === 'DIALOG' && dlg.hasAttribute('open')) { var r = dlg.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dlg.close('dismiss'); }
+  });
+  $$('dialog.drawer a').forEach(function (a) { a.addEventListener('click', function () { var d = a.closest('dialog'); if (d) d.close(); }); });
+
+  /* ---- copy buttons ---- */
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-copy]'); if (!b) return;
+    var sel = b.getAttribute('data-copy'); var src = sel.charAt(0) === '#' ? $(sel) : null;
+    var text = src ? (src.getAttribute('data-copy-text') || src.textContent) : sel;
+    var done = function () { var l = b.querySelector('.cl'); var old = l ? l.textContent : ''; if (l) l.textContent = 'Copied'; say('Copied to clipboard'); setTimeout(function () { if (l) l.textContent = old; }, 1800); };
+    var fallback = function () { var ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (x) { say('Copy blocked. Select the text and copy manually.'); } document.body.removeChild(ta); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  });
+
+  /* ---- links to routes not in this prototype set ---- */
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('a[data-nolink]'); if (!a) return;
+    e.preventDefault(); toast('Not part of this prototype set. Route contract: docs/design/route-inventory.md (' + (a.getAttribute('data-nolink') || a.textContent.trim()) + ').');
+  });
+
+  /* ---- timestamps: local + explicit zone, UTC in title (route-inventory 1.6) ---- */
+  $$('time[data-fmt]').forEach(function (t) {
+    var d = new Date(t.getAttribute('datetime')); if (isNaN(d)) return;
+    try {
+      var loc = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZoneName: 'short' }).format(d);
+      t.textContent = loc; t.title = d.toISOString().replace('.000', '') + ' (UTC)';
+    } catch (x) { /* keep static UTC text */ }
+  });
+
+  /* ---- M-SECTION reveal ---- */
+  var rv = $$('.reveal');
+  if ('IntersectionObserver' in window && rv.length && !reduced()) {
+    var io = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } }); }, { threshold: 0.2 });
+    rv.forEach(function (el, i) { el.style.transitionDelay = Math.min(i % 4, 3) * 40 + 'ms'; io.observe(el); });
+  } else { rv.forEach(function (el) { el.classList.add('in'); }); }
+
+  /* ---- generic table filter: <select data-filter="status" data-table="#t"> rows carry data-status ---- */
+  $$('[data-filter]').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      var tb = $(sel.getAttribute('data-table')); if (!tb) return;
+      var rows = $$('tbody tr', tb), n = 0;
+      var active = $$('[data-filter][data-table="' + sel.getAttribute('data-table') + '"]').filter(function (s) { return s.value; });
+      rows.forEach(function (r) { var ok = active.every(function (s) { var v = r.getAttribute('data-' + s.getAttribute('data-filter')) || ''; return v.split(' ').indexOf(s.value) > -1; }); r.hidden = !ok; if (ok) n++; });
+      var cap = $('caption .n', tb); if (cap) cap.textContent = n;
+      var none = $(sel.getAttribute('data-empty') || '#filter-empty'); if (none) none.hidden = n > 0;
+      say(n + (n === 1 ? ' result' : ' results'));
+    });
+  });
+
+  /* ---- command search (Ctrl/Cmd+K) ---- */
+  var cmd = $('#cmd');
+  if (cmd) {
+    var inp = $('input', cmd), list = $('#cmd-list', cmd), empty = $('#cmd-empty', cmd);
+    var items = $$('li', list);
+    var refresh = function () {
+      var q = inp.value.trim().toLowerCase(); var n = 0;
+      items.forEach(function (li) { if (li.hasAttribute('data-id-result')) return; var ok = !q || li.textContent.toLowerCase().indexOf(q) > -1; li.hidden = !ok; if (ok) n++; });
+      var idr = $('[data-id-result]', list), isId = /^[0-9a-f]{8}$/.test(q);
+      if (idr) { idr.hidden = !isId; if (isId) { $('a', idr).textContent = 'Open job ' + q; n++; } }
+      var worker = /^wk-\d+$/.test(q);
+      empty.hidden = n > 0 || !q;
+      empty.textContent = (q && !isId && !worker) ? 'No job or worker with that ID. Enter an exact ID.' : '';
+    };
+    inp.addEventListener('input', refresh);
+    document.addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (!cmd.open) cmd.showModal(); inp.focus(); } });
+    cmd.addEventListener('close', function () { inp.value = ''; refresh(); });
+    refresh();
+  }
+
+  /* ---- fixtures (all illustrative) ---- */
+  function rng(seed) { var s = seed >>> 0; return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+  CLX.rng = rng;
+  var HANDLERS = [['thumbnail', 2], ['ocr', 1], ['export', 3], ['digest', 1], ['transcode', 1]];
+  CLX.workers = function (n) {
+    var r = rng(7), out = [];
+    for (var i = 0; i < n; i++) {
+      var cap = [2, 4, 4, 8][i % 4], h = HANDLERS[i % 5];
+      var st = 'online', live = true, rev = false;
+      if (n > 1 && i % 17 === 5) { st = 'stale'; live = false; }
+      if (n > 1 && i % 29 === 7) { st = 'draining'; }
+      if (n > 1 && i % 41 === 11) { st = 'revoked'; live = false; rev = true; }
+      var active = (st === 'online' && i % 3 === 0) ? Math.min(cap, 1 + (i % 3)) : (st === 'draining' ? 1 : 0);
+      var hb = live ? 2 + Math.floor(r() * 8) : 38 + Math.floor(r() * 90);
+      out.push({ id: 'wk-' + (i + 1), name: 'worker-' + String(i + 1).padStart(3, '0'), handler: h[0], ver: h[1], cap: cap, active: active, st: st, live: live, rev: rev, hb: hb, inc: 'inc-' + (1000 + i * 7).toString(16) });
+    }
+    return out;
+  };
+  var STATE_LABEL = { online: 'Online', stale: 'Stale', draining: 'Draining', revoked: 'Credential revoked', off: 'Deregistered' };
+  var STATE_GLYPH = { online: 'g-online', stale: 'g-stale', draining: 'g-draining', revoked: 'g-revoked', off: 'g-off' };
+  CLX.STATE_LABEL = STATE_LABEL; CLX.STATE_GLYPH = STATE_GLYPH;
+
+  /* ---- topology (console, data-backed in product; illustrative here). SVG graph with synchronized list. ---- */
+  CLX.topology = function (host, workers, opts) {
+    opts = opts || {};
+    var NS = 'http://www.w3.org/2000/svg', n = workers.length, cluster = n > 12;
+    var W, H, nodes = [];
+    function el(name, attrs, parent) { var e = document.createElementNS(NS, name); for (var k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+    host.textContent = '';
+    var items;
+    if (cluster) {
+      var groups = {}; workers.forEach(function (w) { (groups[w.handler] = groups[w.handler] || []).push(w); });
+      items = Object.keys(groups).map(function (k) { var g = groups[k]; return { key: k, workers: g, label: k + '@' + g[0].ver, live: g.filter(function (w) { return w.st === 'online'; }).length, stale: g.filter(function (w) { return w.st === 'stale'; }).length, drain: g.filter(function (w) { return w.st === 'draining'; }).length, rev: g.filter(function (w) { return w.rev; }).length, act: g.reduce(function (a, w) { return a + w.active; }, 0) }; });
+    } else {
+      items = workers.map(function (w) { return { key: w.id, workers: [w], label: w.name, w: w }; });
+    }
+    var cols = Math.min(items.length, 3), rows = Math.ceil(items.length / cols);
+    var nw = cluster ? 250 : 150, nh = cluster ? 78 : 54, gx = 24, gy = 22, x0 = 190;
+    W = x0 + cols * (nw + gx) + 6; H = Math.max(180, 40 + rows * (nh + gy));
+    var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': opts.label || ('Worker topology: ' + n + ' workers. A table with the same entries follows.') }, host);
+    var vb = { x: 0, y: 0, w: W, h: H };
+    var g0 = el('g', {}, svg);
+    /* coordinator hub */
+    var hubY = H / 2;
+    var hub = el('g', {}, g0);
+    el('rect', { x: 16, y: hubY - 34, width: 120, height: 68, rx: 6, fill: 'var(--color-ink)' }, hub);
+    var t1 = el('text', { x: 76, y: hubY - 4, 'text-anchor': 'middle', fill: 'var(--color-white)', 'font-size': 12, 'font-weight': 600 }, hub); t1.textContent = 'coordinator';
+    var t2 = el('text', { x: 76, y: hubY + 14, 'text-anchor': 'middle', fill: 'var(--color-code-mute)', 'font-size': 10, 'font-family': 'var(--font-mono)' }, hub); t2.textContent = 'claims via gRPC';
+    items.forEach(function (it, i) {
+      var c = i % cols, r = Math.floor(i / cols), x = x0 + c * (nw + gx), y = 24 + r * (nh + gy);
+      it.x = x; it.y = y;
+      el('path', { d: 'M136 ' + hubY + ' C 170 ' + hubY + ', 160 ' + (y + nh / 2) + ', ' + x + ' ' + (y + nh / 2), fill: 'none', stroke: 'var(--color-line-strong)', 'stroke-width': 1 }, g0);
+    });
+    items.forEach(function (it, i) {
+      var w = it.w, st = cluster ? (it.stale + it.rev === it.workers.length ? 'stale' : 'online') : w.st;
+      var g = el('g', { class: 'node', tabindex: 0, role: 'button', 'data-key': it.key, 'data-live': (st === 'stale' || st === 'revoked') ? 'stale' : (st === 'off' ? 'off' : 'on'), 'aria-label': cluster ? (it.label + ' cluster: ' + it.workers.length + ' workers, ' + it.live + ' online, ' + it.stale + ' stale, ' + it.drain + ' draining, ' + it.rev + ' revoked') : (w.name + ', ' + STATE_LABEL[w.st] + ', handler ' + w.handler + ', ' + w.active + ' of ' + w.cap + ' slots active') }, g0);
+      el('rect', { class: 'body', x: it.x, y: it.y, width: nw, height: nh, rx: 6 }, g);
+      if (cluster) {
+        var a = el('text', { x: it.x + 12, y: it.y + 22, 'font-weight': 600, 'font-size': 13 }, g); a.textContent = it.label + ' cluster';
+        var b = el('text', { x: it.x + 12, y: it.y + 42, class: 'sub' }, g); b.textContent = it.workers.length + ' workers · ' + it.act + ' active attempts';
+        var c2 = el('text', { x: it.x + 12, y: it.y + 60, class: 'sub' }, g); c2.textContent = it.live + ' on · ' + it.stale + ' stale · ' + it.drain + ' drain · ' + it.rev + ' revoked';
+      } else {
+        var u = el('use', { href: '#' + STATE_GLYPH[w.st], x: it.x + 10, y: it.y + 10, width: 16, height: 16, style: 'color:' + (w.st === 'online' ? 'var(--color-success)' : w.st === 'revoked' ? 'var(--color-danger)' : 'var(--color-warning)') }, g);
+        var a2 = el('text', { x: it.x + 32, y: it.y + 22, 'font-weight': 600 }, g); a2.textContent = w.name;
+        var b2 = el('text', { x: it.x + 10, y: it.y + 40, class: 'sub' }, g); b2.textContent = STATE_LABEL[w.st] + ' · ' + w.active + '/' + w.cap;
+        if (w.active > 0 && w.live && n < 100) { var p = el('rect', { class: 'pulse', x: it.x - 2, y: it.y - 2, width: nw + 4, height: nh + 4, rx: 8, style: 'transform-box:fill-box;transform-origin:center' }, g); void p; }
+      }
+      nodes.push(g);
+      g.addEventListener('click', function () { select(it.key, true); });
+      g.addEventListener('keydown', function (e) {
+        var idx = nodes.indexOf(g), nx = null;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(it.key, true); return; }
+        if (e.key === 'ArrowRight') nx = idx + 1; else if (e.key === 'ArrowLeft') nx = idx - 1; else if (e.key === 'ArrowDown') nx = idx + cols; else if (e.key === 'ArrowUp') nx = idx - cols;
+        if (nx !== null && nodes[nx]) { e.preventDefault(); nodes[nx].focus(); }
+      });
+    });
+    function apply() { svg.setAttribute('viewBox', vb.x + ' ' + vb.y + ' ' + vb.w + ' ' + vb.h); }
+    CLX.topoCtl = {
+      zoom: function (f) { var cx = vb.x + vb.w / 2, cy = vb.y + vb.h / 2; vb.w = Math.min(W * 2, Math.max(W / 4, vb.w * f)); vb.h = vb.w * H / W; vb.x = cx - vb.w / 2; vb.y = cy - vb.h / 2; apply(); say('Zoom ' + Math.round(W / vb.w * 100) + ' percent'); },
+      pan: function (dx, dy) { vb.x += dx * vb.w; vb.y += dy * vb.h; apply(); },
+      reset: function () { vb = { x: 0, y: 0, w: W, h: H }; apply(); say('View reset'); }
+    };
+    function select(key, fromGraph) {
+      nodes.forEach(function (g) { g.setAttribute('data-sel', g.getAttribute('data-key') === key ? '1' : '0'); });
+      if (opts.onSelect) opts.onSelect(key, fromGraph, items);
+    }
+    CLX.topoSelect = select;
+    return { items: items, select: select, svg: svg };
+  };
+  document.addEventListener('click', function (e) {
+    var z = e.target.closest('[data-topo]'); if (!z || !CLX.topoCtl) return;
+    var a = z.getAttribute('data-topo');
+    if (a === 'in') CLX.topoCtl.zoom(0.8); else if (a === 'out') CLX.topoCtl.zoom(1.25); else if (a === 'reset') CLX.topoCtl.reset();
+    else if (a === 'left') CLX.topoCtl.pan(-0.15, 0); else if (a === 'right') CLX.topoCtl.pan(0.15, 0); else if (a === 'up') CLX.topoCtl.pan(0, -0.15); else if (a === 'down') CLX.topoCtl.pan(0, 0.15);
+  });
+
+  /* ---- tabs/segment toggles: [data-toggle-group] buttons show panels by id ---- */
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-panel]'); if (!b) return;
+    var grp = b.closest('[data-panel-group]'); if (!grp) return;
+    $$('[data-panel]', grp).forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); var p = $(x.getAttribute('data-panel')); if (p) p.hidden = x !== b; });
+    say(b.textContent.trim() + ' view');
+  });
+
+  applyState();
+})();
+</script>
+<script>
+(function(){
+  var note=document.getElementById('result-note');
+  function show(msg,html){note.hidden=false;note.className='notice ok';note.innerHTML='<svg class="icon" aria-hidden="true"><use href="#i-check"/></svg><div class="grow">'+msg+'</div>';CLX.say(note.textContent);}
+  document.getElementById('dlg-cancel').addEventListener('close',function(e){if(this.returnValue!=='confirm')return;
+    var st=document.documentElement.getAttribute('data-state');
+    if(st==='unschedulable'){show('<strong>Canceled.</strong> The job was waiting, so it ended immediately as canceled. <span class="meta">(prototype: state shown after the snapshot confirms)</span>');}
+    else{show('<strong>Cancellation requested.</strong> The job is still running until the worker stops or the lease ends. The status changes only when the server confirms.');document.getElementById('b-cancel').setAttribute('aria-disabled','true');document.getElementById('cancel-lbl').textContent='Cancellation requested';}});
+  document.getElementById('dlg-retry').addEventListener('close',function(){if(this.returnValue!=='confirm')return;show('<strong>New job created.</strong> <a href="job-detail.html">2d7e48aa</a> is queued with its own attempt budget. This job is unchanged.');});
+  /* illustrative lease countdown: text updates each second, never announced; paused offline */
+  var cd=document.getElementById('cd'),n=24;setInterval(function(){if(document.documentElement.getAttribute('data-state')==='offline'||document.hidden)return;n=Math.max(0,n-1);if(cd)cd.textContent=n>0?n+' s':'expired, recovery pending';},1000);
+})();
+</script>
+</body>
+</html>

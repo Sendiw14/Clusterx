@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jobs: CLUSTERX console (design prototype)</title>
+<!--@tokens-->
+<!--@css-->
+<style>
+.fbar{padding:var(--space-4);display:grid;gap:var(--space-4)}
+.fbar-top{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center;justify-content:space-between}
+details.fd>summary{list-style:none;cursor:pointer;display:inline-flex;gap:var(--space-2);align-items:center;min-height:var(--control-height);padding:0 var(--space-3);border:1px solid var(--color-line-strong);border-radius:var(--radius-md);background:var(--color-white);font-weight:500}
+details.fd>summary::-webkit-details-marker{display:none}
+@media (min-width:768px){details.fd>summary{display:none}}
+.tbl td .sub{display:block;color:var(--color-ink-3);font-size:var(--text-ui-sm)}
+.copy-mini{background:none;border:0;padding:0;margin-left:2px;display:inline-grid;place-items:center;min-width:1.5rem;min-height:1.5rem;color:var(--color-ink-2);cursor:pointer;border-radius:var(--radius-sm)}
+.copy-mini:hover{background:var(--color-panel);color:var(--color-ink)}
+.lin{display:inline-flex;gap:4px;align-items:center;font-size:var(--text-ui-sm);color:var(--color-ink-2)}
+</style>
+</head>
+<body class="console" data-default-state="loaded" data-live-map="stale:stale,offline:offline,loading:reconnecting">
+<!--@sprite-->
+<a class="skip" href="#main">Skip to content</a>
+<div class="proto-bar" role="region" aria-label="Prototype notice">
+  <b>design prototype — illustrative data</b>
+  <span class="proto-states" role="group" aria-label="Show state">
+    <button type="button" data-state-set="loaded" aria-pressed="true">loaded</button>
+    <button type="button" data-state-set="loading" aria-pressed="false">loading</button>
+    <button type="button" data-state-set="empty_first" aria-pressed="false">empty (first use)</button>
+    <button type="button" data-state-set="empty_filter" aria-pressed="false">empty (filtered)</button>
+    <button type="button" data-state-set="error" aria-pressed="false">error 500</button>
+    <button type="button" data-state-set="stale" aria-pressed="false">stale</button>
+    <button type="button" data-state-set="offline" aria-pressed="false">offline</button>
+    <button type="button" data-state-set="too_many" aria-pressed="false">too many</button>
+    <button type="button" data-state-set="invalid_filter" aria-pressed="false">invalid filter</button>
+    <button type="button" data-role-set="operator" aria-pressed="true">role: operator</button>
+    <button type="button" data-role-set="viewer" aria-pressed="false">role: viewer</button>
+  </span>
+</div>
+<div class="shell">
+  <aside class="side" aria-label="Sidebar"><div class="side-in"><!--@include p-console-side.html cur=jobs--></div></aside>
+  <div>
+    <header class="top">
+      <button class="icon-btn menu-btn" type="button" data-open="#app-drawer" aria-label="Open menu" aria-haspopup="dialog"><svg class="icon icon-md" aria-hidden="true"><use href="#i-menu"/></svg></button>
+      <nav aria-label="Breadcrumb"><ol class="crumbs"><li><a href="overview.html">Console</a></li><li><span aria-current="page">Jobs</span></li></ol></nav>
+      <span class="grow"></span>
+      <!--@include p-console-tools.html-->
+    </header>
+    <div id="status-live" class="sr-only" role="status" aria-live="polite"></div>
+    <main id="main" class="main" tabindex="-1">
+      <div class="page-h">
+        <div><h1>Jobs</h1><p>Created in the <strong id="win-label">last 7 days</strong> (default window; at most 31 days).</p></div>
+        <div class="toolbar">
+          <button class="btn" type="button" id="refresh"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
+          <a class="btn btn-primary" href="#" data-nolink="/app/jobs/new" data-hide-role="viewer"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Submit job</a>
+        </div>
+      </div>
+
+      <div data-when="stale" class="notice warn" role="status" style="margin-bottom:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#g-stale"/></svg><div class="grow"><strong>This list is stale.</strong> The last snapshot is from 10:39:02 UTC (3 min ago) and the live channel is not connected. <div class="actions"><button class="btn btn-sm" type="button">Refresh</button></div></div></div>
+      <div data-when="offline" class="notice warn" role="status" style="margin-bottom:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-signal-off"/></svg><div class="grow"><strong>You're offline.</strong> Showing the last page you loaded, as of 10:42:07 UTC. Filters are disabled until you reconnect, because uncached results cannot be served truthfully.</div></div>
+      <div data-when="invalid_filter" class="notice info" role="status" style="margin-bottom:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><div class="grow"><strong>Ignored an invalid filter.</strong> The link asked for priority 12, but priority is 0 to 9. The list below uses your other filters.</div></div>
+
+      <section class="card" aria-labelledby="filters-h">
+        <div class="fbar">
+          <div class="fbar-top"><h2 id="filters-h" class="sr-only">Filters</h2>
+            <details class="fd" id="fd"><summary><svg class="icon" aria-hidden="true"><use href="#i-filter"/></svg>Filters <span class="badge" id="fcount">0</span></summary>
+              <form class="filters" id="ff" role="search" aria-label="Filter jobs" onsubmit="return false" style="margin-top:var(--space-3)">
+                <div class="field"><label for="f-status">Status</label><select id="f-status" class="select" data-filter="status" data-table="#jt" data-empty="#filter-empty"><option value="">All states</option><option value="scheduled">Scheduled</option><option value="queued">Queued</option><option value="running">Running</option><option value="retry_wait">Retry wait</option><option value="succeeded">Succeeded</option><option value="failed">Failed</option><option value="canceled">Canceled</option></select></div>
+                <div class="field"><label for="f-handler">Handler</label><select id="f-handler" class="select" data-filter="handler" data-table="#jt" data-empty="#filter-empty"><option value="">Any handler</option><option value="thumbnail">thumbnail</option><option value="ocr">ocr</option><option value="export">export</option><option value="digest">digest</option><option value="transcode">transcode</option></select></div>
+                <div class="field"><label for="f-un">Unschedulable reason</label><select id="f-un" class="select" data-filter="un" data-table="#jt" data-empty="#filter-empty"><option value="">Any</option><option value="no_capable_worker">No capable worker</option><option value="capable_workers_offline">Capable workers offline</option><option value="capable_workers_draining">Capable workers draining</option></select></div>
+                <div class="field"><label for="f-pri">Priority at least</label><select id="f-pri" class="select" data-filter="pri" data-table="#jt" data-empty="#filter-empty"><option value="">0 (any)</option><option value="5">5 or higher</option><option value="9">9 (highest)</option></select><span class="help">9 is highest</span></div>
+                <div class="field"><label for="f-win">Created</label><select id="f-win" class="select"><option>Last 7 days</option><option>Last 24 hours</option><option>Last 31 days (maximum)</option></select></div>
+              </form>
+            </details>
+            <div class="toolbar"><button class="btn btn-sm" type="button" id="preset-failed" aria-pressed="false"><svg class="icon" style="color:var(--color-danger)" aria-hidden="true"><use href="#g-failed"/></svg>Failed (dead-letter)</button></div>
+          </div>
+          <div class="chips" id="chips" aria-label="Active filters" hidden></div>
+        </div>
+      </section>
+
+      <section class="card sect" aria-labelledby="list-h" style="margin-top:var(--space-4)">
+        <h2 id="list-h" class="sr-only">Jobs list</h2>
+        <div data-when="loading" aria-busy="true"><div class="skel skel-row"></div><div class="skel skel-row"></div><div class="skel skel-row"></div><div class="skel skel-row"></div><div class="skel skel-row"></div><p class="sr-only">Loading jobs</p></div>
+        <div data-when="empty_first" class="empty"><svg class="icon icon-md" aria-hidden="true"><use href="#g-queued"/></svg><h3>No jobs yet</h3><p>Jobs appear here after something submits one. Each shows its attempts, lease and outcome.</p><a class="btn btn-primary" href="#" data-nolink="/app/jobs/new" data-hide-role="viewer">Submit a job</a><a href="#" data-nolink="/docs/quickstart">Read the quickstart</a></div>
+        <div data-when="empty_filter" class="empty"><svg class="icon icon-md" aria-hidden="true"><use href="#i-filter"/></svg><h3>No jobs match these filters</h3><p>Status Succeeded, priority 9 in the last 24 hours matches nothing. Widen the window or clear a filter.</p><div class="chips"><span class="chip">Status: Succeeded <button type="button" aria-label="Remove status filter"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button></span><span class="chip">Priority 9 <button type="button" aria-label="Remove priority filter"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button></span></div><button class="btn" type="button" data-state-set="loaded">Clear filters</button></div>
+        <div data-when="error" class="empty"><svg class="icon icon-md" style="color:var(--color-danger)" aria-hidden="true"><use href="#i-alert"/></svg><h3>Jobs could not be loaded</h3><p role="alert">The server returned an internal error. Your filters are kept.</p><p class="mono meta">request id <span id="rid">req_c19a74e3d0</span> <button type="button" class="link-btn" data-copy="#rid">Copy</button></p><div class="actions"><button class="btn btn-primary" type="button" data-state-set="loaded">Retry</button><a class="btn" href="#" data-nolink="/docs/reliability">Reliability notes</a></div></div>
+        <div data-when="too_many"><div class="notice warn" style="margin:var(--space-4)"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg><div class="grow"><strong>More than 500 jobs match.</strong> The table stops at 500 rows to stay responsive. Narrow by status, handler or time window to see the rest. There is no load-everything option.</div></div></div>
+
+        <div data-when="loaded stale offline too_many invalid_filter" class="is-stale-target">
+          <div class="tbl-wrap">
+            <table class="tbl" id="jt"><caption>Jobs, <span class="n">12</span> shown · created in the last 7 days · newest first</caption>
+              <thead><tr><th scope="col">Job</th><th scope="col">Handler</th><th scope="col">Status</th><th scope="col" class="num">Priority</th><th scope="col">Created (UTC)</th><th scope="col">Available (UTC)</th><th scope="col" class="num">Attempts</th></tr></thead>
+              <tbody id="jb"></tbody>
+            </table>
+          </div>
+          <div id="filter-empty" class="empty" hidden><h3>No jobs match these filters</h3><p>Nothing in the rows loaded matches. Clear a filter to see more.</p><button class="btn" type="button" id="clear-f">Clear filters</button></div>
+          <nav class="pager" aria-label="Pagination"><span class="meta">50 per page · sorted by creation time, newest first. Reordering happens only when you press Refresh.</span><span class="toolbar"><button class="btn btn-sm" type="button" aria-disabled="true">Previous <span class="meta">(first page)</span></button><button class="btn btn-sm" type="button" aria-disabled="true">Next <span class="meta">(no more)</span></button></span></nav>
+        </div>
+      </section>
+      <p class="meta" style="margin-top:var(--space-3)">Dead-letter is a view of jobs whose status is failed, not a separate state. Unschedulable is a reason shown on queued jobs, not a status. There are no bulk actions.</p>
+    </main>
+  </div>
+</div>
+<!--@include p-console-dialogs.html cur=jobs-->
+<!--@js-->
+<script>
+(function(){
+  var FC={retryable_exhausted:'Retries exhausted',permanent:'Permanent error',lease_expired:'Lease expired',timeout:'Timeout',canceled_by_operator:'Canceled by operator'};
+  var UN={no_capable_worker:'No capable worker',capable_workers_offline:'Capable workers offline',capable_workers_draining:'Capable workers draining'};
+  var SL={scheduled:['Scheduled','g-scheduled'],queued:['Queued','g-queued'],running:['Running','g-running'],retry_wait:['Retry wait','g-retry'],succeeded:['Succeeded','g-succeeded'],failed:['Failed','g-failed'],canceled:['Canceled','g-canceled']};
+  var R=[
+   ['3f9a21c4','thumbnail',2,'running',5,'10:41:58','10:41:58',1,3],
+   ['7a1be05d','ocr',1,'queued',5,'10:41:20','10:41:20',0,3],
+   ['41d8a7ee','transcode',1,'queued',3,'10:33:20','10:33:20',0,3,null,'no_capable_worker'],
+   ['e2a6c880','digest',1,'retry_wait',0,'10:38:40','10:43:12',1,3],
+   ['b07d5e19','export',3,'failed',0,'10:39:12','10:39:12',3,3,'retryable_exhausted',null,'2d7e48aa'],
+   ['c5f10d33','export',3,'failed',2,'10:31:44','10:31:44',1,3,'permanent'],
+   ['9c1e4f02','ocr',1,'succeeded',0,'10:36:05','10:36:05',2,3],
+   ['d4e2a1b0','thumbnail',2,'succeeded',0,'10:35:01','10:35:01',1,3],
+   ['0f3b7c91','digest',1,'scheduled',0,'10:30:10','14:00:00',0,3],
+   ['6aa90e27','ocr',1,'canceled',0,'10:28:55','10:28:55',1,3,'canceled_by_operator'],
+   ['b86c2e15','export',3,'queued',1,'10:27:31','10:27:31',0,3,null,'capable_workers_offline'],
+   ['2d7e48aa','export',3,'queued',0,'10:40:02','10:40:02',0,3,null,null,null,'b07d5e19']
+  ];
+  var tb=document.getElementById('jb');
+  R.forEach(function(r){
+    var tr=document.createElement('tr');tr.setAttribute('data-status',r[3]);tr.setAttribute('data-handler',r[1]);tr.setAttribute('data-un',r[10]||'');tr.setAttribute('data-pri',[r[4]>=5?'5':'',r[4]>=9?'9':''].join(' ').trim());
+    var s=SL[r[3]];
+    var extra=(r[9]?'<span class="sub">'+FC[r[9]]+'</span>':'')+(r[10]?' <span class="chip chip-reason"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>'+UN[r[10]]+'</span>':'');
+    var lin=(r[11]?'<span class="sub lin">retried as <a href="job-detail.html">'+r[11]+'</a></span>':'')+(r[12]?'<span class="sub lin">retry of <a href="job-detail.html#state=failed">'+r[12]+'</a></span>':'');
+    tr.innerHTML='<td data-label="Job" data-primary><a class="id" href="job-detail.html'+(r[3]==='failed'?'#state=failed':r[10]?'#state=unschedulable':'')+'">'+r[0]+'</a><button class="copy-mini" type="button" data-copy="'+r[0]+'" aria-label="Copy job ID '+r[0]+'"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg></button>'+lin+'</td>'+
+     '<td data-label="Handler">'+r[1]+'@'+r[2]+'</td><td data-label="Status"><div class="cell"><span class="status" data-s="'+r[3]+'"><svg class="icon" aria-hidden="true"><use href="#'+s[1]+'"/></svg>'+s[0]+'</span>'+extra+'</div></td>'+
+     '<td data-label="Priority" class="num">'+r[4]+'</td><td data-label="Created"><time datetime="2026-11-18T'+r[5]+'Z" data-fmt>'+r[5]+' UTC</time></td><td data-label="Available"><time datetime="2026-11-18T'+r[6]+'Z" data-fmt>'+r[6]+' UTC</time></td><td data-label="Attempts" class="num">'+r[7]+' of '+r[8]+'</td>';
+    tb.appendChild(tr);
+  });
+  /* chips and filter count */
+  var sels=['f-status','f-handler','f-un','f-pri'].map(function(i){return document.getElementById(i);});
+  var chips=document.getElementById('chips'), fcount=document.getElementById('fcount'), pf=document.getElementById('preset-failed');
+  function sync(){
+    chips.textContent='';var n=0;
+    sels.forEach(function(s){if(!s.value)return;n++;var c=document.createElement('span');c.className='chip';c.appendChild(document.createTextNode(s.previousElementSibling.textContent+': '+s.options[s.selectedIndex].text+' '));var b=document.createElement('button');b.type='button';b.setAttribute('aria-label','Remove '+s.previousElementSibling.textContent+' filter');b.innerHTML='<svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>';b.onclick=function(){s.value='';s.dispatchEvent(new Event('change'));s.focus();};c.appendChild(b);chips.appendChild(c);});
+    if(n>1){var cl=document.createElement('button');cl.type='button';cl.className='link-btn';cl.textContent='Clear all filters';cl.onclick=clearAll;chips.appendChild(cl);}
+    chips.hidden=!n;fcount.textContent=n;pf.setAttribute('aria-pressed',document.getElementById('f-status').value==='failed'?'true':'false');
+  }
+  function clearAll(){sels.forEach(function(s){s.value='';});sels[0].dispatchEvent(new Event('change'));}
+  sels.forEach(function(s){s.addEventListener('change',sync);});
+  document.getElementById('clear-f').addEventListener('click',clearAll);
+  pf.addEventListener('click',function(){var s=document.getElementById('f-status');s.value=s.value==='failed'?'':'failed';s.dispatchEvent(new Event('change'));});
+  document.getElementById('f-win').addEventListener('change',function(e){document.getElementById('win-label').textContent=e.target.value.toLowerCase();CLX.say('Window set to '+e.target.value);});
+  /* filters collapse into a disclosure below 768 px */
+  var fd=document.getElementById('fd');function fit(){fd.open=window.innerWidth>=768;}fit();window.addEventListener('resize',fit);
+  /* presets from hash */
+  function preset(){var p=(location.hash||'');if(/preset=failed/.test(p)){var s=document.getElementById('f-status');s.value='failed';s.dispatchEvent(new Event('change'));}
+    if(/state=unschedulable/.test(p)){var u=document.getElementById('f-un');}}
+  preset();window.addEventListener('hashchange',preset);
+  document.getElementById('refresh').addEventListener('click',function(){CLX.say('Refreshed. Snapshot as of 10:42:07 UTC. Order updated.');var r=tb.querySelector('tr');r.classList.remove('upd');void r.offsetWidth;r.classList.add('upd');});
+  /* offline: filters disabled with reason */
+  CLX.onState=function(st){sels.concat([document.getElementById('f-win'),pf]).forEach(function(s){if(st==='offline'){s.setAttribute('disabled','');}else{s.removeAttribute('disabled');}});};
+  CLX.onState(document.documentElement.getAttribute('data-state'));
+})();
+</script>
+</body>
+</html>
