@@ -5,4 +5,5 @@ use (
 	./apps/worker
 	./packages/proto
 	./packages/sdk-go
+	./examples/basic-jobs
 )

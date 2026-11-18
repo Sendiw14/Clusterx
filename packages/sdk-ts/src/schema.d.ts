@@ -510,7 +510,7 @@ export interface components {
         };
         Error: {
             /** @enum {string} */
-            code: "bad_request" | "invalid_cursor" | "unauthenticated" | "forbidden" | "job_not_found" | "worker_not_found" | "job_terminal" | "idempotency_conflict" | "retry_not_allowed" | "retry_already_exists" | "worker_deregistered" | "expired" | "token_not_found" | "worker_credential_not_found" | "payload_too_large" | "validation_failed" | "rate_limited" | "unavailable" | "internal";
+            code: "bad_request" | "invalid_cursor" | "unauthenticated" | "forbidden" | "job_not_found" | "worker_not_found" | "job_terminal" | "idempotency_conflict" | "retry_not_allowed" | "retry_already_exists" | "worker_deregistered" | "expired" | "token_not_found" | "worker_credential_not_found" | "payload_too_large" | "validation_failed" | "rate_limited" | "unavailable" | "internal" | "not_found_route" | "method_not_allowed";
             /** @description Human-readable, safe to display; never contains secrets or payload content. */
             message: string;
             details?: {
