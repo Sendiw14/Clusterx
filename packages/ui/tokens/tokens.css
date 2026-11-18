@@ -1,0 +1,175 @@
+/*
+ * CLUSTERX design tokens: "Precision Under Motion" (white-first).
+ * Source of truth for color, type, space, shape, motion. M2 design artifact (TASK-M2-FE-01).
+ * Names follow Tailwind CSS 4 theme namespaces (--color-*, --font-*, --text-*, --radius-*,
+ * --shadow-*, --ease-*, --breakpoint-*) so the same file can be imported into a Tailwind 4
+ * `@theme` block at M6. Adoption method is NOT YET VERIFIED against an installed Tailwind
+ * (no Tailwind in M2). See docs/design/brand-and-tokens.md.
+ *
+ * Every text/surface pair used by the design is measured by docs/design/tools/contrast.mjs,
+ * which reads THIS file. Change a color here and rerun it. Do not copy hex values elsewhere.
+ */
+:root {
+  /* ---- Surfaces ---- */
+  --color-white: #FFFFFF;        /* primary surface */
+  --color-canvas: #F7F9FC;       /* page background behind white cards */
+  --color-panel: #EEF2F7;        /* subtle panels, table header, code well on light */
+
+  /* ---- Ink (text) ---- */
+  --color-ink: #111827;          /* primary text */
+  --color-ink-2: #475569;        /* secondary text */
+  --color-ink-3: #5B6678;        /* tertiary / meta text; still >= 4.5:1 on white, canvas, panel */
+  --color-ink-disabled: #8A94A6; /* disabled controls only (WCAG exempts inactive components) */
+
+  /* ---- Lines ---- */
+  --color-line: #E2E8F0;         /* decorative dividers and card borders (never the only boundary of a control) */
+  --color-line-strong: #7C8A9E;  /* control boundaries, focus-free affordances: >= 3:1 on white/canvas/panel */
+
+  /* ---- Accent: cobalt ---- */
+  --color-accent: #2457E7;       /* primary actions, links, focus ring */
+  --color-accent-ink: #1B46C2;   /* accent text on tinted surfaces, hover state */
+  --color-accent-tint: #E8EEFD;
+
+  /* ---- Status: base = graphics/icons/bars (>= 3:1); ink = text (>= 4.5:1 on white and on its tint) ---- */
+  --color-success: #0C8A63;      /* graphical use only: icon strokes, bars, chart lines */
+  --color-success-ink: #0A7050;  /* text */
+  --color-success-tint: #E5F4EE;
+  --color-warning: #A96B08;      /* graphical use only */
+  --color-warning-ink: #8A5806;  /* text */
+  --color-warning-tint: #FBF0DC;
+  --color-danger: #C33444;       /* graphical; also passes as text on white/canvas */
+  --color-danger-ink: #A82A39;   /* text on tints and panel */
+  --color-danger-tint: #FBE8EA;
+  --color-neutral: #64748B;      /* neutral state glyphs (scheduled, queued, canceled) */
+  --color-neutral-tint: #EEF2F7;
+
+  /* ---- Focus ---- */
+  --color-focus: #2457E7;        /* 2 px ring + 2 px offset on light surfaces */
+  --color-focus-on-dark: #9DB7FF;
+
+  /* ---- Code (deliberate dark contrast block, not a theme) ---- */
+  --color-code-bg: #0F172A;
+  --color-code-ink: #E2E8F0;
+  --color-code-mute: #94A3B8;
+  --color-code-key: #9DB7FF;
+  --color-code-str: #7FD6B0;
+  --color-code-num: #F2C57C;
+  --color-code-err: #FF9AA5;
+
+  /* ---- Chart encoding (color is never the only channel: also dash + marker + direct label) ---- */
+  --chart-succeeded: var(--color-success);   /* solid line, circle marker */
+  --chart-failed: var(--color-danger);       /* dashed 6 3, square marker */
+  --chart-canceled: var(--color-neutral);    /* dotted 1 3, triangle marker */
+  --chart-single: var(--color-accent);       /* one-series charts: solid, diamond marker */
+  --chart-grid: var(--color-line);
+  --chart-axis: var(--color-ink-2);
+  --chart-stale-opacity: 0.45;               /* dimmed when S-STALE / S-OFFLINE */
+
+  /* ---- Fonts (self-host later; files not bundled in M2, see brand-and-tokens.md) ---- */
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-display: "Newsreader", ui-serif, "New York", Georgia, "Times New Roman", serif; /* public hero/page titles only */
+
+  /* ---- Fluid type scale: 320 px to 1440 px viewport, public + docs ---- */
+  --text-step--1: clamp(0.8125rem, 0.793rem + 0.1vw, 0.875rem);   /* 13 to 14 */
+  --text-step-0: clamp(1rem, 0.975rem + 0.12vw, 1.0625rem);       /* 16 to 17 */
+  --text-step-1: clamp(1.125rem, 1.07rem + 0.27vw, 1.3125rem);    /* 18 to 21 */
+  --text-step-2: clamp(1.3125rem, 1.2rem + 0.55vw, 1.75rem);      /* 21 to 28 */
+  --text-step-3: clamp(1.625rem, 1.4rem + 1.1vw, 2.5rem);         /* 26 to 40 */
+  --text-step-4: clamp(2rem, 1.6rem + 2vw, 3.5rem);               /* 32 to 56 */
+  --text-step-5: clamp(2.5rem, 1.75rem + 3.7vw, 5rem);            /* 40 to 80, hero */
+  --leading-tight: 1.04;
+  --leading-heading: 1.18;
+  --leading-body: 1.6;
+  --leading-ui: 1.4;
+  --tracking-display: -0.028em;
+  --tracking-heading: -0.014em;
+  --tracking-label: 0.08em;    /* mono uppercase micro-labels */
+
+  /* ---- Fixed type scale: console (density over fluidity) ---- */
+  --text-ui-xs: 0.75rem;   /* 12, mono micro-labels only */
+  --text-ui-sm: 0.8125rem; /* 13, table meta */
+  --text-ui-md: 0.875rem;  /* 14, console body and table cells */
+  --text-ui-lg: 1rem;      /* 16, inputs (avoids iOS zoom), form labels */
+  --text-ui-h3: 1.125rem;
+  --text-ui-h2: 1.25rem;
+  --text-ui-h1: 1.5rem;
+
+  /* ---- Spacing: 4 px base, Tailwind 4 `--spacing` convention plus named steps ---- */
+  --spacing: 0.25rem;
+  --space-1: 0.25rem;  --space-2: 0.5rem;   --space-3: 0.75rem;  --space-4: 1rem;
+  --space-5: 1.5rem;   --space-6: 2rem;     --space-7: 3rem;     --space-8: 4rem;
+  --space-9: 6rem;     --space-10: 8rem;
+  --section-gap: clamp(3rem, 2rem + 5vw, 7rem);   /* editorial vertical rhythm between public sections */
+
+  /* ---- Grid ---- */
+  --grid-cols: 12;
+  --grid-gutter: clamp(1rem, 0.6rem + 1.6vw, 2rem);
+  --grid-margin: clamp(1rem, 0.4rem + 3vw, 3rem);
+  --max-width-marketing: 75rem;   /* 1200 */
+  --max-width-console: 90rem;     /* 1440 */
+  --max-width-prose: 42.5rem;     /* about 68 characters at step-0 */
+  --sidebar-width: 15rem;
+  --topbar-height: 3.5rem;
+
+  /* ---- Breakpoints (constants for Tailwind and tests; custom properties cannot drive @media) ---- */
+  --breakpoint-xs: 30rem;   /* 480 */
+  --breakpoint-sm: 40rem;   /* 640, table to stacked cards below this */
+  --breakpoint-md: 48rem;   /* 768 */
+  --breakpoint-lg: 64rem;   /* 1024, console sidebar docks */
+  --breakpoint-2xl: 90rem;  /* 1440 */
+
+  /* ---- Shape ---- */
+  --border-width: 1px;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;        /* default card and control radius: precise, not pillowy */
+  --radius-lg: 10px;
+  --radius-full: 999px;    /* status chips only */
+
+  /* ---- Depth: understated; borders carry structure, shadows only lift overlays ---- */
+  --shadow-xs: 0 1px 0 rgb(17 24 39 / 0.04);
+  --shadow-sm: 0 1px 2px rgb(17 24 39 / 0.06);
+  --shadow-overlay: 0 12px 32px -8px rgb(17 24 39 / 0.18), 0 2px 6px rgb(17 24 39 / 0.08);
+
+  /* ---- Icons ---- */
+  --icon-stroke: 1.5;      /* SVG stroke-width at 16/20 px, round caps/joins */
+  --icon-size-sm: 1rem;
+  --icon-size-md: 1.25rem;
+  --icon-size-lg: 1.5rem;
+
+  /* ---- Density (table rows / controls) ---- */
+  --row-comfortable: 2.75rem;   /* 44 */
+  --row-compact: 2rem;          /* 32, still above the 24 px WCAG 2.5.8 minimum */
+  --control-height: 2.5rem;     /* 40 */
+  --control-height-sm: 2rem;    /* 32 */
+  --target-min: 1.5rem;         /* 24, WCAG 2.5.8 floor */
+
+  /* ---- Motion (values from route-inventory section 1.7, within MASTER section 9 budgets) ---- */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-hover: 150ms;
+  --duration-section: 260ms;
+  --duration-overlay-in: 200ms;
+  --duration-overlay-out: 160ms;
+  --duration-route: 180ms;
+  --duration-hero: 560ms;
+  --duration-live: 400ms;
+  --duration-atlas-step: 600ms;
+  --duration-topo-pulse: 1200ms;
+}
+
+/* Reduced motion: collapse every duration. Components additionally remove translate/scale, see motion-and-assets.md. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-hover: 0ms;
+    --duration-section: 0ms;
+    --duration-overlay-in: 0ms;
+    --duration-overlay-out: 0ms;
+    --duration-route: 0ms;
+    --duration-hero: 0ms;
+    --duration-live: 0ms;
+    --duration-atlas-step: 0ms;
+    --duration-topo-pulse: 0ms;
+  }
+}
