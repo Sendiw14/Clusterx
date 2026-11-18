@@ -228,7 +228,7 @@ func (s *Store) Register(ctx context.Context, credID string, p RegisterParams) (
 				return err
 			}
 			if tag.RowsAffected() != 1 {
-				return &Denial{Reason: "credential_revoked", Detail: "credential is not bound to this worker"}
+				return &Denial{Reason: "credential_mismatch", Detail: "credential is not bound to this worker"}
 			}
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM worker_capabilities WHERE worker_id = $1`, target); err != nil {
@@ -265,11 +265,11 @@ func identityDenial(ctx context.Context, q pgx.Tx, w WorkerRef) error {
 		w.WorkerID, w.IncarnationID, w.CredentialID).Scan(&credMatch, &credOK, &incOK, &status)
 	switch {
 	case isNoRows(err):
-		return &Denial{Reason: "credential_revoked", Detail: "credential is not bound to this worker"}
+		return &Denial{Reason: "credential_mismatch", Detail: "credential is not bound to this worker"}
 	case err != nil:
 		return err
 	case !credMatch:
-		return &Denial{Reason: "credential_revoked", Detail: "credential is not bound to this worker"}
+		return &Denial{Reason: "credential_mismatch", Detail: "credential is not bound to this worker"}
 	case !credOK:
 		return deny("credential_revoked")
 	case !incOK:

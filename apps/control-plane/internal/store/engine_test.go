@@ -225,7 +225,15 @@ func TestAC09_FenceDenials(t *testing.T) {
 		a := claimOne(t, s, w)
 		a.CredentialID = x.CredentialID
 		_, err := s.ReportSuccess(ctx, a, res, "")
-		wantDenied(t, err, "credential_revoked")
+		wantDenied(t, err, "credential_mismatch")
+		_, err = s.RenewLease(ctx, a)
+		wantDenied(t, err, "credential_mismatch")
+		_, err = s.Heartbeat(ctx, a.WorkerRef)
+		wantDenied(t, err, "credential_mismatch")
+		// Register naming w's worker id with x's (valid) credential.
+		_, err = s.Register(ctx, x.CredentialID, RegisterParams{WorkerID: w.WorkerID, IncarnationID: NewUUID(), Name: "x",
+			ProtocolVersion: 1, Capacity: 1, Capabilities: []Capability{{"oc", 1}}})
+		wantDenied(t, err, "credential_mismatch")
 	})
 	t.Run("stale_generation", func(t *testing.T) {
 		w := newWorker(t, s, 4, "sg")
@@ -292,6 +300,19 @@ func TestN13_RecoveryClassification(t *testing.T) {
 			JOIN job_attempts a ON a.job_id = j.id WHERE j.id = $1`, id)
 		if want := c.attempt + "/" + c.job + "/" + c.fc; got != want {
 			t.Fatalf("case %d: %s, want %s", i, got, want)
+		}
+		// CR-M5-01 #3: exhaustion is recorded as attempts_exhausted with failure_class and the attempt outcome.
+		ev := q[string](t, s, `SELECT event_type || '/' || coalesce(data->>'failure_class', '') || '/' || coalesce(data->>'attempt_state', '')
+			FROM job_events WHERE job_id = $1 ORDER BY version DESC LIMIT 1`, id)
+		wantEv := c.attempt + "//"
+		switch {
+		case c.job == "failed":
+			wantEv = "attempts_exhausted/" + c.fc + "/" + c.attempt
+		case c.job == "canceled":
+			wantEv = "canceled/canceled_by_operator/"
+		}
+		if ev != wantEv {
+			t.Fatalf("case %d: event %s, want %s", i, ev, wantEv)
 		}
 		if c.job == "retry_wait" { // clean the queue for the next case
 			exec(t, s, `UPDATE jobs SET available_at = now() + interval '1 day' WHERE id = $1`, id)

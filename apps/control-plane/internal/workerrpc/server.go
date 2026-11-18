@@ -143,6 +143,8 @@ func codeFor(reason string) codes.Code {
 	switch reason {
 	case "credential_revoked":
 		return codes.Unauthenticated
+	case "credential_mismatch":
+		return codes.PermissionDenied
 	case "unknown_handler", "result_too_large", "invalid_argument":
 		return codes.InvalidArgument
 	case "rate_limited":

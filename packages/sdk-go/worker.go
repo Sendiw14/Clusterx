@@ -23,7 +23,7 @@ import (
 const ProtocolVersion = 1
 
 // Version is reported to the coordinator as sdk_version.
-const Version = "0.4.0-m4"
+const Version = "0.5.0-m5"
 
 // Cancellation causes visible to handlers through context.Cause(ctx).
 var (
@@ -41,6 +41,10 @@ type WorkerOptions struct {
 	DrainGrace time.Duration // on shutdown: time running handlers get before their contexts are canceled
 	ClaimWait  time.Duration // long-poll per Claim (default 5 s, max 20 s)
 	Logger     *slog.Logger
+	// OnRegistered, when set, is called with the server-assigned worker id after each successful
+	// registration, e.g. to persist it so that a fast restart re-registers the same worker immediately
+	// instead of waiting for the previous incarnation's liveness to lapse (CR-M5-01 #4).
+	OnRegistered func(workerID string)
 }
 
 // Worker runs the claim / renew / report loop against the coordinator over gRPC. Delivery is
@@ -143,7 +147,18 @@ func (w *Worker) register(ctx context.Context) error {
 				w.heartbeat = 10 * time.Second
 			}
 			w.log.Info("registered", "worker_id", r.WorkerId, "incarnation_id", inc, "renew_after", w.renewAfter.String())
+			w.o.WorkerID = r.WorkerId
+			if w.o.OnRegistered != nil {
+				w.o.OnRegistered(r.WorkerId)
+			}
 			return nil
+		}
+		// A persisted worker id bound to another credential (e.g. after credential rotation): register
+		// as a new worker instead of failing forever.
+		if reasonOf(err) == "credential_mismatch" && w.o.WorkerID != "" {
+			w.log.Warn("stored worker id is not bound to this credential; registering a new worker")
+			w.o.WorkerID = ""
+			continue
 		}
 		// A live previous incarnation still holds the credential: wait for its liveness to lapse.
 		if !transient(err) && reasonOf(err) != "incarnation_mismatch" {
@@ -341,8 +356,9 @@ func (w *Worker) execute(parent context.Context, a *workerv1.ClaimedAttempt) {
 		}
 	}()
 
+	jlog, tail := newAttemptLogger(log)
 	job := Job{ID: a.JobId, AttemptID: a.AttemptId, Attempt: int(a.AttemptNumber), MaxAttempts: int(a.MaxAttempts),
-		Handler: HandlerKey{Name: a.GetHandler().GetName(), Version: int(a.GetHandler().GetVersion())}}
+		Handler: HandlerKey{Name: a.GetHandler().GetName(), Version: int(a.GetHandler().GetVersion())}, Log: jlog}
 	out, herr := w.reg.Invoke(hctx, job, a.PayloadJson)
 	close(stopRenew)
 	<-renewDone
@@ -371,7 +387,7 @@ func (w *Worker) execute(parent context.Context, a *workerv1.ClaimedAttempt) {
 	}
 	if herr == nil {
 		report(func(c context.Context) error {
-			r, err := w.c.ReportResult(c, &workerv1.ReportResultRequest{Attempt: ref, ResultJson: out})
+			r, err := w.c.ReportResult(c, &workerv1.ReportResultRequest{Attempt: ref, ResultJson: out, LogTail: tail.String()})
 			if err == nil {
 				log.Debug("reported", "outcome", r.Outcome.String(), "already_final", r.AlreadyFinal)
 			}
@@ -398,7 +414,7 @@ func (w *Worker) execute(parent context.Context, a *workerv1.ClaimedAttempt) {
 	msg := herr.Error()
 	report(func(c context.Context) error {
 		r, err := w.c.ReportFailure(c, &workerv1.ReportFailureRequest{Attempt: ref, ErrorClass: ec, ErrorCode: code,
-			ErrorMessage: msg, CanceledByHandler: canceled})
+			ErrorMessage: msg, LogTail: tail.String(), CanceledByHandler: canceled})
 		if err == nil {
 			log.Debug("reported failure", "outcome", r.Outcome.String(), "code", code)
 		}

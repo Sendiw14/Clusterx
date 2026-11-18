@@ -1141,6 +1141,7 @@ components:
         retried_from_job_id: { type: string, format: uuid }
         retried_as_job_id: { type: string, format: uuid }
         reason: { type: string, enum: [drain_deadline, incarnation_superseded, credential_revoked, deregistered] }
+        attempt_state: { type: string, enum: [lease_expired, deadline_exceeded], description: 'On attempts_exhausted from lease/deadline recovery: the outcome of the last attempt (draft.6, CR-M5-01).' }
 
     WorkerStatus:
       type: string

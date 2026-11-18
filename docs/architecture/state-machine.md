@@ -52,7 +52,7 @@ rows `FOR SHARE`, then the `jobs` row `FOR UPDATE`, then the CAS. A worker mutat
 After a 0-row CAS the denial code is chosen in this order: (terminal job) `stale_attempt` if the attempt is not
 the caller's, `credential_revoked`, idempotent reply or `result_mismatch` or `job_terminal`; (non-terminal)
 `stale_attempt`, `deadline_exceeded`, `lease_expired`, `incarnation_mismatch`, `worker_deregistered`,
-`credential_revoked`. Note `lease_expires_at <= hard_deadline_at` is a CHECK, so the deadline clause is
+`credential_mismatch` (worker bound to another credential), `credential_revoked`. Note `lease_expires_at <= hard_deadline_at` is a CHECK, so the deadline clause is
 defense in depth (it cannot be the only failing clause).
 
 ## Event × state table
@@ -70,7 +70,7 @@ REST codes are `error.code` values (HTTP status in brackets); worker codes are t
 | E5 ReportSuccess (worker) | ✗ `stale_attempt` | ✗ `stale_attempt` | if F ok and `cancel_requested_at IS NULL` → `succeeded`, reply **OK `OUTCOME_SUCCEEDED`**; if F ok and cancel requested → `canceled` (success not committed; reply **OK `OUTCOME_CANCELED`**; event `data.worker_reported="success"`; ADR-0002); else ✗ F code | ✗ `stale_attempt` | same attempt + worker + incarnation + same result hash: = OK `OUTCOME_SUCCEEDED` `already_final=true`; same attempt, different result: ✗ `result_mismatch`; other caller: ✗ `stale_attempt`; other attempt of the caller: ✗ `job_terminal` | ✗ `job_terminal` (`stale_attempt` if not the caller's attempt) | attempt finalized `canceled` by this caller's report: = OK `OUTCOME_CANCELED` `already_final=true`; otherwise ✗ `job_terminal` (`stale_attempt` if not the caller's attempt) |
 | E6 ReportFailure retryable (worker) | ✗ `stale_attempt` | ✗ `stale_attempt` | if F ok: cancel requested → `canceled`; else `attempts_used < max_attempts` → `retry_wait` (`available_at = now()+backoff`); else → `failed` (`attempts_exhausted`) | ✗ `stale_attempt` | ✗ `job_terminal` | duplicate same attempt: =; else ✗ `job_terminal` | ✗ `job_terminal` |
 | E7 ReportFailure permanent (worker) | ✗ `stale_attempt` | ✗ `stale_attempt` | if F ok: cancel requested → `canceled`; else → `failed` | ✗ `stale_attempt` | ✗ `job_terminal` | duplicate: =; else ✗ `job_terminal` | ✗ `job_terminal` |
-| E8 Lease expiry / deadline (scheduler) | — | — | if `lease_expires_at <= now()` or `hard_deadline_at <= now()`: attempt → `lease_expired`/`deadline_exceeded`; job → `canceled` if cancel requested, else `retry_wait` if `attempts_used < max_attempts`, else `failed` | — | — | — | — |
+| E8 Lease expiry / deadline (scheduler) | — | — | if `lease_expires_at <= now()` or `hard_deadline_at <= now()`: attempt → `lease_expired`/`deadline_exceeded`; job → `canceled` if cancel requested (event `canceled`), else `retry_wait` if `attempts_used < max_attempts` (event `lease_expired`/`deadline_exceeded`), else `failed` (event **`attempts_exhausted`**, `data.failure_class` `lease_expired`/`timeout`, `data.attempt_state` = the attempt outcome; CR-M5-01) | — | — | — | — |
 | E9 Cancel (operator) | → `canceled` [200] | → `canceled` [200] | sets `cancel_requested_at` and caps `lease_expires_at` at now()+cancel_grace [202]; if already set = [202] | → `canceled` [200] | ✗ `job_terminal` [409] | ✗ `job_terminal` [409] | = [200] (already canceled) |
 | E10 PollCancellation (worker) | ✗ `stale_attempt` | ✗ `stale_attempt` | returns `cancel_requested` bool + `lease_expires_at` if F ok; else ✗ F code | ✗ `stale_attempt` | returns `job_terminal` | returns `job_terminal` | returns `cancel_requested=true, job_terminal` |
 | E11 Manual retry (operator) | ✗ `retry_not_allowed` [409] | ✗ `retry_not_allowed` [409] | ✗ `retry_not_allowed` [409] | ✗ `retry_not_allowed` [409] | ✗ `retry_not_allowed` [409] | creates **new** job (`queued`, `retried_from_job_id`, fresh attempt budget) [201]; old row untouched; same Idempotency-Key = [200]; child already exists with different/no key ✗ `retry_already_exists` [409] | ✗ `retry_not_allowed` [409] |
@@ -130,7 +130,9 @@ and `apps/control-plane/poc` `TestAC06*` (CR-M4-01 NF-06).
 | `incarnation_mismatch` | FAILED_PRECONDITION | process superseded; re-register |
 | `worker_draining` | FAILED_PRECONDITION | no new claims; renewals denied after drain deadline |
 | `worker_deregistered` | FAILED_PRECONDITION | re-register |
-| `credential_revoked` | UNAUTHENTICATED | credential revoked/expired; exit |
+| `credential_revoked` | UNAUTHENTICATED | credential unknown, malformed, revoked or expired; exit |
+| `credential_mismatch` | PERMISSION_DENIED | valid credential, but the named worker is bound to another credential (or does not exist); the SDK drops a persisted `worker_id` and registers a new worker once, else exit (CR-M5-01) |
+| `invalid_argument` | INVALID_ARGUMENT | malformed request (missing identity, bad UUID, max_jobs out of range, invalid result JSON, reused incarnation_id); fix the client (CR-M5-01) |
 | `unknown_handler` | INVALID_ARGUMENT | not in server registry |
 | `result_too_large` | INVALID_ARGUMENT | result > 128 KiB; report a failure instead |
 | `protocol_unsupported` | FAILED_PRECONDITION | upgrade worker |

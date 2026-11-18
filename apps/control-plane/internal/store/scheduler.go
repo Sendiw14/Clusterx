@@ -68,7 +68,10 @@ func (s *Store) RecoverExpired(ctx context.Context, limit int) (int, error) {
 				backoff = s.Timing.Backoff.Delay(used)
 				data["backoff_ms"] = backoff.Milliseconds()
 			default:
-				to, errCode = "failed", "attempts_exhausted"
+				// Budget exhausted: the attempt outcome stays lease_expired / deadline_exceeded (attempt row and
+				// data.attempt_state); the job event is attempts_exhausted with the failure_class (CR-M5-01 #3).
+				to, errCode, event = "failed", "attempts_exhausted", "attempts_exhausted"
+				data["attempt_state"] = attemptState
 				failureClass = "lease_expired"
 				if deadline {
 					failureClass = "timeout"

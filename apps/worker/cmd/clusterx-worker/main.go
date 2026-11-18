@@ -62,8 +62,21 @@ func run() error {
 		return err
 	}
 	host, _ := os.Hostname()
-	w := sdk.NewWorker(conn, &reg, sdk.WorkerOptions{Name: cfg.Name, Capacity: cfg.Capacity, Hostname: host,
-		DrainGrace: cfg.ShutdownTimeout, Logger: log})
+	opts := sdk.WorkerOptions{Name: cfg.Name, Capacity: cfg.Capacity, Hostname: host, DrainGrace: cfg.ShutdownTimeout,
+		Logger: log, WorkerID: cfg.WorkerID}
+	if cfg.WorkerIDFile != "" {
+		// CR-M5-01 #4: a restarted process re-registers the same worker immediately (new incarnation fences
+		// the old one) instead of waiting for the previous incarnation's liveness timeout.
+		if opts.WorkerID, err = config.ReadWorkerID(cfg.WorkerIDFile); err != nil {
+			return err
+		}
+		opts.OnRegistered = func(id string) {
+			if err := config.WriteWorkerID(cfg.WorkerIDFile, id); err != nil {
+				log.Warn("could not persist worker id; a fast restart waits for the liveness timeout", "err", err)
+			}
+		}
+	}
+	w := sdk.NewWorker(conn, &reg, opts)
 	err = w.Run(ctx)
 	log.Info("worker stopped", "err", err)
 	return err

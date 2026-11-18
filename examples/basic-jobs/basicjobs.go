@@ -75,6 +75,9 @@ func FailNTimes(_ context.Context, job sdk.Job, in FailIn) (FailOut, error) {
 	if in.N < 0 || in.N > MaxFailN {
 		return FailOut{}, sdk.Permanent("invalid_payload", fmt.Errorf("n must be 0..%d", MaxFailN))
 	}
+	if job.Log != nil {
+		job.Log.Info("fail_n_times attempt", "attempt", job.Attempt, "planned_failures", in.N)
+	}
 	if job.Attempt <= in.N {
 		err := fmt.Errorf("planned failure %d of %d", job.Attempt, in.N)
 		if in.Permanent {
