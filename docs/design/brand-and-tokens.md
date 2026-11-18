@@ -197,7 +197,7 @@ Fluid between a 320 px and a 1440 px viewport using `clamp()`. Body never drops 
 
 ### 4.3 Console scale (fixed)
 
-Dense tools need stable sizes: 12 px (mono micro-labels only), 13 px (table meta), 14 px (body and cells), 16 px (inputs, which also prevents iOS zoom-on-focus), then 18, 20 and 24 px for headings. Tabular figures (`font-variant-numeric: tabular-nums`) on every numeric column and KPI.
+Dense tools need stable sizes: 12 px (mono micro-labels only), 13 px (table meta), 14 px (body and cells), 16 px (inputs, which also prevents iOS zoom-on-focus), then 18 px (section and card titles, 1.29 times body), 20 px (empty-state titles), and 28 px (page title, 2.0 times body); KPI values are 32 px. Type-hierarchy check (computed styles, `docs/design/evidence/type-hierarchy.txt`): page title to body is at least 1.66 times on every prototype at 390 and 1440 px (home hero 4.71 times at 1440), and section heading to body is at least 1.29 times. An earlier build had console section headings at 16 px (1.14 times body, weight only); that was real and is fixed. Tabular figures (`font-variant-numeric: tabular-nums`) on every numeric column and KPI.
 
 ## 5. Grid, spacing, shape, depth
 

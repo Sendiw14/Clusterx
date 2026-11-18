@@ -91,9 +91,9 @@
   --text-ui-sm: 0.8125rem; /* 13, table meta */
   --text-ui-md: 0.875rem;  /* 14, console body and table cells */
   --text-ui-lg: 1rem;      /* 16, inputs (avoids iOS zoom), form labels */
-  --text-ui-h3: 1.125rem;
+  --text-ui-h3: 1.125rem; /* 18: section and card titles, 1.29x body */
   --text-ui-h2: 1.25rem;
-  --text-ui-h1: 1.5rem;
+  --text-ui-h1: 1.75rem;  /* 28: console page title, 2.0x body */
 
   /* ---- Spacing: 4 px base, Tailwind 4 `--spacing` convention plus named steps ---- */
   --spacing: 0.25rem;
