@@ -97,6 +97,12 @@ func (s *Store) CreateWorkerCredential(ctx context.Context, name string, expires
 // already hold the share lock commit first; every later mutation is denied (ADR-0003 revocation bound).
 func (s *Store) RevokeWorkerCredential(ctx context.Context, id string) error {
 	return s.inTx(ctx, false, func(tx pgx.Tx) error {
+		// Lock first, then stamp: an UPDATE that waited behind a share lock whose holder did not modify the
+		// row keeps the clock value computed before the wait (no EPQ re-projection), so revoked_at could
+		// precede the terminal_at of a report that committed first (NF-02 class).
+		if _, err := tx.Exec(ctx, `SELECT 1 FROM worker_credentials WHERE id = $1 FOR UPDATE`, id); err != nil {
+			return err
+		}
 		tag, err := tx.Exec(ctx, `UPDATE worker_credentials SET revoked_at = clock_timestamp() WHERE id = $1 AND revoked_at IS NULL`, id)
 		if err != nil {
 			return err
@@ -313,6 +319,9 @@ func (s *Store) Drain(ctx context.Context, w WorkerRef, grace time.Duration) (ti
 		if d := identityDenial(ctx, tx, w); d != nil {
 			return d
 		}
+		if _, err := tx.Exec(ctx, `SELECT 1 FROM workers WHERE id = $1 FOR UPDATE`, w.WorkerID); err != nil {
+			return err // lock before stamping (see RevokeWorkerCredential)
+		}
 		err := tx.QueryRow(ctx, `UPDATE workers SET status = 'draining', drain_requested_at = clock_timestamp(),
 				drain_deadline_at = clock_timestamp() + $3::interval, version = version + 1
 			WHERE id = $1 AND current_incarnation_id = $2 AND status = 'active' RETURNING drain_deadline_at`,
@@ -334,6 +343,9 @@ func (s *Store) Deregister(ctx context.Context, w WorkerRef) (int, error) {
 	err := s.inTx(ctx, false, func(tx pgx.Tx) error {
 		if d := identityDenial(ctx, tx, w); d != nil && !IsDenial(d, "worker_deregistered") {
 			return d
+		}
+		if _, err := tx.Exec(ctx, `SELECT 1 FROM workers WHERE id = $1 FOR UPDATE`, w.WorkerID); err != nil {
+			return err // lock before stamping (see RevokeWorkerCredential)
 		}
 		if _, err := tx.Exec(ctx, `UPDATE workers SET status = 'deregistered', deregistered_at = clock_timestamp(), version = version + 1
 			WHERE id = $1 AND current_incarnation_id = $2 AND status <> 'deregistered'`, w.WorkerID, w.IncarnationID); err != nil {

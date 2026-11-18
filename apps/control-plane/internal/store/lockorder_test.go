@@ -130,3 +130,75 @@ func TestNF01_RealDeadlockIsRetried(t *testing.T) {
 		t.Fatalf("deadlock not retried: %v / %v", errs[0], errs[1])
 	}
 }
+
+// ADR-0003 revocation bound: a revocation that starts while a report holds the credential share lock
+// waits for the report, so a report that commits is never ordered after a committed revocation.
+func TestRevocationSerializesWithInFlightReport(t *testing.T) {
+	s := newTestStore(t, 30*time.Second)
+	w := newWorker(t, s, 4, "h")
+	admit(t, s, "h")
+	a := claimOne(t, s, w)
+	blocker, err := s.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := blocker.Exec(ctx, `SELECT 1 FROM jobs WHERE id = $1 FOR UPDATE`, a.JobID); err != nil {
+		t.Fatal(err)
+	}
+	report := make(chan error, 1)
+	go func() {
+		rep, err := s.ReportSuccess(ctx, a, json.RawMessage(`{}`), "")
+		if err == nil && rep.Outcome != OutcomeSucceeded {
+			err = errors.New(string(rep.Outcome))
+		}
+		report <- err
+	}()
+	time.Sleep(150 * time.Millisecond) // report now holds credential+worker share locks, waits on the job
+	revoke := make(chan error, 1)
+	go func() { revoke <- s.RevokeWorkerCredential(ctx, w.CredentialID) }()
+	time.Sleep(150 * time.Millisecond)
+	select {
+	case err := <-revoke:
+		_ = blocker.Rollback(ctx)
+		<-report
+		t.Fatalf("revocation did not wait for the in-flight report: %v", err)
+	default:
+	}
+	if err := blocker.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-report; err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	if err := <-revoke; err != nil {
+		t.Fatal(err)
+	}
+	if ok := q[bool](t, s, `SELECT c.revoked_at >= j.terminal_at FROM jobs j, worker_credentials c WHERE j.id = $1 AND c.id = $2`, a.JobID, w.CredentialID); !ok {
+		t.Fatal("revocation ordered before the accepted report")
+	}
+}
+
+// ADR-0003 deadline bound: a report that waited for the job row lock is judged by the clock after the
+// wait, even when the lock holder did not modify the row (no EPQ re-check). Kills "drop job FOR UPDATE".
+func TestLeaseJudgedAfterLockWait(t *testing.T) {
+	s := newTestStore(t, 300*time.Millisecond) // the wait must stay under lock_timeout (1 s)
+	w := newWorker(t, s, 4, "h")
+	admit(t, s, "h")
+	a := claimOne(t, s, w)
+	blocker, err := s.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := blocker.Exec(ctx, `SELECT 1 FROM jobs WHERE id = $1 FOR UPDATE`, a.JobID); err != nil {
+		t.Fatal(err)
+	}
+	report := make(chan error, 1)
+	go func() { _, err := s.ReportSuccess(ctx, a, json.RawMessage(`{}`), ""); report <- err }()
+	time.Sleep(600 * time.Millisecond) // lease (300 ms) expires while the report waits
+	if err := blocker.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-report; !IsDenial(err, "lease_expired") {
+		t.Fatalf("report after lease expiry = %v, want lease_expired", err)
+	}
+}
