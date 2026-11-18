@@ -169,3 +169,13 @@ func (s *Store) RequestCancel(ctx context.Context, jobID, actor string) (CancelR
 	})
 	return res, err
 }
+
+// CleanupIdempotency deletes up to limit expired idempotency rows (ADR-0004, 24 h retention).
+func (s *Store) CleanupIdempotency(ctx context.Context, limit int) (int64, error) {
+	tag, err := s.Pool.Exec(ctx, `DELETE FROM submission_idempotency WHERE ctid IN (
+		SELECT ctid FROM submission_idempotency WHERE expires_at <= now() LIMIT $1 FOR UPDATE SKIP LOCKED)`, limit)
+	if err != nil {
+		return 0, classifyDBError(err)
+	}
+	return tag.RowsAffected(), nil
+}

@@ -30,8 +30,10 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/Sendiw14/Clusterx/apps/control-plane/internal/api"
+	"github.com/Sendiw14/Clusterx/apps/control-plane/internal/catalog"
 	"github.com/Sendiw14/Clusterx/apps/control-plane/internal/config"
 	"github.com/Sendiw14/Clusterx/apps/control-plane/internal/migrate"
+	"github.com/Sendiw14/Clusterx/apps/control-plane/internal/scheduler"
 	"github.com/Sendiw14/Clusterx/apps/control-plane/internal/store"
 	"github.com/Sendiw14/Clusterx/apps/control-plane/internal/workerrpc"
 	"github.com/Sendiw14/Clusterx/apps/control-plane/migrations"
@@ -120,7 +122,12 @@ func serve(ctx context.Context, cfg config.Config, migs []migrate.Migration, log
 	if grpcTLS != nil {
 		creds = credentials.NewTLS(grpcTLS)
 	}
-	grpcSrv := workerrpc.NewServer(creds)
+	cat, err := catalog.Default()
+	if err != nil {
+		return err
+	}
+	st := store.New(pool, storeTiming(cfg), cat)
+	grpcSrv := workerrpc.NewServer(st, log, workerrpc.Options{Creds: creds})
 
 	// Bind every listener before reporting started, so a port clash fails start-up.
 	apiLn, err := net.Listen("tcp", cfg.HTTPAddr)
@@ -139,6 +146,10 @@ func serve(ctx context.Context, cfg config.Config, migs []migrate.Migration, log
 		return err
 	}
 
+	schedCtx, stopSched := context.WithCancel(ctx)
+	defer stopSched()
+	go scheduler.Run(schedCtx, st, cfg.Timing.SchedulerTick, log)
+
 	errc := make(chan error, 3)
 	go func() { errc <- serveHTTP(apiSrv, apiLn) }()
 	go func() { errc <- serveHTTP(metricsSrv, metricsLn) }()
@@ -153,8 +164,21 @@ func serve(ctx context.Context, cfg config.Config, migs []migrate.Migration, log
 	case runErr = <-errc:
 		log.Error("listener failed", "err", runErr)
 	}
+	stopSched()
 	shutdown(cfg.ShutdownTimeout, log, pool, grpcSrv, apiSrv, metricsSrv)
 	return runErr
+}
+
+// storeTiming maps validated configuration to store durations (ADR-0003).
+func storeTiming(cfg config.Config) store.Timing {
+	t := store.DefaultTiming()
+	t.LeaseTTL = cfg.Timing.LeaseTTL
+	t.CancelGrace = cfg.Timing.CancelGrace
+	t.DrainGraceMax = cfg.Timing.DrainGrace
+	t.HeartbeatInterval = cfg.Timing.HeartbeatInterval
+	t.LivenessTimeout = cfg.Timing.LivenessTimeout
+	t.Backoff = store.Backoff{Base: cfg.Timing.BackoffBase, Cap: cfg.Timing.BackoffCap}
+	return t
 }
 
 func newHTTPServer(addr string, h http.Handler, tlsCfg *tls.Config, log *slog.Logger) *http.Server {

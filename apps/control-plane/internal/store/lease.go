@@ -3,12 +3,14 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // ClaimedAttempt is everything a worker needs to execute and fence one attempt.
@@ -276,6 +278,10 @@ func (s *Store) ReportSuccess(ctx context.Context, r AttemptRef, result json.Raw
 		return err
 	})
 	if err != nil {
+		var pe *pgconn.PgError
+		if errors.As(err, &pe) && pe.Code == "23514" && pe.ConstraintName == "jobs_result_check" {
+			return Reply{}, deny("result_too_large") // jsonb text form exceeds 128 KiB
+		}
 		return Reply{}, err
 	}
 	return rep, denial
