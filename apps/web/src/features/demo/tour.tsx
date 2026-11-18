@@ -30,7 +30,7 @@ export function DemoTour() {
     <DataProviderContext provider={provider}>
       <div className="toolbar" style={{ justifyContent: "space-between" }}>
         <Segmented label="Demo screen" value={screen} onChange={(v) => { setScreen(v as Screen); setJobId(null); }} options={[
-          { value: "overview", label: "Overview" }, { value: "jobs", label: "Jobs" }, { value: "workers", label: "Workers" }, { value: "config", label: "Configuration" },
+          { value: "overview", label: "Overview" }, { value: "jobs", label: "Jobs" }, { value: "workers", label: "Workers" }, { value: "config", label: "Config" },
         ]} />
         <fieldset className="seg-fieldset" style={{ border: 0, padding: 0, margin: 0 }}>
           <legend className="sr-only">View as</legend>
@@ -47,7 +47,7 @@ export function DemoTour() {
         <Notice variant="warning" icon="i-lock" lead="Viewing as a read-only viewer." role="status">Payloads, results, error text and log tails are removed from the data, not just hidden. This is what the console shows a viewer.</Notice>
       ) : null}
 
-      <section aria-labelledby="demo-screen-h" style={{ display: "grid", gap: "var(--space-4)" }}>
+      <section aria-labelledby="demo-screen-h" style={{ display: "grid", gap: "var(--space-4)", gridTemplateColumns: "minmax(0, 1fr)" }}>
         {screen === "overview" ? (
           <>
             <h2 id="demo-screen-h" className="sr-only">Demo: Overview</h2>

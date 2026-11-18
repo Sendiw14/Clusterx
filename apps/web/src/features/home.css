@@ -107,3 +107,6 @@
   .atlas-note { margin-left: auto; }
   @media (max-width: 479px) { .atlas-note { margin-left: 0; } }
 }
+@layer components {
+  .stack-grid { display: grid; gap: var(--space-6); grid-template-columns: minmax(0, 1fr); }
+}

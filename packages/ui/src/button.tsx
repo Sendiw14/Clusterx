@@ -75,6 +75,7 @@ export function ButtonLink({ href, variant, size, icon, external, children, clas
         {icon ? <Icon name={icon} /> : null}
         {children}
         <Icon name="i-ext" />
+        {" "}
         <span className="sr-only">(external)</span>
       </a>
     );

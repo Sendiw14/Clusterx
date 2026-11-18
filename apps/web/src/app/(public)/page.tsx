@@ -5,7 +5,7 @@ import { Atlas } from "@/features/atlas";
 import "@/features/home.css";
 
 export const metadata: Metadata = {
-  title: { absolute: "CLUSTERX: jobs that outlive their workers" },
+  title: "Jobs that outlive their workers",
   description: "CLUSTERX runs every job at least once. Leases and fencing keep a returning worker from overwriting what happened while it was gone.",
 };
 
@@ -36,7 +36,7 @@ export default function HomePage() {
           </div>
           <Reveal as="figure" className="plate" style={{ margin: 0 }}>
             <div className="plate-h"><span>Fig. 1 · one job, two workers</span><span>Illustrative, scripted</span></div>
-            <div className="tbl-wrap">
+            <div className="tbl-wrap" role="region" tabIndex={0} aria-label="Scripted example ledger">
               <table className="ledger">
                 <caption className="sr-only">Ledger of the scripted example: time, event, resulting status</caption>
                 <thead><tr><th scope="col">Time</th><th scope="col">Event</th><th scope="col">Status</th></tr></thead>
@@ -107,7 +107,7 @@ export default function HomePage() {
           <Reveal as="figure" className="preview" style={{ margin: 0 }}>
             <div className="preview-bar"><span>/app/jobs</span><span>illustrative sample, not a capture of shipped software</span></div>
             <div className="preview-in">
-              <div className="card tbl-wrap">
+              <div className="card tbl-wrap" role="region" tabIndex={0} aria-label="Sample jobs table">
                 <table className="tbl">
                   <caption>Jobs, 4 shown (sample)</caption>
                   <thead><tr><th scope="col">Job</th><th scope="col">Handler</th><th scope="col">Status</th><th scope="col">Attempts</th></tr></thead>
@@ -126,7 +126,7 @@ export default function HomePage() {
       </section>
 
       <section className="section alt" aria-labelledby="qs-h">
-        <div className="wrap" style={{ display: "grid", gap: "var(--space-6)" }}>
+        <div className="wrap stack-grid">
           <Reveal><p className="eyebrow">Quickstart</p><h2 id="qs-h" className="h2" style={{ marginTop: "var(--space-4)" }}>Three workers on your machine.</h2></Reveal>
           <Reveal style={{ maxWidth: "48rem" }}>
             <Notice variant="warning" lead="Not yet verified from a clean checkout." className="qs-notice">These commands are an example of the intended flow. The verification stamp appears here only after the clean-checkout run has passed.</Notice>
@@ -136,7 +136,7 @@ export default function HomePage() {
       </section>
 
       <section className="section" aria-labelledby="faq-h">
-        <div className="wrap" style={{ display: "grid", gap: "var(--space-6)" }}>
+        <div className="wrap stack-grid">
           <Reveal><p className="eyebrow">Limitations and questions</p><h2 id="faq-h" className="h2" style={{ marginTop: "var(--space-4)" }}>What it does not promise.</h2></Reveal>
           <Reveal className="faq" style={{ maxWidth: "48rem" }}>
             <details><summary>Is processing exactly-once?</summary><p>No. Execution is at-least-once. If a worker loses its lease while a handler is still running, the handler may run again on another worker. The database only records a result from the current attempt, so make external side effects idempotent.</p></details>

@@ -373,3 +373,9 @@ html[data-rm="1"] .hero-in>*,html[data-rm="1"] dialog[open],html[data-rm="1"] .s
 .seg [role="radio"][aria-checked="true"]{background:var(--color-ink);color:var(--color-white)}
 .seg [role="radio"]{border:0;background:transparent;min-height:var(--control-height-sm);padding:0 var(--space-3);cursor:pointer;display:inline-flex;gap:6px;align-items:center;font-size:var(--text-ui-sm);color:var(--color-ink-2)}
 .seg [role="radio"]+[role="radio"]{border-left:1px solid var(--color-line-strong)}
+.cmd-btn::after{content:"Ctrl K";font-family:var(--font-mono);font-size:var(--text-ui-xs);border:1px solid var(--color-line);border-radius:var(--radius-xs);padding:0 4px;background:var(--color-panel)}
+.fbar{padding:var(--space-4);display:grid;gap:var(--space-4)}
+.filters{align-items:flex-start}
+.filters .field>.btn{width:100%}
+.live{white-space:nowrap}
+.pub-f a .icon{display:inline-block;vertical-align:-0.15em}

@@ -88,7 +88,7 @@ export function PublicFooter() {
             <ul>
               <li><Link href="/docs/security">Security</Link></li>
               <li>
-                <a href={GITHUB_URL} rel="noopener noreferrer">GitHub <Icon name="i-ext" /><span className="sr-only">(external)</span></a>
+                <a href={GITHUB_URL} rel="noopener noreferrer">GitHub <Icon name="i-ext" /><span className="sr-only"> (external)</span></a>
               </li>
               <li><span>License: Apache-2.0</span></li>
             </ul>

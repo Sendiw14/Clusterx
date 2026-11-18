@@ -23,17 +23,22 @@ function failure(status: number, body: unknown, response?: Response): ApiFailure
  */
 export class LiveProvider implements DataProvider {
   readonly kind = "live" as const;
-  private client = createClusterxClient("/bff", {
-    fetch: async (req) => {
-      const ctl = new AbortController();
-      const t = setTimeout(() => ctl.abort(), TIMEOUT_MS);
-      try {
-        return await fetch(new Request(req, { signal: ctl.signal, credentials: "same-origin" }));
-      } finally {
-        clearTimeout(t);
-      }
-    },
-  });
+  private client: ReturnType<typeof createClusterxClient>;
+
+  /** `baseUrl` is the BFF origin path; tests pass an absolute URL because Node cannot resolve relative Requests. */
+  constructor(baseUrl = "/bff") {
+    this.client = createClusterxClient(baseUrl, {
+      fetch: async (req) => {
+        const ctl = new AbortController();
+        const t = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+        try {
+          return await fetch(new Request(req, { signal: ctl.signal, credentials: "same-origin" }));
+        } finally {
+          clearTimeout(t);
+        }
+      },
+    });
+  }
 
   private async run<T>(call: () => Promise<{ data?: T; error?: unknown; response: Response }>): Promise<Result<T>> {
     try {
@@ -41,7 +46,7 @@ export class LiveProvider implements DataProvider {
       if (response.ok && data !== undefined) return { ok: true, data, requestId: response.headers.get("X-Request-Id") ?? undefined };
       return { ok: false, error: failure(response.status, error, response) };
     } catch (e) {
-      const aborted = e instanceof DOMException && e.name === "AbortError";
+      const aborted = (e as { name?: string } | null)?.name === "AbortError";
       return { ok: false, error: { code: aborted ? "timeout" : "network", status: 0 } };
     }
   }

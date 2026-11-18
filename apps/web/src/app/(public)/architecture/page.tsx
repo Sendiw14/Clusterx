@@ -43,7 +43,7 @@ export default function ArchitecturePage() {
 
         <section aria-labelledby="fail-h" style={{ marginTop: "var(--space-8)" }}>
           <h2 id="fail-h" className="h2">Failure domains</h2>
-          <div className="card tbl-wrap" style={{ marginTop: "var(--space-4)" }}>
+          <div className="card tbl-wrap" role="region" tabIndex={0} aria-label="Failure domains table" style={{ marginTop: "var(--space-4)" }}>
             <table className="tbl">
               <caption>What fails, and what the system promises when it does</caption>
               <thead><tr><th scope="col">Failure</th><th scope="col">What happens</th></tr></thead>

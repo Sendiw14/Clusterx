@@ -69,7 +69,7 @@ export function JobDetailView({ id, workerLink }: { id: string; workerLink?: (id
   return (
     <>
       <Card>
-        <div className="card-h"><h2>Job</h2>{job.state === "ok" ? <CopyButton text={job.data.id} label="Copy ID" ariaLabel="Copy job ID" /> : null}</div>
+        <div className="card-h"><h2>Job</h2>{job.state === "ok" ? <CopyButton text={job.data.id} label="Copy ID" ariaLabel="Copy ID of this job" /> : null}</div>
         <div className="card-pad">
           <Load res={job} rows={3} label="Loading job" errorHeading={job.state === "error" && job.error.code === "job_not_found" ? "No job with that ID" : "The job could not be loaded"}>
             {(j: Job) => (

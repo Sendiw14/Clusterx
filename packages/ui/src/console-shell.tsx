@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Button } from "./button";
 import { Dialog } from "./dialog";
 import { Icon } from "./icon";
@@ -97,6 +97,10 @@ const ID_RE = /^[0-9a-f]{8}(-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?$
 function CommandDialog({ open, onClose, role, lookup }: { open: boolean; onClose: () => void; role: Role; lookup?: (id: string) => Promise<LookupResult> }) {
   const router = useRouter();
   const inputId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
   const [q, setQ] = useState("");
   const [msg, setMsg] = useState("");
   const pages = [...visible(MAIN, role), ...visible(SETTINGS, role)].filter((p) => p.label.toLowerCase().includes(q.trim().toLowerCase()));
@@ -117,7 +121,7 @@ function CommandDialog({ open, onClose, role, lookup }: { open: boolean; onClose
     <Dialog open={open} onClose={onClose} title="Jump to" variant="cmd" hideTitle>
       <div className="field">
         <label htmlFor={inputId}>Jump to a page, or enter an exact job or worker ID</label>
-        <input id={inputId} className="input" type="text" autoComplete="off" spellCheck={false} placeholder="e.g. 3f9a21c4" value={q} onChange={(e) => { setQ(e.target.value); setMsg(""); }}
+        <input ref={inputRef} id={inputId} className="input" type="text" autoComplete="off" spellCheck={false} placeholder="e.g. 3f9a21c4" value={q} onChange={(e) => { setQ(e.target.value); setMsg(""); }}
           onKeyDown={(e) => { if (e.key === "Enter" && isId) { e.preventDefault(); void find(); } }} />
       </div>
       <ul className="nav" style={{ listStyle: "none" }}>
@@ -180,8 +184,8 @@ export function ConsoleShell({ role, login, live, liveDetail, banner, lookup, on
             <Breadcrumbs pathname={pathname} />
             <span className="grow" />
             {role === "viewer" ? <span className="role-banner"><Icon name="i-lock" />Read-only access (viewer)</span> : null}
-            <button type="button" className="cmd-btn" aria-label="Jump to a job or worker by ID" aria-haspopup="dialog" onClick={() => setCmd(true)}>
-              <Icon name="i-search" /><span className="long">Jump to ID</span><kbd>Ctrl K</kbd>
+            <button type="button" className="cmd-btn" aria-label="Jump to ID: open a job or worker by exact ID" aria-keyshortcuts="Control+K Meta+K" aria-haspopup="dialog" onClick={() => setCmd(true)}>
+              <Icon name="i-search" /><span className="long">Jump to ID</span>
             </button>
             <LiveIndicator state={live} detail={liveDetail} />
           </header>

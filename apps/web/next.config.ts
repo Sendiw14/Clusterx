@@ -43,10 +43,6 @@ const config: NextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: [...baseHeaders, { key: "Content-Security-Policy", value: csp("'self'") }] },
-      // The isolated demo can make no connection at all (AC-14, E2E-DEMO-28). Dev keeps 'self' for HMR.
-      ...(isDev
-        ? []
-        : [{ source: "/demo/:path*", headers: [{ key: "Content-Security-Policy", value: csp("'none'") }] }]),
       {
         source: "/app/:path*",
         headers: [

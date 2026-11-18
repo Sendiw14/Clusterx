@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { cx } from "./util";
 
 export interface Column<T> {
@@ -15,10 +15,11 @@ export interface Column<T> {
  * order, nothing hidden) through `data-label` attributes (styles.css).
  */
 export function DataTable<T>({ caption, columns, rows, rowKey, busy, className }: { caption: ReactNode; columns: Column<T>[]; rows: T[]; rowKey: (r: T) => string; busy?: boolean; className?: string }) {
+  const capId = useId();
   return (
-    <div className="tbl-wrap" aria-busy={busy || undefined} style={busy ? { opacity: 0.6 } : undefined}>
+    <div className="tbl-wrap" role="region" tabIndex={0} aria-labelledby={capId} aria-busy={busy || undefined} style={busy ? { opacity: 0.6 } : undefined}>
       <table className={cx("tbl", className)}>
-        <caption>{caption}</caption>
+        <caption id={capId}>{caption}</caption>
         <thead>
           <tr>
             {columns.map((c) => (

@@ -11,11 +11,21 @@ export function RouteFocus() {
       first.current = false;
       return;
     }
-    const main = document.getElementById("main");
-    if (main) {
-      main.focus({ preventScroll: true });
-      window.scrollTo(0, 0);
-    }
+    // Two frames: a closing dialog (menu drawer) restores focus to its trigger first; main must win after that.
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        const main = document.getElementById("main");
+        if (main) {
+          main.focus({ preventScroll: true });
+          window.scrollTo(0, 0);
+        }
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
   }, [pathname]);
   return null;
 }

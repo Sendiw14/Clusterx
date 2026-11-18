@@ -1,0 +1,533 @@
+[
+  {
+    "route": "/",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/ [menu open]",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/activity",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/activity",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs/demo-job-0001",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs/demo-job-0001",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs/new",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs/new",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/observability",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/observability",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings/preferences",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings/preferences",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings/tokens",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings/tokens",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/workers",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/workers",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/workers/demo-worker-1",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/workers/demo-worker-1",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/architecture",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/architecture",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/changelog",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/changelog",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [operator/Config]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [operator/job detail]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [operator/Jobs]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [operator/Overview]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [operator/Workers]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [viewer/Config]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [viewer/job detail]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [viewer/Jobs]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [viewer/Overview]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [viewer/Workers]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/api",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/api",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/concepts",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/concepts",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/deployment",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/deployment",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/quickstart",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/quickstart",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/reliability",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/reliability",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/security",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/security",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/workers",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/workers",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/login",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/login",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  }
+]

@@ -52,7 +52,7 @@ export class FixtureProvider implements DataProvider {
   listJobEvents(id: string): Promise<Result<{ items: JobEvent[] }>> {
     return FIXTURE_JOBS.some((j) => j.id === id) ? ok({ items: FIXTURE_EVENTS[id] ?? [] }) : notFound("job_not_found");
   }
-  listWorkers(): Promise<Result<Page<Worker>>> {
+  listWorkers(_q?: { cursor?: string; limit?: number }): Promise<Result<Page<Worker>>> {
     return ok({ items: FIXTURE_WORKERS.map((w) => this.maskWorker(w)), next_cursor: null, as_of: FIXTURE_AS_OF });
   }
   getWorker(id: string): Promise<Result<WorkerDetail>> {
