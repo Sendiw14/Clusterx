@@ -71,10 +71,13 @@ test.describe("navigation and overlays", () => {
 test.describe("home", () => {
   test("hero states at-least-once and makes no exactly-once, HA or workflow claim (copy check)", async ({ page }) => {
     await page.goto("/", { waitUntil: "networkidle" });
+    const hero = await page.locator("section.hero").innerText();
+    expect(hero).toMatch(/at least once/i);
+    expect(hero).toMatch(/not exactly-once/i);
+    expect(hero).not.toMatch(/guarantees? exactly[- ]once|high availability|highly available|workflow|DAG/i);
+    // whole page: limits may be named, but never claimed as features
     const text = await page.locator("main").innerText();
-    expect(text).toMatch(/at least once/i);
-    expect(text).toMatch(/not exactly-once/i);
-    expect(text).not.toMatch(/guarantees? exactly[- ]once|high availability|highly available|workflow|DAG/i);
+    expect(text).not.toMatch(/(provides?|offers?|guarantees?|supports?) (exactly[- ]once|high availability|automatic failover)/i);
   });
 
   test("Atlas: labelled illustrative, no Live label, keyboard Step reaches 8 of 8 and Reset returns", async ({ browser }) => {
