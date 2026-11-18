@@ -1,0 +1,74 @@
+/* GENERATED from tokens.css by tools/gen-theme.mjs. Do not edit. */
+@theme static {
+  --color-white: #FFFFFF;        /* primary surface */
+  --color-canvas: #F7F9FC;       /* page background behind white cards */
+  --color-panel: #EEF2F7;        /* subtle panels, table header, code well on light */
+  --color-ink: #111827;          /* primary text */
+  --color-ink-2: #475569;        /* secondary text */
+  --color-ink-3: #5B6678;        /* tertiary / meta text; still >= 4.5:1 on white, canvas, panel */
+  --color-ink-disabled: #8A94A6; /* disabled controls only (WCAG exempts inactive components) */
+  --color-line: #E2E8F0;         /* decorative dividers and card borders (never the only boundary of a control) */
+  --color-line-strong: #7C8A9E;  /* control boundaries, focus-free affordances: >= 3:1 on white/canvas/panel */
+  --color-accent: #2457E7;       /* primary actions, links, focus ring */
+  --color-accent-ink: #1B46C2;   /* accent text on tinted surfaces, hover state */
+  --color-accent-tint: #E8EEFD;
+  --color-success: #0C8A63;      /* graphical use only: icon strokes, bars, chart lines */
+  --color-success-ink: #0A7050;  /* text */
+  --color-success-tint: #E5F4EE;
+  --color-warning: #A96B08;      /* graphical use only */
+  --color-warning-ink: #8A5806;  /* text */
+  --color-warning-tint: #FBF0DC;
+  --color-danger: #C33444;       /* graphical; also passes as text on white/canvas */
+  --color-danger-ink: #A82A39;   /* text on tints and panel */
+  --color-danger-tint: #FBE8EA;
+  --color-neutral: #64748B;      /* neutral state glyphs (scheduled, queued, canceled) */
+  --color-neutral-tint: #EEF2F7;
+  --color-focus: #2457E7;        /* 2 px ring + 2 px offset on light surfaces */
+  --color-focus-on-dark: #9DB7FF;
+  --color-code-bg: #0F172A;
+  --color-code-ink: #E2E8F0;
+  --color-code-mute: #94A3B8;
+  --color-code-key: #9DB7FF;
+  --color-code-str: #7FD6B0;
+  --color-code-num: #F2C57C;
+  --color-code-err: #FF9AA5;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-display: "Newsreader", ui-serif, "New York", Georgia, "Times New Roman", serif; /* public hero/page titles only */
+  --text-step--1: clamp(0.8125rem, 0.793rem + 0.1vw, 0.875rem);   /* 13 to 14 */
+  --text-step-0: clamp(1rem, 0.975rem + 0.12vw, 1.0625rem);       /* 16 to 17 */
+  --text-step-1: clamp(1.125rem, 1.07rem + 0.27vw, 1.3125rem);    /* 18 to 21 */
+  --text-step-2: clamp(1.3125rem, 1.2rem + 0.55vw, 1.75rem);      /* 21 to 28 */
+  --text-step-3: clamp(1.625rem, 1.4rem + 1.1vw, 2.5rem);         /* 26 to 40 */
+  --text-step-4: clamp(2rem, 1.6rem + 2vw, 3.5rem);               /* 32 to 56 */
+  --text-step-5: clamp(2.5rem, 1.75rem + 3.7vw, 5rem);            /* 40 to 80, hero */
+  --leading-tight: 1.04;
+  --leading-heading: 1.18;
+  --leading-body: 1.6;
+  --leading-ui: 1.4;
+  --tracking-display: -0.028em;
+  --tracking-heading: -0.014em;
+  --tracking-label: 0.08em;    /* mono uppercase micro-labels */
+  --text-ui-xs: 0.75rem;   /* 12, mono micro-labels only */
+  --text-ui-sm: 0.8125rem; /* 13, table meta */
+  --text-ui-md: 0.875rem;  /* 14, console body and table cells */
+  --text-ui-lg: 1rem;      /* 16, inputs (avoids iOS zoom), form labels */
+  --text-ui-h3: 1.125rem; /* 18: section and card titles, 1.29x body */
+  --text-ui-h2: 1.25rem;
+  --text-ui-h1: 1.75rem;  /* 28: console page title, 2.0x body */
+  --breakpoint-xs: 30rem;   /* 480 */
+  --breakpoint-sm: 40rem;   /* 640, table to stacked cards below this */
+  --breakpoint-md: 48rem;   /* 768 */
+  --breakpoint-lg: 64rem;   /* 1024, console sidebar docks */
+  --breakpoint-2xl: 90rem;  /* 1440 */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;        /* default card and control radius: precise, not pillowy */
+  --radius-lg: 10px;
+  --radius-full: 999px;    /* status chips only */
+  --shadow-xs: 0 1px 0 rgb(17 24 39 / 0.04);
+  --shadow-sm: 0 1px 2px rgb(17 24 39 / 0.06);
+  --shadow-overlay: 0 12px 32px -8px rgb(17 24 39 / 0.18), 0 2px 6px rgb(17 24 39 / 0.08);
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
