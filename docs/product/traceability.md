@@ -4,7 +4,7 @@ Vocabulary (§0): `proposed → specified → approved → implemented → integ
 A status is recorded only with evidence. Unrun tests are **NOT RUN**.
 
 Master revision: R2 · adopted 2026-11-17 (OD-01).
-**Contract freeze candidate (M1):** `api/openapi.yaml` `1.0.0-draft.4`, `worker.proto`, `0001_init.sql` at merge `c48b62f` (backend `182566e`). Status **specified, independently reviewed — awaiting owner acceptance (OD-12)**. Not "approved" until owner accepts.
+**Contract freeze candidate (M1):** `api/openapi.yaml` `1.0.0-draft.4`, `worker.proto`, `0001_init.sql` at merge `c48b62f` (backend `182566e`). Status **approved and FROZEN 2026-11-18 (OD-12)**, local tag `contract-m1-draft.4`. Changes now require a change request (§1.3 step 6).
 
 ## M1 evidence (main `2ea9d0b`, 2026-11-18, dev laptop, not CI)
 

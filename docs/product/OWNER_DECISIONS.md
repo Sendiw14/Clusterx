@@ -13,7 +13,7 @@
 | OD-09 | Local toolchain install | brew Go 1.27 + PostgreSQL 18 | M1 | **APPROVED 2026-11-17**; Docker: owner installs |
 | OD-10 | Lane mode | Subagents per worktree under integrator session | M1 | **APPROVED 2026-11-17** |
 | OD-11 | Push to GitHub `Sendiw14/Clusterx` | Not authorized | Any push | NOT AUTHORIZED |
-| OD-12 | Accept M1 exit + freeze contract draft.4 (`c48b62f`) | Accept; reviewer PASS, 0 P0/P1 open | M2/M4 start | PENDING OWNER |
+| OD-12 | Accept M1 exit + freeze contract draft.4 (`c48b62f`) | Accept; reviewer PASS, 0 P0/P1 open | M2/M4 start | **APPROVED 2026-11-18** (owner, chat); tag `contract-m1-draft.4` |
 | OD-13 | Viewer read access to `/audit` (OQ-03) | Yes, actor/detail masked | M5 | PENDING OWNER |
 | OD-14 | Session lifetimes | idle 2 h, absolute 12 h | M5 | PENDING OWNER |
 | OD-15 | Install Docker (Compose) | Owner installs Docker Desktop | M3 | PENDING OWNER |
