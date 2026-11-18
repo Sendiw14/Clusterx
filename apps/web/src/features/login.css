@@ -1,0 +1,12 @@
+/* Login route styles, ported from docs/design/prototypes/_src/login.html (M2). */
+@layer components {
+
+.login{min-height:calc(100dvh - 8rem);display:grid;place-items:start center;padding:var(--space-8) var(--grid-margin) var(--space-9)}
+.login-card{width:100%;max-width:27rem}
+.login h1{font-family:var(--font-display);font-weight:400;font-size:var(--text-step-3);letter-spacing:var(--tracking-display);line-height:1.1;margin:var(--space-4) 0 var(--space-3)}
+.gh-btn{width:100%;min-height:3rem;font-size:var(--text-ui-lg)}
+.panel{margin-bottom:var(--space-5)}
+.fine-list{list-style:none;display:grid;gap:var(--space-2);margin-top:var(--space-5);padding-top:var(--space-5);border-top:1px solid var(--color-line);font-size:var(--text-ui-md);color:var(--color-ink-2)}
+.reqid{font-family:var(--font-mono);font-size:var(--text-ui-sm)}
+
+}
