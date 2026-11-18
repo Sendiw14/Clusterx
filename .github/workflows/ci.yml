@@ -1,0 +1,47 @@
+# CLUSTERX PR gate (§11). Third-party actions pinned to full commit SHAs (§7).
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm contract:lint
+      - run: pnpm sdk:check
+      - run: pnpm --filter @clusterx/sdk-ts typecheck
+
+  go:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18.7-bookworm
+        env: { POSTGRES_USER: clusterx, POSTGRES_HOST_AUTH_METHOD: trust }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U clusterx" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      CLUSTERX_PG_ADMIN_DSN: postgres://clusterx@localhost:5432/postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with: { go-version-file: go.work }
+      - name: proto codegen is reproducible
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler && ./packages/proto/generate.sh && git diff --exit-code packages/proto/gen
+      - name: vet and race tests (all modules)
+        run: |
+          for m in $(go list -f '{{.Dir}}' -m); do (cd "$m" && go vet ./... && go test -race -count=1 ./...); done
