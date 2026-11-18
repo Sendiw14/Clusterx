@@ -18,6 +18,13 @@
 - No model relabeling. If a subagent call returns a different model, stop that lane and report.
 - Effort/Ultracode stay marked UNVERIFIED until owner records `/effort` and `/status` output here.
 
+## 2026-11-18 — integrator session resumed
+
+- Usage limit (HTTP 429) stopped the RV-01 round-2 reviewer; new host session could not resume its transcript.
+- Fresh reviewer started via project agent profile `clusterx-critical-review` (`model: opus`, `effort: high` requested). Effort UNVERIFIED as before.
+- Toolchain installed (OD-09): Go 1.27.4 darwin/arm64, PostgreSQL 18.7 (Homebrew). First brew attempt failed with `curl: (92) HTTP/2 … PROTOCOL_ERROR`; succeeded on HTTP/1.1 retry.
+- Local PG note: scratchpad path exceeds 103-byte unix-socket limit → clusters run TCP-only (`-k ''`); `LC_ALL=en_US.UTF-8` required to start.
+
 ## Toolchain (2026-11-17)
 
 | Tool | Found | Required | Action |

@@ -18,6 +18,15 @@
 | R-14 | Retention deletion vs immutable terminal history | P1 | Retention ADR; tombstone/idempotency lifetimes | Backend | M1 ADR |
 | R-15 | No SLO numbers until pilot | P1 | OD-06; report measured only | Integrator | RC |
 
+| R-16 | NF-01: lock order specified only for worker mutations; report writing worker/credential row, or drain/revoke locking job first, deadlocks (40P01 reproduced) | P2→P1 at M4 | Global lock-order rule + 40P01 retry, before Deregister/Drain impl | Backend | M4 entry |
+| R-17 | NF-02: tx-start `now()` timestamps — `terminal_at` can precede `cancel_requested_at`; events out of time order vs `version` | P2 | Use `clock_timestamp()` for event/terminal stamps or document `version` as order | Backend | M4 |
+| R-18 | NF-03: 7-day `log_tail` expiry blocked by finished-attempt trigger (23514) | P2, blocks retention | Redesign retention path | Backend | M5 migration |
+| R-19 | NF-04: TRUNCATE / DELETE of non-terminal jobs bypass guards | P2 | Least-privilege DB role, revoke TRUNCATE | Backend + Integrator | M3 |
+| R-20 | NF-05: job can leave `running` with active attempt; next claim unique-violation aborts batch | P2 | DB constraint/trigger coupling job status ↔ active attempt | Backend | M4 |
+| R-21 | NF-06: surviving mutants N6/N12/N13 untested; stale cancel text state-machine.md:85-86, ADR-0002:47 | P2 | Tests + doc fix | Backend | M4 |
+| R-22 | Busy dashboard refetches keep session alive to 12 h absolute cap | P2 | Owner decision on lifetimes | Owner | M5 |
+| R-23 | Session/agent continuity: usage limit + session restart lost a reviewer mid-round | Process | Reviewer restarted fresh from report + handoffs | Integrator | — |
+
 ## Assumptions (default, reversible)
 
 - A-01: Local-only until OD-04. No deploy, no spend.
