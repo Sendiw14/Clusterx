@@ -1,0 +1,214 @@
+// CLUSTERX worker protocol v1 (DRAFT, TASK-M1-BE-01).
+// Source contract: MASTER_PROMPT R2 §6; ADR-0003 (leases/fencing), ADR-0005 (auth).
+// Normative state table: docs/architecture/state-machine.md.
+//
+// Transport and limits (enforced by the coordinator):
+//  - TLS required unless the listener is loopback-only (local dev).
+//  - Auth: metadata `authorization: Bearer cxw_<prefix>_<secret>` on EVERY call; verified against
+//    worker_credentials (hash, not revoked, not expired) without caching for mutations.
+//  - Max message size 256 KiB in each direction (results are capped at 128 KiB of JSON).
+//  - Client deadlines (SDK defaults; server rejects nothing on deadline but work is bounded):
+//      Register 10s · Heartbeat 5s · Claim 30s (may long-poll up to 20s) · RenewLease 5s ·
+//      ReportResult 10s · ReportFailure 10s · PollCancellation 5s · Drain 5s · Deregister 5s.
+//  - Errors: gRPC status + google.rpc.ErrorInfo{domain:"clusterx.dev", reason:<code>} where code is
+//    listed in state-machine.md "Worker-side denial codes".
+//  - Versioning: package suffix v1 is the wire major version. `protocol_version` in Register is the
+//    minor revision; the coordinator accepts [min_supported, current] and rejects others with
+//    FAILED_PRECONDITION/protocol_unsupported. Fields are only added, never renumbered/reused.
+//  - Replies (RV01-03, canonical): a report whose fence holds returns OK with the committed Outcome —
+//    OUTCOME_SUCCEEDED, or OUTCOME_CANCELED when a cancel request committed first (the success is then
+//    NOT committed; the worker must treat its side effects as having happened for a canceled job).
+//    Retrying the same report (same attempt_id, lease_generation, worker identity and identical result
+//    bytes) after a lost reply returns OK with the SAME Outcome and already_final=true. A retry with a
+//    different result => FAILED_PRECONDITION/result_mismatch; another worker's attempt =>
+//    FAILED_PRECONDITION/stale_attempt. `cancel_requested` is never an error reason on reports.
+//    A worker that cannot reach the coordinator MUST NOT assume its lease is still authoritative
+//    after lease_ttl elapses (measured on its own monotonic clock).
+syntax = "proto3";
+
+package clusterx.worker.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/Sendiw14/Clusterx/packages/proto/gen/go/clusterx/worker/v1;workerv1";
+
+service WorkerService {
+  // Register a new process incarnation. A new incarnation_id supersedes (and fences) the previous one.
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  // Worker liveness only. Never extends any attempt lease.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  // Claim up to max_jobs eligible queued jobs. Empty result is not an error.
+  rpc Claim(ClaimRequest) returns (ClaimResponse);
+  // Extend one attempt's lease (capped by hard deadline and cancel grace).
+  rpc RenewLease(RenewLeaseRequest) returns (RenewLeaseResponse);
+  // Report a successful result for the current attempt.
+  rpc ReportResult(ReportResultRequest) returns (ReportResultResponse);
+  // Report a retryable or permanent failure for the current attempt.
+  rpc ReportFailure(ReportFailureRequest) returns (ReportFailureResponse);
+  // Ask whether cancellation was requested for an attempt.
+  rpc PollCancellation(PollCancellationRequest) returns (PollCancellationResponse);
+  // Worker-initiated drain (e.g. SIGTERM): stop new claims, keep renewing until drain deadline.
+  rpc Drain(DrainRequest) returns (DrainResponse);
+  // Final goodbye; remaining active attempts are recovered at lease expiry.
+  rpc Deregister(DeregisterRequest) returns (DeregisterResponse);
+}
+
+// Identity carried by every call after Register. Must match the worker bound to the credential.
+message WorkerIdentity {
+  string worker_id = 1;      // UUID assigned at first Register, persisted by the worker
+  string incarnation_id = 2; // UUID generated fresh per process start
+}
+
+message HandlerCapability {
+  string name = 1;     // ^[a-z][a-z0-9_.-]{0,62}$
+  int32 version = 2;   // 1..1000
+}
+
+message RegisterRequest {
+  string worker_id = 1;         // empty on first registration; server assigns
+  string incarnation_id = 2;    // required, UUID, unique per process
+  string name = 3;              // 1..100 chars
+  int32 protocol_version = 4;   // >= 1
+  string sdk_version = 5;       // <= 64 chars
+  string hostname = 6;          // <= 255 chars, informational
+  int32 capacity = 7;           // 1..256 concurrent attempts
+  repeated HandlerCapability capabilities = 8; // 1..64 entries; unknown handlers rejected
+}
+
+message RegisterResponse {
+  string worker_id = 1;
+  string incarnation_id = 2;
+  google.protobuf.Duration heartbeat_interval = 3;
+  google.protobuf.Duration lease_ttl = 4;
+  google.protobuf.Duration renew_after = 5; // renew no later than this after claim/renew
+  int32 server_protocol_version = 6;
+}
+
+message HeartbeatRequest {
+  WorkerIdentity identity = 1;
+  int32 active_attempts = 2; // informational; server counts authoritative active attempts
+}
+
+message HeartbeatResponse {
+  WorkerStatus status = 1;  // tells a worker it is draining / deregistered
+  google.protobuf.Timestamp drain_deadline = 2; // set when status = DRAINING
+}
+
+enum WorkerStatus {
+  WORKER_STATUS_UNSPECIFIED = 0;
+  WORKER_STATUS_ACTIVE = 1;
+  WORKER_STATUS_DRAINING = 2;
+  WORKER_STATUS_DEREGISTERED = 3;
+}
+
+message ClaimRequest {
+  WorkerIdentity identity = 1;
+  int32 max_jobs = 2;                         // 1..capacity; server also caps by free capacity
+  repeated HandlerCapability supported = 3;   // subset of registered capabilities; empty = all
+  google.protobuf.Duration wait = 4;          // optional long-poll, 0..20s
+}
+
+message ClaimResponse {
+  repeated ClaimedAttempt attempts = 1;
+}
+
+// Everything needed to execute and to fence later calls.
+message ClaimedAttempt {
+  string job_id = 1;
+  string attempt_id = 2;
+  int64 lease_generation = 3;
+  int32 attempt_number = 4;   // 1..max_attempts
+  int32 max_attempts = 5;
+  HandlerCapability handler = 6;
+  bytes payload_json = 7;     // UTF-8 JSON, <= 64 KiB
+  google.protobuf.Duration lease_ttl = 8;          // use relative TTL with a monotonic clock
+  google.protobuf.Timestamp lease_expires_at = 9;  // DB clock, informational
+  google.protobuf.Timestamp hard_deadline_at = 10; // DB clock, informational
+  google.protobuf.Duration time_remaining = 11;    // hard_deadline_at - now() at claim
+}
+
+// Fencing tuple for every attempt-scoped call.
+message AttemptRef {
+  WorkerIdentity identity = 1;
+  string job_id = 2;
+  string attempt_id = 3;
+  int64 lease_generation = 4;
+}
+
+message RenewLeaseRequest {
+  AttemptRef attempt = 1;
+}
+
+message RenewLeaseResponse {
+  google.protobuf.Duration lease_ttl = 1;          // remaining after this renewal
+  google.protobuf.Timestamp lease_expires_at = 2;
+  bool cancel_requested = 3;                        // stop cooperatively; lease capped at cancel grace
+}
+
+message ReportResultRequest {
+  AttemptRef attempt = 1;
+  bytes result_json = 2;   // UTF-8 JSON, <= 128 KiB, else INVALID_ARGUMENT/result_too_large
+  string log_tail = 3;     // <= 16 KiB, server keeps last 16 KiB
+}
+
+message ReportResultResponse {
+  Outcome outcome = 1;
+  bool already_final = 2;  // same-attempt retry; outcome repeats the committed one (incl. OUTCOME_CANCELED)
+}
+
+enum Outcome {
+  OUTCOME_UNSPECIFIED = 0;
+  OUTCOME_SUCCEEDED = 1;
+  OUTCOME_RETRY_SCHEDULED = 2;
+  OUTCOME_FAILED = 3;
+  OUTCOME_CANCELED = 4;    // cancel request committed before this report; reported success was not committed
+}
+
+enum ErrorClass {
+  ERROR_CLASS_UNSPECIFIED = 0; // rejected
+  ERROR_CLASS_RETRYABLE = 1;
+  ERROR_CLASS_PERMANENT = 2;
+}
+
+message ReportFailureRequest {
+  AttemptRef attempt = 1;
+  ErrorClass error_class = 2;
+  string error_code = 3;      // <= 64 chars, machine-readable
+  string error_message = 4;   // <= 2 KiB, truncated by server; must not contain secrets
+  string log_tail = 5;        // <= 16 KiB
+  bool canceled_by_handler = 6; // handler observed cancellation and stopped
+}
+
+message ReportFailureResponse {
+  Outcome outcome = 1;
+  bool already_final = 2;
+  google.protobuf.Timestamp next_available_at = 3; // when outcome = RETRY_SCHEDULED
+}
+
+message PollCancellationRequest {
+  AttemptRef attempt = 1;
+}
+
+message PollCancellationResponse {
+  bool cancel_requested = 1;
+  bool job_terminal = 2;
+  google.protobuf.Timestamp lease_expires_at = 3;
+}
+
+message DrainRequest {
+  WorkerIdentity identity = 1;
+  google.protobuf.Duration grace = 2; // 0..3600s; server clamps to configured drain_grace max
+}
+
+message DrainResponse {
+  google.protobuf.Timestamp drain_deadline = 1;
+}
+
+message DeregisterRequest {
+  WorkerIdentity identity = 1;
+}
+
+message DeregisterResponse {
+  int32 active_attempts_left = 1; // recovered by lease expiry
+}

@@ -1,0 +1,74 @@
+# Claim query plan — TASK-M1-BE-01 (M1 evidence)
+# 2026-11-17T14:51:00Z PostgreSQL 18.7 (Homebrew) on darwin/arm64 (dev laptop, throwaway cluster, default config)
+# Seed: 100000 jobs, 4 handlers (worker capable of 2), 20000 queued (10000 claimable by this worker), priorities 0..9
+# Run inside BEGIN/ROLLBACK because ANALYZE executes FOR UPDATE.
+
+   status   | count 
+------------+-------
+ failed     | 10000
+ queued     | 20000
+ retry_wait | 10000
+ scheduled  | 10000
+ succeeded  | 50000
+(5 rows)
+
+BEGIN
+                                                                            QUERY PLAN                                                                            
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=3193.77..3193.78 rows=1 width=46) (actual time=6.588..6.592 rows=8.00 loops=1)
+   Output: j.id, j.priority, j.available_at, j.created_at, j.ctid, c.ctid
+   Buffers: shared hit=2399
+   ->  LockRows  (cost=3193.77..3193.78 rows=1 width=46) (actual time=6.587..6.591 rows=8.00 loops=1)
+         Output: j.id, j.priority, j.available_at, j.created_at, j.ctid, c.ctid
+         Buffers: shared hit=2399
+         ->  Sort  (cost=3193.77..3193.77 rows=1 width=46) (actual time=6.555..6.556 rows=8.00 loops=1)
+               Output: j.id, j.priority, j.available_at, j.created_at, j.ctid, c.ctid
+               Sort Key: j.priority DESC, j.available_at, j.created_at, j.id
+               Sort Method: quicksort  Memory: 1088kB
+               Buffers: shared hit=2383
+               ->  Hash Join  (cost=674.17..3193.76 rows=1 width=46) (actual time=0.794..4.387 rows=10000.00 loops=1)
+                     Output: j.id, j.priority, j.available_at, j.created_at, j.ctid, c.ctid
+                     Inner Unique: true
+                     Hash Cond: ((j.handler_name = c.handler_name) AND (j.handler_version = c.handler_version))
+                     Buffers: shared hit=2374
+                     ->  Bitmap Heap Scan on public.jobs j  (cost=661.43..3152.65 rows=5404 width=51) (actual time=0.782..3.098 rows=20000.00 loops=1)
+                           Output: j.id, j.priority, j.available_at, j.created_at, j.ctid, j.handler_name, j.handler_version
+                           Recheck Cond: ((j.available_at <= now()) AND (j.status = 'queued'::text))
+                           Filter: (j.attempts_used < j.max_attempts)
+                           Heap Blocks: exact=2167
+                           Buffers: shared hit=2372
+                           ->  Bitmap Index Scan on jobs_claimable_idx  (cost=0.00..660.08 rows=16211 width=0) (actual time=0.646..0.646 rows=20000.00 loops=1)
+                                 Index Cond: (j.available_at <= now())
+                                 Index Searches: 1
+                                 Buffers: shared hit=205
+                     ->  Hash  (cost=12.66..12.66 rows=5 width=42) (actual time=0.009..0.009 rows=2.00 loops=1)
+                           Output: c.ctid, c.handler_name, c.handler_version
+                           Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                           Buffers: shared hit=2
+                           ->  Bitmap Heap Scan on public.worker_capabilities c  (cost=4.19..12.66 rows=5 width=42) (actual time=0.005..0.005 rows=2.00 loops=1)
+                                 Output: c.ctid, c.handler_name, c.handler_version
+                                 Recheck Cond: (c.worker_id = '00000000-0000-7000-8000-0000000000a1'::uuid)
+                                 Heap Blocks: exact=1
+                                 Buffers: shared hit=2
+                                 ->  Bitmap Index Scan on worker_capabilities_pkey  (cost=0.00..4.19 rows=5 width=0) (actual time=0.001..0.001 rows=2.00 loops=1)
+                                       Index Cond: (c.worker_id = '00000000-0000-7000-8000-0000000000a1'::uuid)
+                                       Index Searches: 1
+                                       Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=179
+ Planning Time: 0.248 ms
+ Execution Time: 6.608 ms
+(43 rows)
+
+ROLLBACK
+
+# Findings (backend lane)
+# - Uses partial index jobs_claimable_idx (status='queued') and locks only the 8 returned rows (LockRows over LIMIT).
+# - It is NOT a top-N index walk: all 20000 queued rows are read via bitmap scan, 10000 survive the capability
+#   hash join, then a quicksort runs. 6.6 ms at 20k queued, so cost grows linearly with eligible queued depth.
+# - Cause: handler_name leads the index and a worker usually has several capabilities; the planner also
+#   misestimates the capability semi-join (est. rows=1 vs 10000 actual).
+# - Tried and NOT adopted: extra partial index (priority DESC, available_at, created_at, id) WHERE status='queued'.
+#   The plan was unchanged (still bitmap + sort, 7.1 ms), so migration 0001 is unchanged.
+# - Follow-up (M4, R-07, AC-19): per-capability LATERAL top-N (ORDER BY ... LIMIT n per handler, then merge) or
+#   extended statistics. Re-measure at 100k+ queued under concurrent claimants before freezing.
