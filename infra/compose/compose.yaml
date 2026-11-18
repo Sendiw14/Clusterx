@@ -1,0 +1,87 @@
+# CLUSTERX local starter (development only — NOT a production example; see docs/operations/deployment.md, M8).
+# Usage: cp ../../.env.example ../../.env && ./bootstrap.sh
+name: clusterx
+x-cp-env: &cp-env
+  CLUSTERX_ENV: development
+  CLUSTERX_LOG_LEVEL: info
+  CLUSTERX_HTTP_ADDR: 0.0.0.0:8080
+  CLUSTERX_GRPC_ADDR: 0.0.0.0:9090
+  CLUSTERX_METRICS_ADDR: 0.0.0.0:9091
+  CLUSTERX_METRICS_TOKEN: ${CLUSTERX_METRICS_TOKEN:?set in .env}
+  CLUSTERX_DATABASE_URL: postgres://clusterx_app:${CLUSTERX_APP_DB_PASSWORD:?set in .env}@postgres:5432/clusterx?sslmode=disable
+  CLUSTERX_MIGRATE_ON_START: "false"
+
+services:
+  postgres:
+    image: postgres:18.7-bookworm@sha256:ece55f7868da684e400f82f1030a050718adbdd65c23aa500c486f6e2950dc0f
+    environment:
+      POSTGRES_DB: clusterx
+      POSTGRES_USER: clusterx_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      CLUSTERX_APP_DB_PASSWORD: ${CLUSTERX_APP_DB_PASSWORD:?set in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clusterx_admin -d clusterx"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports: ["127.0.0.1:${CLUSTERX_PG_PORT:-5432}:5432"]
+
+  migrate:
+    build: { context: ../.., dockerfile: apps/control-plane/Dockerfile }
+    image: clusterx/control-plane:local
+    command: ["migrate"]
+    environment:
+      CLUSTERX_ENV: development
+      CLUSTERX_MIGRATE_DATABASE_URL: postgres://clusterx_admin:${POSTGRES_PASSWORD}@postgres:5432/clusterx?sslmode=disable
+      CLUSTERX_DATABASE_URL: postgres://clusterx_app:${CLUSTERX_APP_DB_PASSWORD}@postgres:5432/clusterx?sslmode=disable
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: "no"
+
+  control-plane:
+    image: clusterx/control-plane:local
+    command: ["serve"]
+    environment: *cp-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:9091:9091"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  worker: &worker
+    build: { context: ../.., dockerfile: apps/worker/Dockerfile }
+    image: clusterx/worker:local
+    profiles: [workers]
+    environment: &worker-env
+      CLUSTERX_ENV: development
+      CLUSTERX_WORKER_CONTROL_PLANE_ADDR: control-plane:9090
+      CLUSTERX_WORKER_INSECURE: "true" # plaintext only inside the private compose network
+      CLUSTERX_WORKER_CAPACITY: "4"
+      CLUSTERX_WORKER_NAME: worker-1
+      CLUSTERX_WORKER_CREDENTIAL: ${CLUSTERX_WORKER_CREDENTIAL_1:-}
+    depends_on: [control-plane]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 256m
+  worker-2:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      CLUSTERX_WORKER_NAME: worker-2
+      CLUSTERX_WORKER_CREDENTIAL: ${CLUSTERX_WORKER_CREDENTIAL_2:-}
+  worker-3:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      CLUSTERX_WORKER_NAME: worker-3
+      CLUSTERX_WORKER_CREDENTIAL: ${CLUSTERX_WORKER_CREDENTIAL_3:-}
+
+volumes:
+  pgdata:
