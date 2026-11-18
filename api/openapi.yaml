@@ -3,7 +3,7 @@ openapi: 3.1.1
 # 3.1.x chosen per assumption A-03 until 3.2.1 generator compatibility is proven (M3).
 info:
   title: CLUSTERX Control Plane API
-  version: 1.0.0-draft.4
+  version: 1.0.0-draft.5
   summary: REST API of the CLUSTERX coordinator (/api/v1).
   description: |
     Source contract: docs/product/MASTER_PROMPT.md R2 §6. State semantics: docs/architecture/state-machine.md.
@@ -27,6 +27,10 @@ info:
     * draft.4 (TASK-M1-BE-04) applies REVIEW-M1-RV-01 fixes (token authority, sid/sub binding, stream
       re-validation, closed JobEvent.data) and FE-02 gaps (sort, filters, validation vocabulary, as_of,
       credential idempotency, config build info, overview window, Go-enforced idle timeout, 500 response).
+    * draft.5 (TASK-M4-BE-01, CR-M4-01): `Error.code` adds `not_found_route` (404 for an unknown path) and
+      `method_not_allowed` (405 with `Allow` for a known path and another method); both use the Error body.
+      M4 serves createJob, listJobs, getJob, listJobAttempts, listJobEvents, listWorkers, getWorker,
+      listHandlers and getConfig with direct API tokens; the other operations are not routed yet (404 not_found_route).
     * The BFF passes Go status codes, bodies and the headers Content-Type, X-Request-Id, Retry-After,
       Idempotent-Replayed, Location, ETag, Cache-Control, Date through unchanged (ADR-0006 §3).
 servers:
@@ -1005,7 +1009,8 @@ components:
           enum: [bad_request, invalid_cursor, unauthenticated, forbidden, job_not_found, worker_not_found,
                  job_terminal, idempotency_conflict, retry_not_allowed, retry_already_exists, worker_deregistered,
                  expired, token_not_found, worker_credential_not_found,
-                 payload_too_large, validation_failed, rate_limited, unavailable, internal]
+                 payload_too_large, validation_failed, rate_limited, unavailable, internal,
+                 not_found_route, method_not_allowed]
         message: { type: string, description: 'Human-readable, safe to display; never contains secrets or payload content.' }
         details: { type: object, additionalProperties: true }
         request_id: { type: string }

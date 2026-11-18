@@ -1,6 +1,7 @@
-// Package api serves the control-plane HTTP surface. In this foundation slice it serves
-// /health/live and /health/ready on the public listener and protected /metrics on the
-// internal listener (OpenAPI contract-m1-draft.4). /api/v1 operations arrive in later tickets.
+// Package api serves the control-plane HTTP surface: /health/live, /health/ready and the M4 /api/v1
+// operations on the public listener, protected /metrics on the internal listener (OpenAPI
+// 1.0.0-draft.5). Unknown routes answer 404 not_found_route and wrong methods 405
+// method_not_allowed, both with the Error body (CR-M4-01 M3-2).
 package api
 
 import (
@@ -23,13 +24,13 @@ type ReadinessCheck func(ctx context.Context) error
 // ReadyTimeout bounds one readiness probe.
 const ReadyTimeout = 2 * time.Second
 
-// NewHandler returns the public HTTP handler (health endpoints).
-func NewHandler(ready ReadinessCheck, log *slog.Logger, m *Metrics) http.Handler {
+// NewHandler returns the public HTTP handler: health endpoints and, when v1 is given, /api/v1.
+func NewHandler(ready ReadinessCheck, log *slog.Logger, m *Metrics, v1 ...*V1) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) {
+	route(mux, "/health/live", map[string]http.HandlerFunc{http.MethodGet: func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-	})
-	mux.HandleFunc("GET /health/ready", func(w http.ResponseWriter, r *http.Request) {
+	}})
+	route(mux, "/health/ready", map[string]http.HandlerFunc{http.MethodGet: func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), ReadyTimeout)
 		defer cancel()
 		if err := ready(ctx); err != nil {
@@ -40,6 +41,15 @@ func NewHandler(ready ReadinessCheck, log *slog.Logger, m *Metrics) http.Handler
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
+	}})
+	for _, v := range v1 {
+		if v.Log == nil {
+			v.Log = log
+		}
+		v.register(mux)
+	}
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, r, http.StatusNotFound, "not_found_route", "No such route.")
 	})
 	return wrap("api", mux, log, m)
 }

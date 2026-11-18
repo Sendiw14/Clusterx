@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -123,4 +124,22 @@ func (s *Store) AuthenticateToken(ctx context.Context, secret string) (Principal
 	_, _ = s.Pool.Exec(ctx, `UPDATE api_tokens SET last_used_at = now() WHERE id = $1
 		AND (last_used_at IS NULL OR last_used_at < now() - interval '60 seconds')`, id)
 	return Principal{Ref: "token:" + id, Role: role, Scopes: scopes}, nil
+}
+
+// ErrPrivilegedRuntime is returned when the runtime connection can run DDL (NF-04).
+var ErrPrivilegedRuntime = errors.New("store: runtime database role is superuser or may CREATE in schema public; use a clusterx_runtime member")
+
+// CheckRuntimePrivileges fails when the runtime role is more privileged than clusterx_runtime intends.
+func (s *Store) CheckRuntimePrivileges(ctx context.Context) error {
+	var bad bool
+	err := s.Pool.QueryRow(ctx, `SELECT r.rolsuper OR has_schema_privilege(current_user, 'public', 'CREATE')
+		OR has_table_privilege(current_user, 'jobs', 'TRUNCATE') OR has_table_privilege(current_user, 'jobs', 'DELETE')
+		FROM pg_roles r WHERE r.rolname = current_user`).Scan(&bad)
+	if err != nil {
+		return classifyDBError(err)
+	}
+	if bad {
+		return ErrPrivilegedRuntime
+	}
+	return nil
 }

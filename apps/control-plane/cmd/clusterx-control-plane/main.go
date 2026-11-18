@@ -5,6 +5,13 @@
 //
 //	clusterx-control-plane          # serve (default)
 //	clusterx-control-plane migrate  # apply pending migrations and exit
+//	clusterx-control-plane token create --role operator --name NAME --owner-github-id N --owner-login LOGIN [--scopes a,b] [--expires-in-days 90]
+//	clusterx-control-plane token revoke --id UUID
+//	clusterx-control-plane worker-credential create --name NAME [--expires-in-days 0]
+//	clusterx-control-plane worker-credential revoke --id UUID
+//
+// The create commands print the secret once on stdout; only its SHA-256 is stored. There are no
+// default credentials.
 //
 // Configuration is read from CLUSTERX_* environment variables and fails closed
 // (internal/config).
@@ -39,8 +46,12 @@ import (
 	"github.com/Sendiw14/Clusterx/apps/control-plane/migrations"
 )
 
-// version is set at build time with -ldflags "-X main.version=...".
-var version = "dev"
+// version and commit are set at build time with -ldflags "-X main.version=... -X main.commit=...".
+// commit "0000000" means the build did not record a commit.
+var (
+	version = "dev"
+	commit  = "0000000"
+)
 
 func main() {
 	slog.SetDefault(newLogger(slog.LevelInfo))
@@ -71,8 +82,10 @@ func run(args []string) error {
 		return runMigrations(ctx, cfg, migs, log)
 	case len(args) == 0 || (len(args) == 1 && args[0] == "serve"):
 		return serve(ctx, cfg, migs, log)
+	case len(args) >= 2 && (args[0] == "token" || args[0] == "worker-credential"):
+		return runAdmin(ctx, cfg, args, os.Stdout)
 	default:
-		return fmt.Errorf("usage: clusterx-control-plane [serve|migrate]")
+		return fmt.Errorf("usage: clusterx-control-plane [serve|migrate|token create|token revoke|worker-credential create|worker-credential revoke]")
 	}
 }
 
@@ -116,17 +129,28 @@ func serve(ctx context.Context, cfg config.Config, migs []migrate.Migration, log
 		return fmt.Errorf("grpc tls: %w", err)
 	}
 
-	apiSrv := newHTTPServer(cfg.HTTPAddr, api.NewHandler(api.DBReadiness(pool, migs), log, httpMetrics), httpTLS, log)
-	metricsSrv := newHTTPServer(cfg.MetricsAddr, api.NewMetricsHandler(reg, cfg.MetricsToken, log, httpMetrics), httpTLS, log)
-	var creds credentials.TransportCredentials
-	if grpcTLS != nil {
-		creds = credentials.NewTLS(grpcTLS)
-	}
 	cat, err := catalog.Default()
 	if err != nil {
 		return err
 	}
 	st := store.New(pool, storeTiming(cfg), cat)
+	if cfg.Env == config.Production {
+		switch err := st.CheckRuntimePrivileges(ctx); {
+		case errors.Is(err, store.ErrPrivilegedRuntime):
+			return err
+		case err != nil:
+			log.Warn("could not verify runtime role privileges at start-up", "err", err)
+		}
+	}
+	v1 := &api.V1{Store: st, Catalog: cat, Environment: string(cfg.Env), Version: version, Commit: commit, Log: log,
+		Timing: api.ConfigTiming{HeartbeatInterval: cfg.Timing.HeartbeatInterval, LivenessTimeout: cfg.Timing.LivenessTimeout,
+			LeaseTTL: cfg.Timing.LeaseTTL, CancelGrace: cfg.Timing.CancelGrace, DrainGrace: cfg.Timing.DrainGrace}}
+	apiSrv := newHTTPServer(cfg.HTTPAddr, api.NewHandler(api.DBReadiness(pool, migs), log, httpMetrics, v1), httpTLS, log)
+	metricsSrv := newHTTPServer(cfg.MetricsAddr, api.NewMetricsHandler(reg, cfg.MetricsToken, log, httpMetrics), httpTLS, log)
+	var creds credentials.TransportCredentials
+	if grpcTLS != nil {
+		creds = credentials.NewTLS(grpcTLS)
+	}
 	grpcSrv := workerrpc.NewServer(st, log, workerrpc.Options{Creds: creds})
 
 	// Bind every listener before reporting started, so a port clash fails start-up.
