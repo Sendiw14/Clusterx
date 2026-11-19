@@ -1,0 +1,31 @@
+== apps/control-plane
+ok  	github.com/Sendiw14/Clusterx/apps/control-plane/cmd/clusterx-control-plane	1.703s
+ok  	github.com/Sendiw14/Clusterx/apps/control-plane/internal/api	9.784s
+ok  	github.com/Sendiw14/Clusterx/apps/control-plane/internal/auth	1.489s
+ok  	github.com/Sendiw14/Clusterx/apps/control-plane/internal/catalog	1.500s
+ok  	github.com/Sendiw14/Clusterx/apps/control-plane/internal/chaos	27.330s
+ok  	github.com/Sendiw14/Clusterx/apps/control-plane/internal/config	1.478s
+ok  	github.com/Sendiw14/Clusterx/apps/control-plane/internal/e2e	18.547s
+ok  	github.com/Sendiw14/Clusterx/apps/control-plane/internal/migrate	2.701s
+?   	github.com/Sendiw14/Clusterx/apps/control-plane/internal/pgtest	[no test files]
+ok  	github.com/Sendiw14/Clusterx/apps/control-plane/internal/scheduler	2.287s
+ok  	github.com/Sendiw14/Clusterx/apps/control-plane/internal/store	11.076s
+?   	github.com/Sendiw14/Clusterx/apps/control-plane/internal/testenv	[no test files]
+ok  	github.com/Sendiw14/Clusterx/apps/control-plane/internal/workerrpc	4.352s
+?   	github.com/Sendiw14/Clusterx/apps/control-plane/migrations	[no test files]
+ok  	github.com/Sendiw14/Clusterx/apps/control-plane/poc	11.974s
+exit=0
+== apps/worker
+?   	github.com/Sendiw14/Clusterx/apps/worker/cmd/clusterx-worker	[no test files]
+ok  	github.com/Sendiw14/Clusterx/apps/worker/internal/config	1.446s
+ok  	github.com/Sendiw14/Clusterx/apps/worker/internal/rpcclient	1.815s
+exit=0
+== packages/sdk-go
+ok  	github.com/Sendiw14/Clusterx/packages/sdk-go	3.160s
+exit=0
+== packages/proto
+?   	github.com/Sendiw14/Clusterx/packages/proto/gen/go/clusterx/worker/v1	[no test files]
+exit=0
+== examples/basic-jobs
+ok  	github.com/Sendiw14/Clusterx/examples/basic-jobs	1.557s
+exit=0
