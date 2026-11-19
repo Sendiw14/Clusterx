@@ -72,12 +72,14 @@ services:
     mem_limit: 256m
   worker-2:
     <<: *worker
+    build: !reset null # only `worker` builds the shared image (avoids parallel same-tag builds)
     environment:
       <<: *worker-env
       CLUSTERX_WORKER_NAME: worker-2
       CLUSTERX_WORKER_CREDENTIAL: ${CLUSTERX_WORKER_CREDENTIAL_2:-}
   worker-3:
     <<: *worker
+    build: !reset null # only `worker` builds the shared image (avoids parallel same-tag builds)
     environment:
       <<: *worker-env
       CLUSTERX_WORKER_NAME: worker-3

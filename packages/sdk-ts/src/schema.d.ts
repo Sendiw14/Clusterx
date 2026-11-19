@@ -217,7 +217,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Audit/security/diagnostic events (viewer sees privileged+outcome only, details masked; audit:read). */
+        /**
+         * Audit/security/diagnostic events (viewer sees privileged+outcome only, details masked; audit:read).
+         * @description A viewer asking for category security or diagnostic gets an empty page (not 403). At most one category value.
+         */
         get: operations["listAuditEvents"];
         put?: never;
         post?: never;
@@ -306,7 +309,10 @@ export interface paths {
         put?: never;
         /**
          * Issue a token. The secret is returned ONCE in this 201 body and never again. Audited (token.create).
-         * @description Rotation = create a new token, switch clients, then revoke the old one (no rotate endpoint).
+         * @description Rotation = create a new token, switch clients, then revoke the old one (no rotate endpoint). The owner is the
+         *     session user; an operator token requires an operator owner (422 rule role_not_allowed), and use-time authority
+         *     stays scopes ∩ the owner's current role. Idempotency-Key replays are scoped to the session user and recorded in
+         *     the token.create audit row; a different body with the same key is 409 idempotency_conflict (details.token_id).
          */
         post: operations["createApiToken"];
         delete?: never;
@@ -423,7 +429,15 @@ export interface paths {
          *     may open it with an API token holding jobs:read; such streams are re-validated against the token's
          *     current authority (revoked/expired/owner disabled => 4401; jobs:read lost => 4403) on the same <= 30 s cadence. Server→client JSON text frames follow
          *     `StreamMessage`; the client sends nothing except optional `{"type":"ping"}`.
-         *     Close codes: 1000 normal · 1001 server shutdown · 1008 policy (origin) · 1012 restart ·
+         *     Before the upgrade: 401 (no/invalid credential), 403 `forbidden` with `details.reason=origin_not_allowed` when an
+         *     `Origin` header is present and not in CLUSTERX_STREAM_ALLOWED_ORIGINS (server-to-server BFF upgrades send no Origin),
+         *     403 when jobs:read is missing, 503 when the hub is unavailable (poll snapshots instead).
+         *     `hello.session_expires_at` is min(absolute, idle) expiry for session streams and the token's `expires_at` for
+         *     token streams. Hints for one entity id are forwarded in increasing `version` order only; a slow consumer's
+         *     queue (256 frames) is discarded and replaced by one `resync{buffer_overflow}`; a failed or overflowing DB
+         *     change-feed poll broadcasts `resync{gap_detected}`. Logout and token/credential revocation trigger an immediate
+         *     re-check (close 4401) in addition to the <= 30 s cadence. Server shutdown closes 1001 (no `server_restart` frame).
+         *     Close codes: 1000 normal · 1001 server shutdown · 1008 policy (client sent a non-ping frame) · 1012 restart ·
          *     4401 session ended/revoked (re-auth) · 4403 forbidden · 4408 idle/pong timeout · 4429 too many streams (max 5 per session).
          *     After any reconnect or `resync`, clients refetch snapshots; hints may be dropped, duplicated or reordered.
          */
@@ -682,6 +696,11 @@ export interface components {
             retried_as_job_id?: string;
             /** @enum {string} */
             reason?: "drain_deadline" | "incarnation_superseded" | "credential_revoked" | "deregistered";
+            /**
+             * @description On attempts_exhausted from lease/deadline recovery: the outcome of the last attempt (draft.6, CR-M5-01).
+             * @enum {string}
+             */
+            attempt_state?: "lease_expired" | "deadline_exceeded";
         };
         /** @enum {string} */
         WorkerStatus: "active" | "draining" | "deregistered";
@@ -765,6 +784,7 @@ export interface components {
                 draining: number;
             };
             oldest_queued_age_seconds: number | null;
+            /** @description Queued jobs with no live, active worker advertising their handler version (sum of the three unschedulable reasons). */
             unschedulable_jobs: number;
             /** @description succeeded/failed/canceled counts cover jobs whose terminal_at >= since (= as_of - days; days = retention.terminal_jobs_days). */
             terminal_counts_window: {
@@ -892,7 +912,10 @@ export interface components {
              */
             role: "operator" | "viewer";
             scopes: components["schemas"]["Scope"][];
-            /** @default 90 */
+            /**
+             * @description Omitted or null = 90.
+             * @default 90
+             */
             expires_in_days: number | null;
         };
         ApiTokenCreated: components["schemas"]["ApiToken"] & {
@@ -919,7 +942,10 @@ export interface components {
         };
         WorkerCredentialCreate: {
             name: string;
-            /** @default 180 */
+            /**
+             * @description Omitted = 180; explicit null = no expiry.
+             * @default 180
+             */
             expires_in_days: number | null;
         };
         WorkerCredentialCreated: components["schemas"]["WorkerCredential"] & {
@@ -1120,7 +1146,11 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description Authenticated but role/scope does not permit this operation. */
+        /**
+         * @description Authenticated but role/scope does not permit this operation. `details` is `{required, role}` for role/scope
+         *     denials, or `{reason}` with `credential_not_allowed` (API token on a BFF-session-only route), `origin_not_allowed`
+         *     (stream). Denied mutations append a `security` audit row (`authz.denied`).
+         */
         Forbidden: {
             headers: {
                 [name: string]: unknown;
@@ -1310,7 +1340,12 @@ export interface components {
                 };
             };
         };
-        /** @description Too many requests. */
+        /**
+         * @description Too many requests (in-memory token buckets in the single coordinator, ADR-0001; reset on restart):
+         *     every mutating request per principal (default 20/s, burst 40), failed authentications per TCP peer
+         *     (default 60/min; once empty, every request from that peer gets 429 until it refills) and POST /sessions per
+         *     GitHub id (default 10/min). `Retry-After` is whole seconds (>= 1).
+         */
         RateLimited: {
             headers: {
                 /** @description Seconds. */
@@ -1828,7 +1863,14 @@ export interface operations {
             query: {
                 metric: "jobs_admitted" | "jobs_succeeded" | "jobs_failed" | "jobs_canceled" | "attempts_started" | "lease_expirations" | "queue_age_p95_seconds" | "run_duration_p95_seconds";
                 from: string;
-                /** @description to - from <= 7 days and must not exceed retention. */
+                /**
+                 * @description to - from <= 7 days; from within the 30-day retention window (else 422 retention_exceeded); at most 2016
+                 *     points (else 422 rule range on ?step). from/to are aligned down/up to the step. Only complete buckets
+                 *     (ending at or before as_of) are returned. Counters come from job_events (admitted includes retry_created;
+                 *     failed/canceled by to_status/event), lease_expirations from job_attempts (lease_expired + deadline_exceeded),
+                 *     queue_age_p95_seconds = p95 of first-attempt start - coalesce(run_after, created_at), run_duration_p95_seconds
+                 *     = p95 of attempt finish - start (null when the bucket has no samples).
+                 */
                 to: string;
                 step?: "1m" | "5m" | "1h";
             };
