@@ -3,7 +3,7 @@ openapi: 3.1.1
 # 3.1.x chosen per assumption A-03 until 3.2.1 generator compatibility is proven (M3).
 info:
   title: CLUSTERX Control Plane API
-  version: 1.0.0-draft.5
+  version: 1.0.0-draft.6
   summary: REST API of the CLUSTERX coordinator (/api/v1).
   description: |
     Source contract: docs/product/MASTER_PROMPT.md R2 §6. State semantics: docs/architecture/state-machine.md.
@@ -31,6 +31,12 @@ info:
       `method_not_allowed` (405 with `Allow` for a known path and another method); both use the Error body.
       M4 serves createJob, listJobs, getJob, listJobAttempts, listJobEvents, listWorkers, getWorker,
       listHandlers and getConfig with direct API tokens; the other operations are not routed yet (404 not_found_route).
+    * draft.6 (TASK-M5-BE-01, CR-M5-01): every operation is routed. Additive clarifications only:
+      `JobEventData.attempt_state` (recovery that exhausts the budget appends `attempts_exhausted` with
+      `failure_class` and the attempt outcome); 403 `details.reason` adds `origin_not_allowed` (stream) and
+      `credential_not_allowed` everywhere a route is BFF-session-only; stream 403/503 before the upgrade; rate
+      limits (429) documented on RateLimited; timeseries buckets are complete-only; audit viewer scoping;
+      credential idempotency conflicts carry `details.token_id` / `details.worker_credential_id`.
     * The BFF passes Go status codes, bodies and the headers Content-Type, X-Request-Id, Retry-After,
       Idempotent-Replayed, Location, ETag, Cache-Control, Date through unchanged (ADR-0006 §3).
 servers:
@@ -469,7 +475,13 @@ paths:
         - name: to
           in: query
           required: true
-          description: to - from <= 7 days and must not exceed retention.
+          description: |
+            to - from <= 7 days; from within the 30-day retention window (else 422 retention_exceeded); at most 2016
+            points (else 422 rule range on ?step). from/to are aligned down/up to the step. Only complete buckets
+            (ending at or before as_of) are returned. Counters come from job_events (admitted includes retry_created;
+            failed/canceled by to_status/event), lease_expirations from job_attempts (lease_expired + deadline_exceeded),
+            queue_age_p95_seconds = p95 of first-attempt start - coalesce(run_after, created_at), run_duration_p95_seconds
+            = p95 of attempt finish - start (null when the bucket has no samples).
           schema: { type: string, format: date-time }
         - name: step
           in: query
@@ -492,6 +504,7 @@ paths:
       tags: [audit]
       operationId: listAuditEvents
       summary: Audit/security/diagnostic events (viewer sees privileged+outcome only, details masked; audit:read).
+      description: A viewer asking for category security or diagnostic gets an empty page (not 403). At most one category value.
       parameters:
         - name: category
           in: query
@@ -654,7 +667,11 @@ paths:
       tags: [credentials]
       operationId: createApiToken
       summary: Issue a token. The secret is returned ONCE in this 201 body and never again. Audited (token.create).
-      description: Rotation = create a new token, switch clients, then revoke the old one (no rotate endpoint).
+      description: |
+        Rotation = create a new token, switch clients, then revoke the old one (no rotate endpoint). The owner is the
+        session user; an operator token requires an operator owner (422 rule role_not_allowed), and use-time authority
+        stays scopes ∩ the owner's current role. Idempotency-Key replays are scoped to the session user and recorded in
+        the token.create audit row; a different body with the same key is 409 idempotency_conflict (details.token_id).
       security: [ { serviceAssertion: [] } ]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -861,7 +878,15 @@ paths:
         may open it with an API token holding jobs:read; such streams are re-validated against the token's
         current authority (revoked/expired/owner disabled => 4401; jobs:read lost => 4403) on the same <= 30 s cadence. Server→client JSON text frames follow
         `StreamMessage`; the client sends nothing except optional `{"type":"ping"}`.
-        Close codes: 1000 normal · 1001 server shutdown · 1008 policy (origin) · 1012 restart ·
+        Before the upgrade: 401 (no/invalid credential), 403 `forbidden` with `details.reason=origin_not_allowed` when an
+        `Origin` header is present and not in CLUSTERX_STREAM_ALLOWED_ORIGINS (server-to-server BFF upgrades send no Origin),
+        403 when jobs:read is missing, 503 when the hub is unavailable (poll snapshots instead).
+        `hello.session_expires_at` is min(absolute, idle) expiry for session streams and the token's `expires_at` for
+        token streams. Hints for one entity id are forwarded in increasing `version` order only; a slow consumer's
+        queue (256 frames) is discarded and replaced by one `resync{buffer_overflow}`; a failed or overflowing DB
+        change-feed poll broadcasts `resync{gap_detected}`. Logout and token/credential revocation trigger an immediate
+        re-check (close 4401) in addition to the <= 30 s cadence. Server shutdown closes 1001 (no `server_restart` frame).
+        Close codes: 1000 normal · 1001 server shutdown · 1008 policy (client sent a non-ping frame) · 1012 restart ·
         4401 session ended/revoked (re-auth) · 4403 forbidden · 4408 idle/pong timeout · 4429 too many streams (max 5 per session).
         After any reconnect or `resync`, clients refetch snapshots; hints may be dropped, duplicated or reordered.
       parameters:
@@ -1220,7 +1245,7 @@ components:
           required: [live, stale, draining]
           properties: { live: { type: integer }, stale: { type: integer }, draining: { type: integer } }
         oldest_queued_age_seconds: { type: [number, 'null'] }
-        unschedulable_jobs: { type: integer }
+        unschedulable_jobs: { type: integer, description: 'Queued jobs with no live, active worker advertising their handler version (sum of the three unschedulable reasons).' }
         terminal_counts_window:
           type: object
           required: [days, since]
@@ -1330,7 +1355,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 100 }
         role: { type: string, enum: [operator, viewer], description: 'Ceiling for this token. viewer tokens may only hold *:read scopes (else 422). At use time the effective authority is scopes ∩ the owner''s CURRENT role; a disabled owner makes the token unusable (401 user_disabled). See ADR-0005 #3.' }
         scopes: { type: array, minItems: 1, maxItems: 6, uniqueItems: true, items: { $ref: '#/components/schemas/Scope' } }
-        expires_in_days: { type: [integer, 'null'], minimum: 1, maximum: 365, default: 90 }
+        expires_in_days: { type: [integer, 'null'], minimum: 1, maximum: 365, default: 90, description: 'Omitted or null = 90.' }
     ApiTokenCreated:
       allOf:
         - $ref: '#/components/schemas/ApiToken'
@@ -1357,7 +1382,7 @@ components:
       additionalProperties: false
       properties:
         name: { type: string, minLength: 1, maxLength: 100 }
-        expires_in_days: { type: [integer, 'null'], minimum: 1, maximum: 730, default: 180 }
+        expires_in_days: { type: [integer, 'null'], minimum: 1, maximum: 730, default: 180, description: 'Omitted = 180; explicit null = no expiry.' }
     WorkerCredentialCreated:
       allOf:
         - $ref: '#/components/schemas/WorkerCredential'
@@ -1595,7 +1620,10 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
           example: { code: unauthenticated, message: "Authentication required.", details: { reason: session_expired }, request_id: "req_01JD3C" }
     Forbidden:
-      description: Authenticated but role/scope does not permit this operation.
+      description: |
+        Authenticated but role/scope does not permit this operation. `details` is `{required, role}` for role/scope
+        denials, or `{reason}` with `credential_not_allowed` (API token on a BFF-session-only route), `origin_not_allowed`
+        (stream). Denied mutations append a `security` audit row (`authz.denied`).
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1662,7 +1690,11 @@ components:
                 - { field: /payload/width, rule: schema, message: "must be an integer" }
             request_id: "req_01JD3J"
     RateLimited:
-      description: Too many requests.
+      description: |
+        Too many requests (in-memory token buckets in the single coordinator, ADR-0001; reset on restart):
+        every mutating request per principal (default 20/s, burst 40), failed authentications per TCP peer
+        (default 60/min; once empty, every request from that peer gets 429 until it refills) and POST /sessions per
+        GitHub id (default 10/min). `Retry-After` is whole seconds (>= 1).
       headers:
         Retry-After: { schema: { type: integer }, description: Seconds. }
       content:
