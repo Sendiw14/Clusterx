@@ -325,6 +325,13 @@ func TestM5_TokensAndWorkerCredentials(t *testing.T) {
 		t.Fatalf("replay: %v", replay)
 	}
 	e.want(e.do("POST", "/api/v1/tokens", e.as(op), strings.Replace(body, `"ci"`, `"cd"`, 1), "Idempotency-Key", "tok-1"), 409, "idempotency_conflict")
+	// RV5-08 / N14: credential idempotency keys are scoped to the actor; another operator reusing the
+	// key gets a fresh token (201 with its own secret), not operator A's replay.
+	op2 := e.login(302, "operator")
+	other := decode[map[string]any](t, e.want2(e.do("POST", "/api/v1/tokens", e.as(op2), body, "Idempotency-Key", "tok-1"), 201))
+	if other["id"] == created["id"] || other["secret"] == nil || other["owner_user_id"] != op2.userID {
+		t.Fatalf("idempotency key leaked across actors: %v", other)
+	}
 	// List never contains secrets or hashes.
 	rec = e.do("GET", "/api/v1/tokens?limit=1", e.as(op), "")
 	if strings.Contains(rec.Body.String(), "cxt_") && strings.Contains(rec.Body.String(), secret[13:]) || strings.Contains(rec.Body.String(), "hash") {
@@ -475,12 +482,33 @@ func TestM5_RateLimit(t *testing.T) {
 	// Reads are not limited by the mutation bucket; another principal has its own bucket.
 	e.want(e.do("GET", "/api/v1/jobs", e.op, ""), 200, "")
 	e.want(e.do("POST", "/api/v1/jobs", e.token(9, "operator", "jobs:write"), okJob), 201, "")
-	// Failed authentication drains the per-peer bucket; then even valid credentials from that peer get 429.
+	// Credential guessing drains the per-peer bucket; further guesses get 429 (REST and login), while a
+	// credential that verifies from the same peer is still served (RV5-05).
 	for range 4 {
 		e.want(e.do("GET", "/api/v1/jobs", "cxt_bad", ""), 401, "unauthenticated")
 	}
-	e.want(e.do("GET", "/api/v1/jobs", e.op, ""), 429, "rate_limited")
+	e.want(e.do("GET", "/api/v1/jobs", "cxt_bad", ""), 429, "rate_limited")
 	e.want(e.do("POST", "/api/v1/sessions", "x.y.z", `{}`), 429, "rate_limited")
+	e.want(e.do("GET", "/api/v1/jobs", e.op, ""), 200, "")
+}
+
+// RV5-05: behind the BFF all users share one TCP peer. Session-lifecycle 401s (logout, expiry) do not
+// drain the per-peer bucket, so one user's stale tabs never rate-limit another user.
+func TestRV5_AuthFailureBucketIsNotCrossUser(t *testing.T) {
+	e := newM5(t, func(v *api.V1) { v.AuthFailures = api.NewLimiter(0.01, 3) })
+	a := e.login(101, "viewer")
+	b := e.login(102, "operator")
+	e.want(e.do("DELETE", "/api/v1/sessions/current", e.as(a), ""), 204, "")
+	for range 6 { // user A's browser tab keeps polling with its ended session
+		e.want(e.do("GET", "/api/v1/jobs", e.as(a), ""), 401, "unauthenticated")
+	}
+	e.want(e.do("GET", "/api/v1/jobs", e.as(b), ""), 200, "")
+	// Guessing then exhausts the bucket; user B's verified session is still served.
+	for range 3 {
+		e.want(e.do("GET", "/api/v1/jobs", "cxt_bad", ""), 401, "unauthenticated")
+	}
+	e.want(e.do("GET", "/api/v1/jobs", "cxt_bad", ""), 429, "rate_limited")
+	e.want(e.do("GET", "/api/v1/jobs", e.as(b), ""), 200, "")
 }
 
 // refWorker drives the store directly as one registered worker.

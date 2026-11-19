@@ -63,7 +63,7 @@ tombstoned IDs answer **410 `expired`** (CCR-M1), unknown IDs 404. Tombstones ar
 the ID answers 404. Figures are not legal advice (§6). Backups: 14 d.
 The log-retention function and the guards `jobs_retention_delete_only` (DELETE jobs only when terminal ≥ 30 d) and
 BEFORE TRUNCATE triggers on history tables are in migration 0002 (CR-M4-01 NF-03/NF-04). Runtime role
-`clusterx_runtime`: SELECT/INSERT/UPDATE, DELETE only on sessions, submission_idempotency, worker_capabilities;
+`clusterx_runtime`: SELECT/INSERT/UPDATE (since 0004: SELECT only on job_tombstones, no UPDATE on job_events/audit_events), DELETE only on sessions, submission_idempotency, worker_capabilities;
 no TRUNCATE/DDL. `clusterx_retention`: the deletes above. Login users are granted one role out of band.
 
 ## Migrations
@@ -77,4 +77,15 @@ across releases; no destructive change in the same release that stops using a co
 - Credential idempotency (`POST /tokens`, `POST /worker-credentials`): `submission_idempotency.job_id` references `jobs`, so the
   key and request fingerprint are stored in the create audit row (`details.idempotency_key`, `details.fingerprint`, 24 h window),
   serialized by `pg_advisory_xact_lock` on (actor, action, key). No schema change.
+  **Contract interpretation (accepted in REVIEW-M5-RV-01 RV5-08, recorded by TASK-M5-BE-02):** the audit row is the idempotency
+  record for credential creation. The key is scoped to (actor, action): another principal reusing it gets a new credential
+  (test `TestM5_TokensAndWorkerCredentials`). This requires `audit_events` retention to stay **≥ 24 h** (it is 90 d); a
+  shorter audit retention would silently shorten the replay window. Lookups use the partial index
+  `audit_events_idempotency_idx (action, actor, (details->>'idempotency_key'), occurred_at) WHERE details ? 'idempotency_key'`
+  (migration 0004).
+- Worker denial audit budget (RV5-11): `Store.DenialAudit`, an in-process token bucket per worker credential id
+  (1 row/s, burst 60, reset on restart; ADR-0001 single coordinator). Denials beyond it are answered but not audited.
+- Migration 0004 (TASK-M5-BE-02): `job_events.txid xid8 DEFAULT pg_current_xact_id()` + partial index (stream feed
+  visibility cursor, RV5-04; pre-0004 rows keep NULL); the credential idempotency index above; and least privilege for
+  `clusterx_runtime` (RV5-10): no INSERT/UPDATE on `job_tombstones`, no UPDATE on `job_events`/`audit_events`.
 - Migration 0003 is additive (indexes only) for metrics series and session retention.

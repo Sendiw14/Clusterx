@@ -180,7 +180,34 @@ func (s *Store) Register(ctx context.Context, credID string, p RegisterParams) (
 		} else if err != nil {
 			return err
 		}
-		target := p.WorkerID
+		target := ""
+		if p.WorkerID != "" {
+			// Drain is sticky to the worker id and a deregistered id is never resurrected (RV5-02): a new
+			// incarnation of a draining worker stays draining (Claim answers worker_draining).
+			var status, prevInc string
+			var live bool
+			err := tx.QueryRow(ctx, `SELECT status, current_incarnation_id, last_heartbeat_at > clock_timestamp() - $3::interval
+				FROM workers WHERE id = $1 AND credential_id = $2 FOR UPDATE`, p.WorkerID, credID, s.Timing.LivenessTimeout).Scan(&status, &prevInc, &live)
+			if isNoRows(err) {
+				return &Denial{Reason: "credential_mismatch", Detail: "credential is not bound to this worker"}
+			} else if err != nil {
+				return err
+			}
+			if status != "deregistered" {
+				target = p.WorkerID
+				// Two processes sharing one id supersede each other; each takeover fences the other's
+				// attempts and is audited, within the per-credential audit budget (RV5R-02).
+				if live && prevInc != p.IncarnationID && (s.DenialAudit == nil || s.DenialAudit(credID)) {
+					if err := insertAudit(ctx, tx, AuditRow{Category: "security", Action: "worker.incarnation_takeover", Outcome: "allowed",
+						Actor: "worker:" + target, TargetType: "worker", TargetID: target,
+						Details: map[string]any{"previous_incarnation_id": prevInc, "incarnation_id": p.IncarnationID, "credential_id": credID}}); err != nil {
+						return err
+					}
+				}
+			}
+			// A deregistered id falls through to the same one-live-worker-per-credential selection as an
+			// empty worker_id (RV5R-01): it never yields a second live row for the credential.
+		}
 		if target == "" {
 			rows, err := tx.Query(ctx, `SELECT id, current_incarnation_id, last_heartbeat_at > clock_timestamp() - $2::interval
 				FROM workers WHERE credential_id = $1 AND status <> 'deregistered' ORDER BY id FOR UPDATE`, credID, s.Timing.LivenessTimeout)
@@ -218,11 +245,10 @@ func (s *Store) Register(ctx context.Context, credID string, p RegisterParams) (
 			}
 		} else {
 			tag, err := tx.Exec(ctx, `UPDATE workers SET name = $3, current_incarnation_id = $4, capacity = $5, protocol_version = $6,
-					sdk_version = NULLIF($7, ''), hostname = NULLIF($8, ''), status = 'active', drain_requested_at = NULL,
-					drain_deadline_at = NULL, deregistered_at = NULL, last_heartbeat_at = clock_timestamp(),
+					sdk_version = NULLIF($7, ''), hostname = NULLIF($8, ''), last_heartbeat_at = clock_timestamp(),
 					registered_at = CASE WHEN current_incarnation_id = $4 THEN registered_at ELSE clock_timestamp() END,
-					version = version + CASE WHEN current_incarnation_id = $4 AND status = 'active' THEN 0 ELSE 1 END
-				WHERE id = $1 AND credential_id = $2`,
+					version = version + CASE WHEN current_incarnation_id = $4 THEN 0 ELSE 1 END
+				WHERE id = $1 AND credential_id = $2 AND status <> 'deregistered'`,
 				target, credID, p.Name, p.IncarnationID, p.Capacity, p.ProtocolVersion, p.SDKVersion, p.Hostname)
 			if err != nil {
 				return err

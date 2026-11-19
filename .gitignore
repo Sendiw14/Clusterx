@@ -5,3 +5,5 @@ node_modules/
 .env*
 !.env.example
 infra/compose/.secrets.env
+infra/compose/.secrets/
+infra/compose/.keygen.*/

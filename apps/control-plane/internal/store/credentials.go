@@ -38,7 +38,8 @@ func credentialIdem(ctx context.Context, tx pgx.Tx, actor, action, key, fp strin
 	}
 	var target, oldFP string
 	err := tx.QueryRow(ctx, `SELECT target_id::text, details->>'fingerprint' FROM audit_events
-		WHERE action = $1 AND actor = $2 AND outcome = 'allowed' AND details->>'idempotency_key' = $3
+		WHERE action = $1 AND actor = $2 AND outcome = 'allowed' AND details ? 'idempotency_key'
+		  AND details->>'idempotency_key' = $3
 		  AND occurred_at > clock_timestamp() - interval '24 hours'
 		ORDER BY occurred_at DESC LIMIT 1`, action, actor, key).Scan(&target, &oldFP)
 	if isNoRows(err) {

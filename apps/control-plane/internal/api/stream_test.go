@@ -245,3 +245,25 @@ func itoa(i int) string {
 	}
 	return string(b)
 }
+
+// RV5R-04 / R07: the /stream endpoint subscribes with the principal's scopes, so a jobs:read token
+// stream never receives a worker hint.
+func TestStreamHintScopeWiring(t *testing.T) {
+	e := newM5(t)
+	srv := httptest.NewServer(e.h)
+	t.Cleanup(srv.Close)
+	c, _, err := dialStream(t, srv, e.token(601, "operator", "jobs:read"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.CloseNow()
+	if m, err := readMsg(t, c, 2*time.Second); err != nil || m["type"] != "hello" {
+		t.Fatalf("hello: %v %v", m, err)
+	}
+	e.v1.Hub.PublishWorker("0193a0f2-0000-7000-8000-0000000000f1", 7)
+	e.v1.Hub.PublishJob("0193a0f2-0000-7000-8000-0000000000f2", 1)
+	m := readUntil(t, c, 3*time.Second, func(m map[string]any) bool { return m["type"] == "hint" })
+	if m["entity"] != "job" {
+		t.Fatalf("jobs:read stream received %v", m)
+	}
+}

@@ -48,7 +48,7 @@ A viewer token can only hold `*:read` scopes (issuance rejects otherwise).
 | `POST /api/v1/worker-credentials/{id}/revoke` | ✓ | ✗ 403 | **none** (session only) | ✗ 401 | **yes** `worker_credential.revoke` |
 | `GET /api/v1/handlers` | ✓ | ✓ | `jobs:read` | ✗ 401 | no |
 | `GET /api/v1/config` | ✓ | ✓ | any read scope | ✗ 401 | no |
-| `GET /api/v1/stream` (WebSocket, via BFF) | ✓ | ✓ (hints carry ids/versions only) | `jobs:read` — token streams re-validated ≤ 30 s, close 4401/4403 (RV01-13) | ✗ 401 | no |
+| `GET /api/v1/stream` (WebSocket, via BFF) | ✓ | ✓ (hints carry ids/versions only) | `jobs:read` — token streams re-validated ≤ 30 s, close 4401/4403 (RV01-13); hints filtered by scope: `worker` hints need `workers:read`, `metrics` hints `metrics:read` (RV5-07) | ✗ 401 | no |
 
 Token/credential management is deliberately unavailable to API tokens, so a leaked token cannot mint
 or revoke credentials. Rotation = create + revoke (CCR-01).

@@ -323,13 +323,20 @@ func TestAC08_DatabaseOutageMidRun(t *testing.T) {
 	outageAt := time.Now()
 	pg.stop(t)
 	waitFor(t, 10*time.Second, "readiness 503", func() bool { return c.status("GET", "/health/ready", "", "") == 503 })
-	code, body, hdr := c.do("POST", "/api/v1/jobs", tok, `{"handler_name":"hash_sha256","handler_version":1,"payload":{"data":"during-outage"}}`,
-		"Idempotency-Key", "outage-1")
-	if code != 503 || body["code"] != "unavailable" {
-		t.Fatalf("admission during outage: %d %v (want 503 unavailable, never 2xx)", code, body)
+	// Repeated admissions deterministically cover both outage error paths (RV5-01): the first ones hit
+	// pooled connections whose server died (io.ErrUnexpectedEOF), later ones fail to connect.
+	for i := range 12 {
+		code, body, hdr := c.do("POST", "/api/v1/jobs", tok, `{"handler_name":"hash_sha256","handler_version":1,"payload":{"data":"during-outage"}}`,
+			"Idempotency-Key", "outage-1")
+		if code != 503 || body["code"] != "unavailable" {
+			t.Fatalf("admission %d during outage: %d %v (want 503 unavailable, never 2xx)", i, code, body)
+		}
+		if hdr.Get("Retry-After") == "" {
+			t.Fatal("503 without Retry-After")
+		}
 	}
-	if hdr.Get("Retry-After") == "" {
-		t.Fatal("503 without Retry-After")
+	if strings.Contains(c.p.out.String(), `"api internal error"`) {
+		t.Fatalf("coordinator logged an internal error during the outage:\n%s", tail(c.p.out.String(), 20))
 	}
 	if c.status("GET", "/health/live", "", "") != 200 {
 		t.Fatal("liveness must not depend on the database")
@@ -339,7 +346,7 @@ func TestAC08_DatabaseOutageMidRun(t *testing.T) {
 	restartedAt := time.Now()
 	waitFor(t, 30*time.Second, "readiness back", func() bool { return c.status("GET", "/health/ready", "", "") == 200 })
 	// The client retries the refused submission with the same key: created exactly once now.
-	code, body, _ = c.do("POST", "/api/v1/jobs", tok, `{"handler_name":"hash_sha256","handler_version":1,"payload":{"data":"during-outage"}}`,
+	code, body, _ := c.do("POST", "/api/v1/jobs", tok, `{"handler_name":"hash_sha256","handler_version":1,"payload":{"data":"during-outage"}}`,
 		"Idempotency-Key", "outage-1")
 	if code != 201 {
 		t.Fatalf("resubmission after outage: %d %v (outage attempt must not have been committed)", code, body)
@@ -382,6 +389,9 @@ func TestAC08_DatabaseOutageMidRun(t *testing.T) {
 	// Neither process restarted: both rode out the outage (the scheduler logged failed ticks meanwhile).
 	if w.cmd.ProcessState != nil || c.p.cmd.ProcessState != nil {
 		t.Fatal("a process exited during the outage")
+	}
+	if strings.Contains(c.p.out.String(), `"worker rpc internal error"`) {
+		t.Fatalf("worker RPCs answered INTERNAL during the outage (want UNAVAILABLE):\n%s", tail(c.p.out.String(), 20))
 	}
 	if !strings.Contains(c.p.out.String(), "scheduler tick failed") {
 		t.Fatal("coordinator log shows no paused scheduler work during the outage")

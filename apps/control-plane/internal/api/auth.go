@@ -82,6 +82,21 @@ func (v *V1) securityEvent(r *http.Request, action, actor, targetType, targetID 
 	}
 }
 
+// authFailed answers a failed authentication. Only credential-guessing reasons (an unknown token or an
+// assertion that does not verify) drain the per-peer bucket; session/token lifecycle reasons
+// (expired, revoked, user disabled) do not, so stale tabs behind the BFF cannot lock out other users
+// (RV5-05). An empty bucket turns further guesses into 429; a credential that verifies is never
+// refused by this bucket.
+func (v *V1) authFailed(w http.ResponseWriter, r *http.Request, reason string) {
+	if reason == "token_invalid" || reason == auth.ReasonInvalid {
+		if ok, wait := v.AuthFailures.Allow(clientIP(r)); !ok {
+			rateLimited(w, r, wait)
+			return
+		}
+	}
+	v.unauthenticatedReason(w, r, reason)
+}
+
 func (v *V1) unauthenticatedReason(w http.ResponseWriter, r *http.Request, reason string) {
 	details := map[string]any{"reason": reason}
 	if base, expiry, ok := strings.Cut(reason, ":"); ok {
@@ -94,19 +109,13 @@ func (v *V1) unauthenticatedReason(w http.ResponseWriter, r *http.Request, reaso
 // guard authenticates, authorizes and rate-limits one route, then calls next with the principal.
 func (v *V1) guard(a access, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ip := clientIP(r)
-		if ok, wait := v.AuthFailures.Peek(ip); !ok {
-			rateLimited(w, r, wait)
-			return
-		}
 		p, reason, err := v.authenticate(r, a)
 		if err != nil {
 			v.fail(w, r, err)
 			return
 		}
 		if reason != "" {
-			v.AuthFailures.Allow(ip) // failed authentications drain the per-peer bucket
-			v.unauthenticatedReason(w, r, reason)
+			v.authFailed(w, r, reason)
 			return
 		}
 		if msg, details := authorize(p, a); msg != "" {

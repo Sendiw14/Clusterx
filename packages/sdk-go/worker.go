@@ -92,10 +92,11 @@ func reasonOf(err error) string {
 	return ""
 }
 
-// transient reports errors worth retrying with the same request.
+// transient reports errors worth retrying with the same request. INTERNAL is included (RV5-01): a
+// coordinator-side fault (e.g. DB connection loss) must back off and retry, never exit the worker.
 func transient(err error) bool {
 	switch status.Code(err) {
-	case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted, codes.Aborted:
+	case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted, codes.Aborted, codes.Internal:
 		return true
 	}
 	return false

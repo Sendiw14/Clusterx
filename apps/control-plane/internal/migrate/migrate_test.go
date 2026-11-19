@@ -24,8 +24,8 @@ func TestLoadEmbedded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(migs) != 3 || migs[0].Name != "0001_init.sql" || migs[1].Name != "0002_m4_integrity_roles.sql" ||
-		migs[2].Name != "0003_m5_metrics_indexes.sql" || len(migs[0].Checksum) != 64 {
+	if len(migs) != 4 || migs[0].Name != "0001_init.sql" || migs[1].Name != "0002_m4_integrity_roles.sql" ||
+		migs[2].Name != "0003_m5_metrics_indexes.sql" || migs[3].Name != "0004_m5_feed_cursor_grants.sql" || len(migs[0].Checksum) != 64 {
 		t.Fatalf("unexpected migrations: %+v", migs)
 	}
 }

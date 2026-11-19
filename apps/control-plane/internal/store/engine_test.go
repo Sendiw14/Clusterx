@@ -719,6 +719,9 @@ func TestNF04_PrivilegesAndDeleteGuards(t *testing.T) {
 		`DELETE FROM jobs`, `DELETE FROM job_events`, `DELETE FROM job_attempts`, `DELETE FROM audit_events`,
 		`TRUNCATE submission_idempotency`, `CREATE TABLE x (a int)`, `ALTER TABLE jobs DROP COLUMN priority`,
 		`DROP TRIGGER jobs_terminal_immutable ON jobs`, `INSERT INTO schema_migrations VALUES (99, 'x', repeat('0', 64))`,
+		// RV5-10 (migration 0004): tombstones are read-only and history tables append-only for the runtime.
+		`INSERT INTO job_tombstones (job_id, terminal_at, expired_at) VALUES (gen_random_uuid(), now(), now())`,
+		`UPDATE job_tombstones SET expired_at = now()`, `UPDATE job_events SET actor = 'x'`, `UPDATE audit_events SET actor = 'x'`,
 	} {
 		_, err := conn.Exec(ctx, sql)
 		var pe *pgconn.PgError

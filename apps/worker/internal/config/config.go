@@ -66,11 +66,22 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 	var errs []error
 	get := func(k string) string { v, _ := lookup(k); return strings.TrimSpace(v) }
 	fail := func(format string, a ...any) { errs = append(errs, fmt.Errorf(format, a...)) }
+	// CLUSTERX_WORKER_CREDENTIAL_FILE: the credential mounted as a file (RV5-09), never both.
+	credential := get(VarCredential)
+	if path := get(VarCredential + "_FILE"); path != "" {
+		if credential != "" {
+			fail("set %s or %s_FILE, not both", VarCredential, VarCredential)
+		} else if b, err := os.ReadFile(path); err != nil {
+			fail("%s_FILE: cannot read %q", VarCredential, path)
+		} else {
+			credential = strings.TrimSpace(string(b))
+		}
+	}
 
 	c := Config{
 		Env:           Env(get(VarEnv)),
 		Addr:          get(VarAddr),
-		Credential:    get(VarCredential),
+		Credential:    credential,
 		TLSCAFile:     get(VarTLSCAFile),
 		TLSServerName: get(VarTLSServerName),
 		Name:          get(VarName),

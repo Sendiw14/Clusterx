@@ -483,7 +483,7 @@ func (s *Store) classify(ctx context.Context, tx pgx.Tx, r AttemptRef, action st
 	default:
 		reason = "stale_attempt"
 	}
-	if err := audit(ctx, tx, r, action, reason); err != nil {
+	if err := s.audit(ctx, tx, r, action, reason); err != nil {
 		return Reply{}, nil, err
 	}
 	return Reply{}, deny(reason), nil
@@ -497,7 +497,10 @@ func auditCategory(reason string) string {
 	return "diagnostic"
 }
 
-func audit(ctx context.Context, tx pgx.Tx, r AttemptRef, action, reason string) error {
+func (s *Store) audit(ctx context.Context, tx pgx.Tx, r AttemptRef, action, reason string) error {
+	if s.DenialAudit != nil && !s.DenialAudit(r.CredentialID) {
+		return nil // per-credential budget spent: a misbehaving worker cannot flood audit_events
+	}
 	_, err := tx.Exec(ctx, `INSERT INTO audit_events (category, action, outcome, actor, target_type, target_id, occurred_at, details)
 		VALUES ($6, $7, 'rejected', 'worker:' || $1, 'job', $2, clock_timestamp(),
 		        jsonb_build_object('reason', $3::text, 'attempt_id', $4::text, 'lease_generation', $5::bigint))`,
@@ -534,7 +537,7 @@ func (s *Store) RenewLease(ctx context.Context, r AttemptRef) (Lease, error) {
 		}
 		if draining {
 			denial = deny("worker_draining")
-			return audit(ctx, tx, r, "worker.renew_lease", "worker_draining")
+			return s.audit(ctx, tx, r, "worker.renew_lease", "worker_draining")
 		}
 		return tx.QueryRow(ctx, `UPDATE jobs j SET lease_expires_at = LEAST(clock_timestamp() + $7::interval, j.hard_deadline_at,
 				COALESCE(j.cancel_requested_at + $8::interval, 'infinity'::timestamptz))

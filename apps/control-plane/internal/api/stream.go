@@ -66,7 +66,7 @@ func (v *V1) stream(w http.ResponseWriter, r *http.Request) {
 	}
 	defer c.CloseNow()
 	c.SetReadLimit(512)
-	sub, ok := v.Hub.subscribe(key)
+	sub, ok := v.Hub.subscribe(key, append([]string{}, p.Scopes...)...) // non-nil: filter by scopes
 	if !ok {
 		_ = c.Close(CloseTooMany, "too many streams")
 		return
