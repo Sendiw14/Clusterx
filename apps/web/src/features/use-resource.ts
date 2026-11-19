@@ -15,7 +15,8 @@ export type Resource<T> =
  */
 export type LiveMatch<T> = (e: Extract<RealtimeEvent, { type: "hint" }>, current: T) => boolean;
 
-const COALESCE_MS = 250;
+/** Bursts of hints become at most one refetch per second (throttle, so a steady stream still refreshes). */
+const COALESCE_MS = 1000;
 
 /**
  * Loads once per `key` change (the previous key's data is never shown for a new key: it reads as `loading`).
@@ -52,8 +53,8 @@ export function useResource<T>(load: () => Promise<Result<T>>, key: string, live
       const cur = current.current.data;
       const hit = e.type === "hint" ? cur !== undefined && live(e, cur) : true;
       if (!hit) return;
-      clearTimeout(t);
-      t = setTimeout(() => setNonce((n) => n + 1), COALESCE_MS);
+      if (t) return;
+      t = setTimeout(() => { t = undefined; setNonce((n) => n + 1); }, COALESCE_MS);
     });
     return () => { off(); clearTimeout(t); };
   }, [rt, live]);
