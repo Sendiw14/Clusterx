@@ -34,10 +34,10 @@ export default function HomePage() {
                 <tbody>
                   <tr><td>t+00.0 s</td><td>admit <span className="who">· committed</span></td><td>queued</td></tr>
                   <tr><td>t+00.4 s</td><td>claim, lease gen 1 <span className="who">· worker A</span></td><td>running</td></tr>
-                  <tr><td>t+30.4 s</td><td>lease expired</td><td>retry_wait</td></tr>
-                  <tr><td>t+32.9 s</td><td>claim, lease gen 2 <span className="who">· worker B</span></td><td>running</td></tr>
-                  <tr><td>t+34.1 s</td><td>result committed</td><td>succeeded</td></tr>
-                  <tr className="rej"><td>t+41.7 s</td><td>late report from worker A <span className="who">· rejected</span></td><td>succeeded <span className="who">(unchanged)</span></td></tr>
+                  <tr><td>t+42.4 s</td><td>lease expired</td><td>retry_wait</td></tr>
+                  <tr><td>t+44.9 s</td><td>claim, lease gen 2 <span className="who">· worker B</span></td><td>running</td></tr>
+                  <tr><td>t+46.1 s</td><td>result committed</td><td>succeeded</td></tr>
+                  <tr className="rej"><td>t+53.7 s</td><td>late report from worker A <span className="who">· rejected</span></td><td>succeeded <span className="who">(unchanged)</span></td></tr>
                 </tbody>
               </table>
             </div>
@@ -84,10 +84,10 @@ export default function HomePage() {
           <Reveal className="sec-h" style={{ marginBottom: 0 }}><p className="eyebrow">The worker-failure story</p><h2 id="story-h" className="h2">What happens when a worker dies mid-job.</h2><p className="lede">The same scripted example as the Atlas, in plain terms: no retry is hidden, no result is overwritten. The recovery path is covered by in-process tests; killing a real worker process to watch it is not yet verified.</p></Reveal>
           <Reveal as="ol" className="timeline">
             <li><span className="t">t+00 s</span><p><strong>Claimed.</strong> Worker A holds attempt 1 under a lease. The default is 30 s and it is configurable.</p></li>
-            <li data-kind="warn"><span className="t">t+30 s</span><p><strong>Lease expires.</strong> The database clock decides, not the worker. Attempt 1 counts against the job&apos;s budget.</p></li>
-            <li><span className="t">t+32 s</span><p><strong>Retried.</strong> With budget left the job goes back to the queue; worker B claims attempt 2.</p></li>
-            <li data-kind="ok"><span className="t">t+34 s</span><p><strong>Committed.</strong> Worker B&apos;s result is recorded with its attempt and generation.</p></li>
-            <li data-kind="bad"><span className="t">t+41 s</span><p><strong>Rejected.</strong> Worker A reports late. The result is refused and a diagnostic event is kept. The job still says succeeded.</p></li>
+            <li data-kind="warn"><span className="t">t+42 s</span><p><strong>Lease expires.</strong> The database clock decides, not the worker. Attempt 1 counts against the job&apos;s budget.</p></li>
+            <li><span className="t">t+44 s</span><p><strong>Retried.</strong> With budget left the job goes back to the queue; worker B claims attempt 2.</p></li>
+            <li data-kind="ok"><span className="t">t+46 s</span><p><strong>Committed.</strong> Worker B&apos;s result is recorded with its attempt and generation.</p></li>
+            <li data-kind="bad"><span className="t">t+53 s</span><p><strong>Rejected.</strong> Worker A reports late. The result is refused and a diagnostic event is kept. The job still says succeeded.</p></li>
           </Reveal>
         </div>
       </section>

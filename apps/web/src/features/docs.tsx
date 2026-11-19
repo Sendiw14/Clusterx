@@ -1,37 +1,46 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Notice } from "@clusterx/ui";
+import { allDocMeta, loadDoc, type DocSlug } from "@/lib/docs/content";
+import { renderMarkdown, type Heading } from "@/lib/docs/markdown";
+import { OnThisPage } from "@/features/on-this-page";
 
-export const DOC_ORDER = [
-  { href: "/docs/quickstart", title: "Quickstart", blurb: "From a clean checkout to a first job, three workers and a recovery demonstration." },
-  { href: "/docs/concepts", title: "Concepts", blurb: "Job states, attempts, leases, fencing, at-least-once and priorities." },
-  { href: "/docs/workers", title: "Worker SDK", blurb: "Register handlers, error types, timeouts and worker credentials." },
-  { href: "/docs/api", title: "API reference", blurb: "The versioned REST contract, authentication and the error model." },
-  { href: "/docs/reliability", title: "Reliability", blurb: "Guarantees and non-guarantees, retry budgets and recovery." },
-  { href: "/docs/deployment", title: "Deployment", blurb: "Single-VM reference, TLS, backups and upgrades." },
-  { href: "/docs/security", title: "Security", blurb: "Authentication, roles, worker trust and the demo boundary." },
-] as const;
-
-/** Shared docs page frame: one h1, a lede, an honest status notice where content is not final. */
-export function DocPage({ title, lead, pending, children }: { title: string; lead: string; pending?: string; children?: ReactNode }) {
+/** Shared docs page frame: one h1, a lede, the article, and the on-this-page rail. Content never depends on script. */
+export function DocFrame({ title, lead, headings, children, href }: { title: string; lead: string; headings: Heading[]; children: ReactNode; href: string }) {
   return (
-    <>
-      <h1>{title}</h1>
-      <p className="lede">{lead}</p>
-      {pending ? <Notice variant="info" lead="Documentation in progress." role="none">{pending}</Notice> : null}
-      {children}
-    </>
+    <div className="docs-cols">
+      <article className="docs-article" data-doc={href}>
+        <h1>{title}</h1>
+        <p className="lede">{lead}</p>
+        <OnThisPage headings={headings} variant="inline" />
+        {children}
+        <PrevNext href={href} />
+      </article>
+      <OnThisPage headings={headings} variant="rail" />
+    </div>
   );
 }
 
+/** A docs page authored in content/docs/<slug>.md. */
+export function MarkdownDoc({ slug }: { slug: DocSlug }) {
+  const d = loadDoc(slug);
+  const r = renderMarkdown(d.body, { sectionLabel: d.title });
+  return <DocFrame title={d.title} lead={d.lead} headings={r.headings} href={`/docs/${slug}`}>{r.nodes}</DocFrame>;
+}
+
+export function docMetadata(slug: DocSlug) {
+  const d = loadDoc(slug);
+  return { title: `${d.title}: Docs`, description: d.description };
+}
+
 export function PrevNext({ href }: { href: string }) {
-  const i = DOC_ORDER.findIndex((d) => d.href === href);
-  const prev = DOC_ORDER[i - 1];
-  const next = DOC_ORDER[i + 1];
+  const all = allDocMeta();
+  const i = all.findIndex((d) => `/docs/${d.slug}` === href);
+  const prev = all[i - 1];
+  const next = all[i + 1];
   return (
-    <nav aria-label="Previous and next page" style={{ display: "flex", justifyContent: "space-between", gap: "var(--space-4)", marginTop: "var(--space-8)", paddingTop: "var(--space-4)", borderTop: "1px solid var(--color-line)", flexWrap: "wrap" }}>
-      {prev ? <Link href={prev.href}>Previous: {prev.title}</Link> : <span />}
-      {next ? <Link href={next.href}>Next: {next.title}</Link> : <span />}
+    <nav className="prevnext" aria-label="Previous and next page">
+      {prev ? <Link href={`/docs/${prev.slug}`} rel="prev"><span>Previous</span>{prev.title}</Link> : <span />}
+      {next ? <Link href={`/docs/${next.slug}`} rel="next" className="next"><span>Next</span>{next.title}</Link> : <span />}
     </nav>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button, ButtonLink } from "./button";
 import { Dialog } from "./dialog";
 import { Icon } from "./icon";
@@ -50,8 +50,8 @@ export function PublicHeader({ signedIn = false }: { signedIn?: boolean }) {
 const DOC_PAGES = [
   { href: "/docs/quickstart", label: "Quickstart" },
   { href: "/docs/concepts", label: "Concepts" },
-  { href: "/docs/api", label: "API reference" },
   { href: "/docs/workers", label: "Worker SDK" },
+  { href: "/docs/api", label: "API reference" },
   { href: "/docs/reliability", label: "Reliability" },
   { href: "/docs/deployment", label: "Deployment" },
 ] as const;
@@ -103,7 +103,7 @@ export function PublicFooter() {
   );
 }
 
-export function DocsSidebar() {
+export function DocsSidebar({ search }: { search?: ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [pathname]);
@@ -120,8 +120,12 @@ export function DocsSidebar() {
       <div className="docs-menu-btn">
         <Button size="sm" icon="i-menu" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>Docs menu</Button>
       </div>
-      <nav className={cx("docs-side")} aria-label="Documentation">{links}</nav>
+      <div className={cx("docs-side")}>
+        {search}
+        <nav aria-label="Documentation">{links}</nav>
+      </div>
       <Dialog open={open} onClose={() => setOpen(false)} title="Docs menu" variant="drawer">
+        {search}
         <nav aria-label="Documentation menu">{links}</nav>
       </Dialog>
     </>
