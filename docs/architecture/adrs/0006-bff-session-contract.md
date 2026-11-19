@@ -48,7 +48,7 @@ error.
 ## 3. Browser ↔ BFF
 
 - Cookie `__Host-clusterx_session`: `Secure; HttpOnly; SameSite=Lax; Path=/`; value = an **authenticated-encrypted
-  (sealed) `{sid, uid, login, role, exp}` envelope** (login/role/exp are display hints only; Go re-derives role per request) with a 1-byte key-version prefix, sealed by the BFF with keys derived from
+  (sealed) `{sid, uid, login, role, exp}` envelope** with a 1-byte key-version prefix, sealed by the BFF with keys derived from
   `CLUSTERX_WEB_SESSION_KEY` (label-separated from the CSRF key). The `cxs_` session secret returned by
   `POST /sessions` is **not** stored in the cookie (Go authenticates BFF requests by assertion `sid`, not by the
   secret; Go keeps only its SHA-256). Regenerated at login (fixation defense); a still-valid previous session is
