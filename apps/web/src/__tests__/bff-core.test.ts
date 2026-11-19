@@ -51,9 +51,8 @@ beforeEach(() => { seen = []; script = () => ({ status: 200, body: {} }); env();
 
 const cfg = () => { const c = loadConfig(); if (!c.ok) throw new Error(c.problems.join()); return c.config; };
 const cookie = () => sealSession(cfg(), SESSION).split(";")[0]!;
-const ctx = (path: string[]) => ({ params: Promise.resolve({ path }) });
-const get = (path: string, headers: Record<string, string> = { cookie: cookie() }) => proxyGET(new Request(`${ORIGIN}/bff/api/v1/${path}`, { headers }), ctx(path.split("?")[0]!.split("/")));
-const post = (path: string, headers: Record<string, string> = {}, body = "{}") => proxyPOST(new Request(`${ORIGIN}/bff/api/v1/${path}`, { method: "POST", body, headers: { cookie: cookie(), origin: ORIGIN, "x-csrf-token": csrfToken(KEY, SESSION.sid), "content-type": "application/json", ...headers } }), ctx(path.split("/")));
+const get = (path: string, headers: Record<string, string> = { cookie: cookie() }) => proxyGET(new Request(`${ORIGIN}/bff/api/v1/${path}`, { headers }));
+const post = (path: string, headers: Record<string, string> = {}, body = "{}") => proxyPOST(new Request(`${ORIGIN}/bff/api/v1/${path}`, { method: "POST", body, headers: { cookie: cookie(), origin: ORIGIN, "x-csrf-token": csrfToken(KEY, SESSION.sid), "content-type": "application/json", ...headers } }));
 const claims = async (h: IncomingMessage["headers"]) => {
   const tok = String(h.authorization).replace("Bearer ", "");
   const { payload, protectedHeader } = await jwtVerify(tok, pub, { issuer: "clusterx-bff", audience: "clusterx-control-plane" });
@@ -225,7 +224,7 @@ describe("API proxy", () => {
     for (const h of cases) {
       const merged: Record<string, string> = { cookie: cookie(), "content-type": "application/json", origin: ORIGIN, "x-csrf-token": csrfToken(KEY, SESSION.sid), ...h };
       for (const k of Object.keys(merged)) if (merged[k] === "") delete merged[k];
-      const r = await proxyPOST(new Request(`${ORIGIN}/bff/api/v1/jobs`, { method: "POST", body: "{}", headers: merged }), ctx(["jobs"]));
+      const r = await proxyPOST(new Request(`${ORIGIN}/bff/api/v1/jobs`, { method: "POST", body: "{}", headers: merged }));
       expect(r.status, JSON.stringify(h)).toBe(403);
       expect((await r.json()).code).toBe("csrf_failed");
     }
