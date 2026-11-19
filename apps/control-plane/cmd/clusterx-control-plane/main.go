@@ -144,6 +144,10 @@ func serve(ctx context.Context, cfg config.Config, migs []migrate.Migration, log
 		return err
 	}
 	st := store.New(pool, storeTiming(cfg), cat)
+	// Per-credential denial audit budget (RV5-11): 1 row/s, burst 60; beyond it denials are answered
+	// but not audited, so a misbehaving worker credential cannot flood audit_events.
+	denials := api.NewLimiter(1, 60)
+	st.DenialAudit = func(credID string) bool { ok, _ := denials.Allow(credID); return ok }
 	if cfg.Env == config.Production {
 		switch err := st.CheckRuntimePrivileges(ctx); {
 		case errors.Is(err, store.ErrPrivilegedRuntime):
@@ -173,7 +177,9 @@ func serve(ctx context.Context, cfg config.Config, migs []migrate.Migration, log
 	if grpcTLS != nil {
 		creds = credentials.NewTLS(grpcTLS)
 	}
-	grpcSrv := workerrpc.NewServer(st, log, workerrpc.Options{Creds: creds})
+	workerAuthFailures := rateLimiter(cfg.RateAuthFailures/60, cfg.RateAuthFailures)
+	grpcSrv := workerrpc.NewServer(st, log, workerrpc.Options{Creds: creds,
+		AuthFailure: func(peer string) bool { ok, _ := workerAuthFailures.Allow(peer); return ok }})
 
 	// Bind every listener before reporting started, so a port clash fails start-up.
 	apiLn, err := net.Listen("tcp", cfg.HTTPAddr)

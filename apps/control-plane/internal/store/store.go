@@ -105,6 +105,9 @@ type Store struct {
 	Catalog Catalog
 	// Failpoint, when set, is called at named points inside transactions; a non-nil error aborts the tx.
 	Failpoint func(name string) error
+	// DenialAudit, when set, rate-limits worker denial audit rows per credential id (RV5-11): it
+	// returns false when the row should be skipped. The denial itself is always answered.
+	DenialAudit func(credentialID string) bool
 }
 
 // New returns a Store with the given timing.

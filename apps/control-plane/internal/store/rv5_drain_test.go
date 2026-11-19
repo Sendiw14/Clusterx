@@ -76,3 +76,29 @@ func TestRV5_ConcurrentIncarnationsNewestWins(t *testing.T) {
 		t.Fatalf("takeover audit rows = %d, want 2", n)
 	}
 }
+
+// RV5-11: worker denial audit rows are rate-limited per credential; the denial is still answered.
+func TestRV5_DenialAuditRateLimited(t *testing.T) {
+	s := newTestStore(t, 30*time.Second)
+	ctx := context.Background()
+	w := newWorker(t, s, 2, "sleep_ms")
+	admit(t, s, "sleep_ms")
+	att := claimOne(t, s, w)
+	budget := 2
+	s.DenialAudit = func(cred string) bool {
+		if cred != w.CredentialID {
+			t.Errorf("keyed by %q", cred)
+		}
+		budget--
+		return budget >= 0
+	}
+	stale := att
+	stale.Generation++
+	for range 5 {
+		_, err := s.RenewLease(ctx, stale)
+		wantDenied(t, err, "stale_attempt")
+	}
+	if n := q[int64](t, s, `SELECT count(*) FROM audit_events WHERE actor = 'worker:' || $1::text AND outcome = 'rejected'`, w.WorkerID); n != 2 {
+		t.Fatalf("denial audit rows = %d, want 2", n)
+	}
+}

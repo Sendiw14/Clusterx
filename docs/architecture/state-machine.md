@@ -140,7 +140,10 @@ and `apps/control-plane/poc` `TestAC06*` (CR-M4-01 NF-06).
 | `unavailable` | UNAVAILABLE | DB down; claims paused; never assume lease still valid |
 
 Every worker-side denial on a mutation (E4–E7) appends one `audit_events` row (`diagnostic` for
-stale/late, `security` for revoked/mismatch), rate-limited per worker (ADR-0004).
+stale/late, `security` for revoked/mismatch), rate-limited per worker credential (ADR-0004): at most 1 row/s
+with a burst of 60 per credential id, in-process; beyond that the denial is still answered but not audited.
+Unknown or malformed worker secrets count against the per-peer auth-failure bucket
+(`CLUSTERX_RATE_AUTH_FAILURES_PER_MINUTE`); once empty, such calls get `RESOURCE_EXHAUSTED rate_limited`.
 
 ## Retry / attempt budget
 

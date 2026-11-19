@@ -83,6 +83,8 @@ across releases; no destructive change in the same release that stops using a co
   shorter audit retention would silently shorten the replay window. Lookups use the partial index
   `audit_events_idempotency_idx (action, actor, (details->>'idempotency_key'), occurred_at) WHERE details ? 'idempotency_key'`
   (migration 0004).
+- Worker denial audit budget (RV5-11): `Store.DenialAudit`, an in-process token bucket per worker credential id
+  (1 row/s, burst 60, reset on restart; ADR-0001 single coordinator). Denials beyond it are answered but not audited.
 - Migration 0004 (TASK-M5-BE-02): `job_events.txid xid8 DEFAULT pg_current_xact_id()` + partial index (stream feed
   visibility cursor, RV5-04; pre-0004 rows keep NULL); the credential idempotency index above; and least privilege for
   `clusterx_runtime` (RV5-10): no INSERT/UPDATE on `job_tombstones`, no UPDATE on `job_events`/`audit_events`.

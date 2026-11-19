@@ -85,13 +85,17 @@ func FastTiming(lease time.Duration) store.Timing {
 }
 
 // ServeGRPC starts the worker service on a loopback port; returns its address.
-func (e *Env) ServeGRPC(t testing.TB) string {
+func (e *Env) ServeGRPC(t testing.TB, tweak ...func(*workerrpc.Options)) string {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := workerrpc.NewServer(e.Store, Discard, workerrpc.Options{ClaimPoll: 20 * time.Millisecond})
+	o := workerrpc.Options{ClaimPoll: 20 * time.Millisecond}
+	for _, f := range tweak {
+		f(&o)
+	}
+	s := workerrpc.NewServer(e.Store, Discard, o)
 	go func() { _ = s.Serve(ln) }()
 	t.Cleanup(s.Stop)
 	return ln.Addr().String()

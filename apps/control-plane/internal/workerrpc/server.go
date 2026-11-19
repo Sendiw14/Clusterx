@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net"
 	"regexp"
 	"strings"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -51,20 +53,24 @@ type credKey struct{}
 
 type service struct {
 	workerv1.UnimplementedWorkerServiceServer
-	st   *store.Store
-	log  *slog.Logger
-	poll time.Duration
+	st          *store.Store
+	log         *slog.Logger
+	poll        time.Duration
+	authFailure func(peer string) bool
 }
 
 // Options configure the server.
 type Options struct {
 	Creds     credentials.TransportCredentials // nil only for loopback (config enforces in production)
 	ClaimPoll time.Duration                    // long-poll re-check interval; default 250 ms
+	// AuthFailure, when set, is charged once per unknown or malformed worker secret, keyed by the TCP
+	// peer; when it returns false the call gets RESOURCE_EXHAUSTED rate_limited (RV5-05).
+	AuthFailure func(peer string) bool
 }
 
 // NewServer returns a gRPC server with the worker service registered.
 func NewServer(st *store.Store, log *slog.Logger, o Options) *grpc.Server {
-	svc := &service{st: st, log: log, poll: o.ClaimPoll}
+	svc := &service{st: st, log: log, poll: o.ClaimPoll, authFailure: o.AuthFailure}
 	if svc.poll <= 0 {
 		svc.poll = 250 * time.Millisecond
 	}
@@ -94,6 +100,8 @@ func (s *service) intercept(ctx context.Context, req any, info *grpc.UnaryServer
 	credID, err := s.authenticate(ctx)
 	if err == nil {
 		resp, err = h(context.WithValue(ctx, credKey{}, credID), req)
+	} else if s.guessLimited(ctx, err) {
+		err = withReason(codes.ResourceExhausted, "rate_limited", "too many failed authentications")
 	} else {
 		err = s.toStatus(err)
 	}
@@ -105,6 +113,23 @@ func (s *service) intercept(ctx context.Context, req any, info *grpc.UnaryServer
 	s.log.Log(ctx, lvl, "worker rpc", "method", method, "code", code.String(), "reason", reasonOf(err),
 		"duration_ms", float64(time.Since(start).Microseconds())/1000)
 	return resp, err
+}
+
+// guessLimited charges a credential-guessing failure (unknown or malformed secret; revoked or expired
+// credentials are lifecycle, not guessing) to the peer's bucket and reports whether it is exhausted.
+func (s *service) guessLimited(ctx context.Context, err error) bool {
+	d, ok := errors.AsType[*store.Denial](err)
+	if s.authFailure == nil || !ok || (d.Detail != "unknown credential" && d.Detail != "malformed credential" && d.Detail != "missing credential") {
+		return false
+	}
+	addr := ""
+	if p, ok := peer.FromContext(ctx); ok && p.Addr != nil {
+		addr = p.Addr.String()
+		if host, _, err := net.SplitHostPort(addr); err == nil {
+			addr = host
+		}
+	}
+	return !s.authFailure(addr)
 }
 
 // authenticate resolves the bearer credential on every call (no cache).
