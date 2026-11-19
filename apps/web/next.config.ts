@@ -1,29 +1,11 @@
 import type { NextConfig } from "next";
 import { fileURLToPath } from "node:url";
+import { buildCsp } from "./src/lib/csp";
 
 const isDev = process.env.NODE_ENV !== "production";
 
-/**
- * Baseline CSP (MASTER section 7). Next.js 16 emits inline bootstrap scripts, so `script-src` needs
- * 'unsafe-inline' until a nonce-based policy is introduced via proxy.ts (that forces dynamic rendering of every
- * page; deferred to M5/M8 with the BFF, recorded in the handoff). Everything else is locked down:
- * no framing, no plugins, same-origin connections only, no remote fonts or images.
- */
-function csp(connectSrc: string): string {
-  return [
-    "default-src 'self'",
-    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data:",
-    "font-src 'self'",
-    `connect-src ${connectSrc}`,
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-    "manifest-src 'self'",
-  ].join("; ");
-}
+/** Public pages are statically rendered, so they keep a static policy. The console, /login and /auth get a per-request nonce policy from `src/proxy.ts` instead (no second CSP header here). */
+const PUBLIC_ONLY = "/((?!app(?:/|$)|login(?:/|$)|auth(?:/|$)).*)";
 
 const baseHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -42,7 +24,8 @@ const config: NextConfig = {
   turbopack: { root: fileURLToPath(new URL("../..", import.meta.url)) },
   async headers() {
     return [
-      { source: "/:path*", headers: [...baseHeaders, { key: "Content-Security-Policy", value: csp("'self'") }] },
+      { source: "/:path*", headers: baseHeaders },
+      { source: PUBLIC_ONLY, headers: [{ key: "Content-Security-Policy", value: buildCsp({ dev: isDev }) }] },
       {
         source: "/app/:path*",
         headers: [

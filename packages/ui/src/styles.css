@@ -179,16 +179,19 @@ dialog.cmd{margin-top:10vh}
 .live[data-live="demo"] .icon{color:var(--color-accent)}
 
 /* reveal (M-SECTION) and hero (M-HERO) */
-.js .reveal{opacity:0;transform:translateY(8px)}
-.js .reveal.in{opacity:1;transform:none;transition:opacity var(--duration-section) var(--ease-out),transform var(--duration-section) var(--ease-out)}
+/* Reveal only applies when script runs (content is complete without JS). `scripting` replaces the old inline `.js` class script, which a nonce CSP would block (RV6-09). */
+@media (scripting:enabled){
+  .reveal{opacity:0;transform:translateY(8px)}
+  .reveal.in{opacity:1;transform:none;transition:opacity var(--duration-section) var(--ease-out),transform var(--duration-section) var(--ease-out)}
+}
 .hero-in>*{animation:heroin var(--duration-hero) var(--ease-out) both;animation-delay:calc(var(--i,0) * 60ms)}
 @keyframes heroin{from{opacity:0;transform:translateY(12px)}}
 @media (prefers-reduced-motion:reduce){
-  .js .reveal{opacity:1;transform:none}
+  .reveal{opacity:1;transform:none}
   .hero-in>*,dialog[open],.skel,.tbl tr.upd td{animation:none!important}
   *{scroll-behavior:auto!important}
 }
-html[data-rm="1"] .js .reveal{opacity:1;transform:none}
+html[data-rm="1"] .reveal{opacity:1;transform:none}
 html[data-rm="1"] .hero-in>*,html[data-rm="1"] dialog[open],html[data-rm="1"] .skel{animation:none!important}
 
 /* ---------- public shell ---------- */
