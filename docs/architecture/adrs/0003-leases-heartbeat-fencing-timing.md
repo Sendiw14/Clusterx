@@ -75,14 +75,24 @@ old incarnation immediately (renew/report denied `incarnation_mismatch`); they a
 **Drain is sticky to the worker id (TASK-M5-BE-02, RV5-02, integrator decision).** Re-registering a
 `draining` worker id (operator or self drain) keeps `status='draining'` and its drain deadline: the new
 incarnation gets no claims (`Claim` → `worker_draining`) until it deregisters. A `deregistered` worker
-id is never resurrected: registering with it creates a **new** worker row (new `worker_id`, active), so
-rejoining after a drain always means a new id (the SDK persists it via `OnRegistered`; operators may
-also delete the id file). **One persisted worker id per process:** if two live processes share one id
+id is never resurrected: registering with it goes through the same selection as a registration without
+`worker_id` (RV5R-01): a matching incarnation is reused, a **live** non-deregistered worker of the same
+credential ⇒ `incarnation_mismatch`, a stale one is taken over, otherwise a **new** worker row (new
+`worker_id`, active) is created and the SDK persists it via `OnRegistered`. So one credential never has
+more than one live worker row. Integrator ratification (TASK-M5-BE-03): the server-assigned new row is
+accepted (supersedes "delete the id file"), with two operator-visible consequences:
+1. **Drain under a supervisor acts like a rolling restart.** A drained worker deregisters and exits; a
+   supervisor (`restart: always`, Kubernetes) restarts it and it joins as a new active row. To keep a
+   host out, **revoke its worker credential** (drain alone does not). Console drain UI and docs must say so.
+2. **Every graceful restart creates a new `workers` row** (SIGTERM ⇒ self-drain ⇒ deregister ⇒ restart).
+   The persisted worker id only saves the liveness wait after a crash (CR-M5-01 #4); deregistered rows
+   accumulate and are visible as history. **One persisted worker id per process:** if two live processes share one id
 (shared volume, `CLUSTERX_WORKER_ID` in a scaled service), the newest registration supersedes and the
 older incarnation is fenced (`incarnation_mismatch`, its attempts recovered at lease expiry); every
 takeover of a still-live incarnation appends a `security` audit row `worker.incarnation_takeover`
-(previous and new incarnation ids). Tests: `TestRV5_OperatorDrainSurvivesReRegister`,
-`TestRV5_ConcurrentIncarnationsNewestWins`.
+(previous and new incarnation ids), charged to the per-credential audit budget of ADR-0004 (RV5R-02). Tests: `TestRV5_OperatorDrainSurvivesReRegister`,
+`TestRV5_ConcurrentIncarnationsNewestWins`, `TestRV5R_DeregisteredIdBypassesSingleLiveBinding`,
+`TestRV5R_TakeoverAuditBudgeted`.
 
 ### Timing values (starting configuration, bounds validated at startup — fail closed)
 | Setting | Default | Allowed | Constraint |

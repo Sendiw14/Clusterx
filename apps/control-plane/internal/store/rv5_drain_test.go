@@ -102,3 +102,56 @@ func TestRV5_DenialAuditRateLimited(t *testing.T) {
 		t.Fatalf("denial audit rows = %d, want 2", n)
 	}
 }
+
+// RV5R-01 (reviewer proof, round 2): Register with a deregistered worker_id goes through the same
+// one-live-worker-per-credential selection as an empty worker_id.
+func TestRV5R_DeregisteredIdBypassesSingleLiveBinding(t *testing.T) {
+	s := newTestStore(t, 30*time.Second)
+	ctx := context.Background()
+	w := newWorker(t, s, 2, "sleep_ms")
+	if _, err := s.Deregister(ctx, w); err != nil {
+		t.Fatal(err)
+	}
+	reg := func(workerID string) (Registered, error) {
+		return s.Register(ctx, w.CredentialID, RegisterParams{WorkerID: workerID, IncarnationID: NewUUID(), Name: "w",
+			ProtocolVersion: 1, Capacity: 2, Capabilities: []Capability{{"sleep_ms", 1}}})
+	}
+	live, err := reg("") // normal rejoin: one live row
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = reg("")
+	wantDenied(t, err, "incarnation_mismatch")
+	for range 10 {
+		r, err := reg(w.WorkerID)
+		wantDenied(t, err, "incarnation_mismatch")
+		if r.WorkerID != "" && r.WorkerID != live.WorkerID {
+			t.Fatalf("extra worker row %s", r.WorkerID)
+		}
+	}
+	if n := q[int64](t, s, `SELECT count(*) FROM workers WHERE credential_id = $1 AND status <> 'deregistered'`, w.CredentialID); n != 1 {
+		t.Fatalf("credential bound to %d non-deregistered workers, want 1", n)
+	}
+	// Once the live row is stale, the deregistered id takes it over (no new row).
+	exec(t, s, `UPDATE workers SET last_heartbeat_at = clock_timestamp() - interval '1 hour' WHERE id = $1`, live.WorkerID)
+	if r, err := reg(w.WorkerID); err != nil || r.WorkerID != live.WorkerID {
+		t.Fatalf("stale takeover via deregistered id: %v %v", r.WorkerID, err)
+	}
+}
+
+// RV5R-02 (reviewer proof, round 2): the live-takeover audit row is inside the per-credential budget.
+func TestRV5R_TakeoverAuditBudgeted(t *testing.T) {
+	s := newTestStore(t, 30*time.Second)
+	ctx := context.Background()
+	w := newWorker(t, s, 2, "sleep_ms")
+	s.DenialAudit = func(string) bool { return false } // budget fully spent
+	for range 50 {
+		if _, err := s.Register(ctx, w.CredentialID, RegisterParams{WorkerID: w.WorkerID, IncarnationID: NewUUID(), Name: "w",
+			ProtocolVersion: 1, Capacity: 2, Capabilities: []Capability{{"sleep_ms", 1}}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := q[int64](t, s, `SELECT count(*) FROM audit_events WHERE action = 'worker.incarnation_takeover'`); n != 0 {
+		t.Fatalf("takeover audit rows with the budget spent: %d", n)
+	}
+}

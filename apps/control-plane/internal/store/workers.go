@@ -180,7 +180,34 @@ func (s *Store) Register(ctx context.Context, credID string, p RegisterParams) (
 		} else if err != nil {
 			return err
 		}
-		target := p.WorkerID
+		target := ""
+		if p.WorkerID != "" {
+			// Drain is sticky to the worker id and a deregistered id is never resurrected (RV5-02): a new
+			// incarnation of a draining worker stays draining (Claim answers worker_draining).
+			var status, prevInc string
+			var live bool
+			err := tx.QueryRow(ctx, `SELECT status, current_incarnation_id, last_heartbeat_at > clock_timestamp() - $3::interval
+				FROM workers WHERE id = $1 AND credential_id = $2 FOR UPDATE`, p.WorkerID, credID, s.Timing.LivenessTimeout).Scan(&status, &prevInc, &live)
+			if isNoRows(err) {
+				return &Denial{Reason: "credential_mismatch", Detail: "credential is not bound to this worker"}
+			} else if err != nil {
+				return err
+			}
+			if status != "deregistered" {
+				target = p.WorkerID
+				// Two processes sharing one id supersede each other; each takeover fences the other's
+				// attempts and is audited, within the per-credential audit budget (RV5R-02).
+				if live && prevInc != p.IncarnationID && (s.DenialAudit == nil || s.DenialAudit(credID)) {
+					if err := insertAudit(ctx, tx, AuditRow{Category: "security", Action: "worker.incarnation_takeover", Outcome: "allowed",
+						Actor: "worker:" + target, TargetType: "worker", TargetID: target,
+						Details: map[string]any{"previous_incarnation_id": prevInc, "incarnation_id": p.IncarnationID, "credential_id": credID}}); err != nil {
+						return err
+					}
+				}
+			}
+			// A deregistered id falls through to the same one-live-worker-per-credential selection as an
+			// empty worker_id (RV5R-01): it never yields a second live row for the credential.
+		}
 		if target == "" {
 			rows, err := tx.Query(ctx, `SELECT id, current_incarnation_id, last_heartbeat_at > clock_timestamp() - $2::interval
 				FROM workers WHERE credential_id = $1 AND status <> 'deregistered' ORDER BY id FOR UPDATE`, credID, s.Timing.LivenessTimeout)
@@ -207,30 +234,6 @@ func (s *Store) Register(ctx context.Context, credID string, p RegisterParams) (
 					return &Denial{Reason: "incarnation_mismatch", Detail: "credential is bound to a live worker; pass its worker_id to re-register"}
 				}
 				target = c.id // take over a stale worker of this credential
-			}
-		}
-		if target != "" {
-			// Drain is sticky to the worker id and a deregistered id is never resurrected (RV5-02): a new
-			// incarnation of a draining worker stays draining (Claim answers worker_draining); after
-			// deregistration the process rejoins as a new worker row.
-			var status, prevInc string
-			var live bool
-			err := tx.QueryRow(ctx, `SELECT status, current_incarnation_id, last_heartbeat_at > clock_timestamp() - $3::interval
-				FROM workers WHERE id = $1 AND credential_id = $2 FOR UPDATE`, target, credID, s.Timing.LivenessTimeout).Scan(&status, &prevInc, &live)
-			if isNoRows(err) {
-				return &Denial{Reason: "credential_mismatch", Detail: "credential is not bound to this worker"}
-			} else if err != nil {
-				return err
-			}
-			if status == "deregistered" {
-				target = ""
-			} else if live && prevInc != p.IncarnationID {
-				// Two processes sharing one id supersede each other; each takeover fences the other's attempts.
-				if err := insertAudit(ctx, tx, AuditRow{Category: "security", Action: "worker.incarnation_takeover", Outcome: "allowed",
-					Actor: "worker:" + target, TargetType: "worker", TargetID: target,
-					Details: map[string]any{"previous_incarnation_id": prevInc, "incarnation_id": p.IncarnationID, "credential_id": credID}}); err != nil {
-					return err
-				}
 			}
 		}
 		if target == "" {
