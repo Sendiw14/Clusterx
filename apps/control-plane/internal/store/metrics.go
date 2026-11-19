@@ -155,3 +155,51 @@ func (s *Store) MetricsSeries(ctx context.Context, metric string, from, to time.
 	})
 	return out, asOf, classifyDBError(err)
 }
+
+// Ops is the alerting snapshot exported on the internal /metrics listener (M8, NFR-OBS-01). It is read
+// from the authoritative tables on each scrape; Prometheus only stores the gauges.
+type Ops struct {
+	Overview
+	WorkersRecentlyLost int64            // non-deregistered, heartbeat older than the liveness timeout but < 1 h
+	AttemptsFinished5m  map[string]int64 // attempts that ended in the last 5 minutes, by attempt state
+	DatabaseSizeBytes   int64
+}
+
+// OpsSnapshot reads Ops. Any error means the database is unusable for the scrape.
+func (s *Store) OpsSnapshot(ctx context.Context) (Ops, error) {
+	o := Ops{AttemptsFinished5m: map[string]int64{}}
+	var err error
+	if o.Overview, err = s.MetricsOverview(ctx); err != nil {
+		return o, err
+	}
+	for _, st := range []string{"succeeded", "failed", "lease_expired", "deadline_exceeded", "canceled"} {
+		o.AttemptsFinished5m[st] = 0
+	}
+	err = pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SET LOCAL statement_timeout = '5s'`); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(ctx, `SELECT
+				(SELECT count(*) FROM workers WHERE status <> 'deregistered'
+					AND last_heartbeat_at <= now() - $1::interval AND last_heartbeat_at > now() - interval '1 hour'),
+				pg_database_size(current_database())`, s.Timing.LivenessTimeout).Scan(&o.WorkersRecentlyLost, &o.DatabaseSizeBytes); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `SELECT state, count(*) FROM job_attempts
+			WHERE finished_at > now() - interval '5 minutes' GROUP BY state`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var st string
+			var n int64
+			if err := rows.Scan(&st, &n); err != nil {
+				return err
+			}
+			o.AttemptsFinished5m[st] = n
+		}
+		return rows.Err()
+	})
+	return o, classifyDBError(err)
+}

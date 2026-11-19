@@ -1,0 +1,1490 @@
+	Query Text: SELECT $1::text AS explain_marker
+	Query Parameters: $1 = 'MARK claim single (8 rows)'
+	Result  (cost=0.00..0.01 rows=1 width=32) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.210 +0530 [98799] LOG:  duration: 0.011 ms  plan:
+	Query Text: SELECT c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at > clock_timestamp())
+				FROM worker_credentials c WHERE c.id = $1 FOR SHARE
+	Query Parameters: $1 = '01a1f520-ba41-71db-8682-97d6e0429ee6'
+	LockRows  (cost=0.15..8.18 rows=1 width=7) (actual time=0.009..0.009 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using worker_credentials_pkey on worker_credentials c  (cost=0.15..8.17 rows=1 width=7) (actual time=0.004..0.004 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-ba41-71db-8682-97d6e0429ee6'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.212 +0530 [98799] LOG:  duration: 0.013 ms  plan:
+	Query Text: SELECT w.status, w.capacity - (SELECT count(*) FROM job_attempts a WHERE a.worker_id = w.id AND a.state = 'active')
+				FROM workers w WHERE w.id = $1 AND w.credential_id = $2 AND w.current_incarnation_id = $3 FOR UPDATE
+	Query Parameters: $1 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $2 = '01a1f520-ba41-71db-8682-97d6e0429ee6', $3 = '8e024803-5975-4aa9-8936-915c9ddaec0d'
+	LockRows  (cost=0.15..16.34 rows=1 width=46) (actual time=0.012..0.012 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using workers_current_incarnation_id_key on workers w  (cost=0.15..16.33 rows=1 width=46) (actual time=0.011..0.011 rows=1.00 loops=1)
+	        Index Cond: (current_incarnation_id = '8e024803-5975-4aa9-8936-915c9ddaec0d'::uuid)
+	        Filter: ((id = '01a1f520-ba44-7eb8-b162-f699fb17f781'::uuid) AND (credential_id = '01a1f520-ba41-71db-8682-97d6e0429ee6'::uuid))
+	        Index Searches: 1
+	        Buffers: shared hit=4
+	        SubPlan 1
+	          ->  Aggregate  (cost=8.14..8.15 rows=1 width=8) (actual time=0.004..0.004 rows=1.00 loops=1)
+	                Buffers: shared hit=2
+	                ->  Index Only Scan using job_attempts_worker_active_idx on job_attempts a  (cost=0.12..8.14 rows=1 width=0) (actual time=0.002..0.002 rows=0.00 loops=1)
+	                      Index Cond: (worker_id = w.id)
+	                      Heap Fetches: 0
+	                      Index Searches: 1
+	                      Buffers: shared hit=2
+2026-11-20 00:15:25.213 +0530 [98799] LOG:  duration: 0.155 ms  plan:
+	Query Text: SELECT j.id FROM (
+					SELECT handler_name, handler_version FROM worker_capabilities
+					WHERE worker_id = $1 AND (cardinality($3::text[]) = 0 OR (handler_name, handler_version) IN
+						(SELECT * FROM unnest($3::text[], $4::int[])))) c
+				CROSS JOIN LATERAL (
+					SELECT q.id, q.priority, q.available_at, q.created_at FROM jobs q
+					WHERE q.status = 'queued' AND q.handler_name = c.handler_name AND q.handler_version = c.handler_version
+					  AND q.available_at <= now() AND q.attempts_used < q.max_attempts
+					ORDER BY q.priority DESC, q.available_at, q.created_at, q.id
+					LIMIT $2 FOR UPDATE SKIP LOCKED) j
+				ORDER BY j.priority DESC, j.available_at, j.created_at, j.id LIMIT $2
+	Query Parameters: $1 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $2 = '8', $3 = '{}', $4 = '{}'
+	Limit  (cost=219.26..219.28 rows=8 width=34) (actual time=0.153..0.154 rows=8.00 loops=1)
+	  Buffers: shared hit=58 read=13 dirtied=8 written=9
+	  ->  Sort  (cost=219.26..219.36 rows=40 width=34) (actual time=0.153..0.153 rows=8.00 loops=1)
+	        Sort Key: j.priority DESC, j.available_at, j.created_at, j.id
+	        Sort Method: quicksort  Memory: 26kB
+	        Buffers: shared hit=58 read=13 dirtied=8 written=9
+	        ->  Nested Loop  (cost=4.61..218.46 rows=40 width=34) (actual time=0.074..0.137 rows=16.00 loops=1)
+	              Buffers: shared hit=49 read=13 dirtied=8 written=9
+	              ->  Bitmap Heap Scan on worker_capabilities  (cost=4.19..12.66 rows=5 width=36) (actual time=0.007..0.007 rows=2.00 loops=1)
+	                    Recheck Cond: (worker_id = '01a1f520-ba44-7eb8-b162-f699fb17f781'::uuid)
+	                    Heap Blocks: exact=1
+	                    Buffers: shared hit=2
+	                    ->  Bitmap Index Scan on worker_capabilities_pkey  (cost=0.00..4.19 rows=5 width=0) (actual time=0.003..0.003 rows=2.00 loops=1)
+	                          Index Cond: (worker_id = '01a1f520-ba44-7eb8-b162-f699fb17f781'::uuid)
+	                          Index Searches: 1
+	                          Buffers: shared hit=1
+	              ->  Subquery Scan on j  (cost=0.42..41.08 rows=8 width=34) (actual time=0.042..0.064 rows=8.00 loops=2)
+	                    Buffers: shared hit=47 read=13 dirtied=8 written=9
+	                    ->  Limit  (cost=0.42..41.00 rows=8 width=40) (actual time=0.041..0.063 rows=8.00 loops=2)
+	                          Buffers: shared hit=47 read=13 dirtied=8 written=9
+	                          ->  LockRows  (cost=0.42..50675.05 rows=9990 width=40) (actual time=0.041..0.063 rows=8.00 loops=2)
+	                                Buffers: shared hit=47 read=13 dirtied=8 written=9
+	                                ->  Index Scan using jobs_claimable_idx on jobs q  (cost=0.42..50575.15 rows=9990 width=40) (actual time=0.029..0.049 rows=8.00 loops=2)
+	                                      Index Cond: ((handler_name = worker_capabilities.handler_name) AND (handler_version = worker_capabilities.handler_version) AND (available_at <= now()))
+	                                      Filter: ((attempts_used < max_attempts) AND (status = 'queued'::text))
+	                                      Index Searches: 2
+	                                      Buffers: shared hit=15 read=13 written=9
+2026-11-20 00:15:25.215 +0530 [98799] LOG:  duration: 1.618 ms  plan:
+	Query Text: UPDATE jobs SET status = 'running', attempts_used = attempts_used + 1,
+						lease_generation = lease_generation + 1, current_attempt_id = uuidv7(),
+						hard_deadline_at = clock_timestamp() + make_interval(secs => timeout_seconds),
+						lease_expires_at = LEAST(clock_timestamp() + $2::interval, clock_timestamp() + make_interval(secs => timeout_seconds)),
+						version = version + 1, updated_at = clock_timestamp()
+					WHERE id = $1 AND status = 'queued' AND attempts_used < max_attempts
+					RETURNING id, current_attempt_id, attempts_used, max_attempts, lease_generation, version, handler_name,
+						handler_version, payload, lease_expires_at, hard_deadline_at, clock_timestamp()
+	Query Parameters: $1 = '01a1f520-80f2-7ef1-9b3e-c0d58dc359a4', $2 = '00:00:30'
+	Update on jobs  (cost=0.42..8.49 rows=1 width=96) (actual time=1.615..1.616 rows=1.00 loops=1)
+	  Buffers: shared hit=329 read=23 dirtied=7 written=17
+	  ->  Index Scan using jobs_pkey on jobs  (cost=0.42..8.49 rows=1 width=96) (actual time=0.023..0.024 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-80f2-7ef1-9b3e-c0d58dc359a4'::uuid)
+	        Filter: ((attempts_used < max_attempts) AND (status = 'queued'::text))
+	        Index Searches: 1
+	        Buffers: shared hit=2 read=2
+2026-11-20 00:15:25.216 +0530 [98799] LOG:  duration: 0.005 ms  plan:
+	Query Text: SELECT *        FROM jobs WHERE id = NEW.job_id
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=332) (actual time=0.002..0.003 rows=1.00 loops=1)
+	  Index Cond: (id = '01a1f520-80f2-7ef1-9b3e-c0d58dc359a4'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.216 +0530 [98799] CONTEXT:  SQL statement "SELECT *        FROM jobs WHERE id = NEW.job_id"
+	PL/pgSQL function clusterx_guard_attempt_insert() line 5 at SQL statement
+2026-11-20 00:15:25.216 +0530 [98799] LOG:  duration: 0.003 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-80f2-7ef1-9b3e-c0d58dc359a4'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.002..0.002 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.002..0.002 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-80f2-7ef1-9b3e-c0d58dc359a4'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.216 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.216 +0530 [98799] LOG:  duration: 0.004 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."workers" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba44-7eb8-b162-f699fb17f781'
+	LockRows  (cost=0.15..8.18 rows=1 width=10) (actual time=0.004..0.004 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using workers_pkey on workers x  (cost=0.15..8.17 rows=1 width=10) (actual time=0.004..0.004 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-ba44-7eb8-b162-f699fb17f781'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.216 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."workers" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.216 +0530 [98799] LOG:  duration: 0.749 ms  plan:
+	Query Text: INSERT INTO job_attempts (id, job_id, attempt_number, lease_generation, worker_id,
+						worker_incarnation_id, started_at) VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp())
+	Query Parameters: $1 = '01a1f520-ba5d-7cf0-ba02-72ae0e53a5a4', $2 = '01a1f520-80f2-7ef1-9b3e-c0d58dc359a4', $3 = '1', $4 = '1', $5 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $6 = '8e024803-5975-4aa9-8936-915c9ddaec0d'
+	Insert on job_attempts  (cost=0.00..0.01 rows=0 width=0) (actual time=0.609..0.609 rows=0.00 loops=1)
+	  Buffers: shared hit=100 read=1 dirtied=16 written=14
+	  ->  Result  (cost=0.00..0.01 rows=1 width=284) (actual time=0.002..0.002 rows=1.00 loops=1)
+2026-11-20 00:15:25.217 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-80f2-7ef1-9b3e-c0d58dc359a4'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.002..0.002 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.001..0.002 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-80f2-7ef1-9b3e-c0d58dc359a4'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.217 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.217 +0530 [98799] LOG:  duration: 0.286 ms  plan:
+	Query Text: INSERT INTO job_events (job_id, version, event_type, from_status, to_status, attempt_id, actor, occurred_at, data)
+					VALUES ($1, $2, 'claimed', 'queued', 'running', $3, 'worker:' || $4, clock_timestamp(), jsonb_build_object('attempt_number', $5::int))
+	Query Parameters: $1 = '01a1f520-80f2-7ef1-9b3e-c0d58dc359a4', $2 = '2', $3 = '01a1f520-ba5d-7cf0-ba02-72ae0e53a5a4', $4 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $5 = '1'
+	Insert on job_events  (cost=0.00..0.02 rows=0 width=0) (actual time=0.237..0.237 rows=0.00 loops=1)
+	  Buffers: shared hit=54 read=8 dirtied=4 written=8
+	  ->  Result  (cost=0.00..0.02 rows=1 width=216) (actual time=0.009..0.009 rows=1.00 loops=1)
+2026-11-20 00:15:25.217 +0530 [98799] LOG:  duration: 0.125 ms  plan:
+	Query Text: UPDATE jobs SET status = 'running', attempts_used = attempts_used + 1,
+						lease_generation = lease_generation + 1, current_attempt_id = uuidv7(),
+						hard_deadline_at = clock_timestamp() + make_interval(secs => timeout_seconds),
+						lease_expires_at = LEAST(clock_timestamp() + $2::interval, clock_timestamp() + make_interval(secs => timeout_seconds)),
+						version = version + 1, updated_at = clock_timestamp()
+					WHERE id = $1 AND status = 'queued' AND attempts_used < max_attempts
+					RETURNING id, current_attempt_id, attempts_used, max_attempts, lease_generation, version, handler_name,
+						handler_version, payload, lease_expires_at, hard_deadline_at, clock_timestamp()
+	Query Parameters: $1 = '01a1f520-811b-7f65-b224-52e20824c89f', $2 = '00:00:30'
+	Update on jobs  (cost=0.42..8.49 rows=1 width=96) (actual time=0.123..0.124 rows=1.00 loops=1)
+	  Buffers: shared hit=24 read=1 dirtied=1 written=1
+	  ->  Index Scan using jobs_pkey on jobs  (cost=0.42..8.49 rows=1 width=96) (actual time=0.019..0.019 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-811b-7f65-b224-52e20824c89f'::uuid)
+	        Filter: ((attempts_used < max_attempts) AND (status = 'queued'::text))
+	        Index Searches: 1
+	        Buffers: shared hit=3 read=1 written=1
+2026-11-20 00:15:25.217 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT *        FROM jobs WHERE id = NEW.job_id
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=332) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = '01a1f520-811b-7f65-b224-52e20824c89f'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.217 +0530 [98799] CONTEXT:  SQL statement "SELECT *        FROM jobs WHERE id = NEW.job_id"
+	PL/pgSQL function clusterx_guard_attempt_insert() line 5 at SQL statement
+2026-11-20 00:15:25.217 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-811b-7f65-b224-52e20824c89f'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-811b-7f65-b224-52e20824c89f'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.217 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.217 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."workers" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba44-7eb8-b162-f699fb17f781'
+	LockRows  (cost=0.15..8.18 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using workers_pkey on workers x  (cost=0.15..8.17 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-ba44-7eb8-b162-f699fb17f781'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.217 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."workers" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.217 +0530 [98799] LOG:  duration: 0.123 ms  plan:
+	Query Text: INSERT INTO job_attempts (id, job_id, attempt_number, lease_generation, worker_id,
+						worker_incarnation_id, started_at) VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp())
+	Query Parameters: $1 = '01a1f520-ba61-72bb-8c9b-38abd49e93e2', $2 = '01a1f520-811b-7f65-b224-52e20824c89f', $3 = '1', $4 = '1', $5 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $6 = '8e024803-5975-4aa9-8936-915c9ddaec0d'
+	Insert on job_attempts  (cost=0.00..0.01 rows=0 width=0) (actual time=0.068..0.068 rows=0.00 loops=1)
+	  Buffers: shared hit=21
+	  ->  Result  (cost=0.00..0.01 rows=1 width=284) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.217 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-811b-7f65-b224-52e20824c89f'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-811b-7f65-b224-52e20824c89f'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.217 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.217 +0530 [98799] LOG:  duration: 0.054 ms  plan:
+	Query Text: INSERT INTO job_events (job_id, version, event_type, from_status, to_status, attempt_id, actor, occurred_at, data)
+					VALUES ($1, $2, 'claimed', 'queued', 'running', $3, 'worker:' || $4, clock_timestamp(), jsonb_build_object('attempt_number', $5::int))
+	Query Parameters: $1 = '01a1f520-811b-7f65-b224-52e20824c89f', $2 = '2', $3 = '01a1f520-ba61-72bb-8c9b-38abd49e93e2', $4 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $5 = '1'
+	Insert on job_events  (cost=0.00..0.02 rows=0 width=0) (actual time=0.026..0.026 rows=0.00 loops=1)
+	  Buffers: shared hit=6 read=1 dirtied=1
+	  ->  Result  (cost=0.00..0.02 rows=1 width=216) (actual time=0.002..0.002 rows=1.00 loops=1)
+2026-11-20 00:15:25.217 +0530 [98799] LOG:  duration: 0.084 ms  plan:
+	Query Text: UPDATE jobs SET status = 'running', attempts_used = attempts_used + 1,
+						lease_generation = lease_generation + 1, current_attempt_id = uuidv7(),
+						hard_deadline_at = clock_timestamp() + make_interval(secs => timeout_seconds),
+						lease_expires_at = LEAST(clock_timestamp() + $2::interval, clock_timestamp() + make_interval(secs => timeout_seconds)),
+						version = version + 1, updated_at = clock_timestamp()
+					WHERE id = $1 AND status = 'queued' AND attempts_used < max_attempts
+					RETURNING id, current_attempt_id, attempts_used, max_attempts, lease_generation, version, handler_name,
+						handler_version, payload, lease_expires_at, hard_deadline_at, clock_timestamp()
+	Query Parameters: $1 = '01a1f520-8144-7e9f-ba6d-1c39536a0d38', $2 = '00:00:30'
+	Update on jobs  (cost=0.42..8.49 rows=1 width=96) (actual time=0.083..0.084 rows=1.00 loops=1)
+	  Buffers: shared hit=24 read=1 dirtied=1
+	  ->  Index Scan using jobs_pkey on jobs  (cost=0.42..8.49 rows=1 width=96) (actual time=0.008..0.008 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-8144-7e9f-ba6d-1c39536a0d38'::uuid)
+	        Filter: ((attempts_used < max_attempts) AND (status = 'queued'::text))
+	        Index Searches: 1
+	        Buffers: shared hit=3 read=1
+2026-11-20 00:15:25.217 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT *        FROM jobs WHERE id = NEW.job_id
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=332) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = '01a1f520-8144-7e9f-ba6d-1c39536a0d38'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.217 +0530 [98799] CONTEXT:  SQL statement "SELECT *        FROM jobs WHERE id = NEW.job_id"
+	PL/pgSQL function clusterx_guard_attempt_insert() line 5 at SQL statement
+2026-11-20 00:15:25.217 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-8144-7e9f-ba6d-1c39536a0d38'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-8144-7e9f-ba6d-1c39536a0d38'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.217 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.217 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."workers" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba44-7eb8-b162-f699fb17f781'
+	LockRows  (cost=0.15..8.18 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using workers_pkey on workers x  (cost=0.15..8.17 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-ba44-7eb8-b162-f699fb17f781'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.217 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."workers" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.217 +0530 [98799] LOG:  duration: 0.109 ms  plan:
+	Query Text: INSERT INTO job_attempts (id, job_id, attempt_number, lease_generation, worker_id,
+						worker_incarnation_id, started_at) VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp())
+	Query Parameters: $1 = '01a1f520-ba61-7b26-b91d-41a6815def93', $2 = '01a1f520-8144-7e9f-ba6d-1c39536a0d38', $3 = '1', $4 = '1', $5 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $6 = '8e024803-5975-4aa9-8936-915c9ddaec0d'
+	Insert on job_attempts  (cost=0.00..0.01 rows=0 width=0) (actual time=0.059..0.059 rows=0.00 loops=1)
+	  Buffers: shared hit=14
+	  ->  Result  (cost=0.00..0.01 rows=1 width=284) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.218 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-8144-7e9f-ba6d-1c39536a0d38'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-8144-7e9f-ba6d-1c39536a0d38'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.218 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.218 +0530 [98799] LOG:  duration: 0.054 ms  plan:
+	Query Text: INSERT INTO job_events (job_id, version, event_type, from_status, to_status, attempt_id, actor, occurred_at, data)
+					VALUES ($1, $2, 'claimed', 'queued', 'running', $3, 'worker:' || $4, clock_timestamp(), jsonb_build_object('attempt_number', $5::int))
+	Query Parameters: $1 = '01a1f520-8144-7e9f-ba6d-1c39536a0d38', $2 = '2', $3 = '01a1f520-ba61-7b26-b91d-41a6815def93', $4 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $5 = '1'
+	Insert on job_events  (cost=0.00..0.02 rows=0 width=0) (actual time=0.028..0.028 rows=0.00 loops=1)
+	  Buffers: shared hit=6 read=1 dirtied=1 written=1
+	  ->  Result  (cost=0.00..0.02 rows=1 width=216) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.218 +0530 [98799] LOG:  duration: 0.083 ms  plan:
+	Query Text: UPDATE jobs SET status = 'running', attempts_used = attempts_used + 1,
+						lease_generation = lease_generation + 1, current_attempt_id = uuidv7(),
+						hard_deadline_at = clock_timestamp() + make_interval(secs => timeout_seconds),
+						lease_expires_at = LEAST(clock_timestamp() + $2::interval, clock_timestamp() + make_interval(secs => timeout_seconds)),
+						version = version + 1, updated_at = clock_timestamp()
+					WHERE id = $1 AND status = 'queued' AND attempts_used < max_attempts
+					RETURNING id, current_attempt_id, attempts_used, max_attempts, lease_generation, version, handler_name,
+						handler_version, payload, lease_expires_at, hard_deadline_at, clock_timestamp()
+	Query Parameters: $1 = '01a1f520-817b-7b94-b9cf-21b6a1afc543', $2 = '00:00:30'
+	Update on jobs  (cost=0.42..8.49 rows=1 width=96) (actual time=0.082..0.082 rows=1.00 loops=1)
+	  Buffers: shared hit=24 read=1 dirtied=1 written=1
+	  ->  Index Scan using jobs_pkey on jobs  (cost=0.42..8.49 rows=1 width=96) (actual time=0.011..0.011 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-817b-7b94-b9cf-21b6a1afc543'::uuid)
+	        Filter: ((attempts_used < max_attempts) AND (status = 'queued'::text))
+	        Index Searches: 1
+	        Buffers: shared hit=3 read=1 written=1
+2026-11-20 00:15:25.218 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT *        FROM jobs WHERE id = NEW.job_id
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=332) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = '01a1f520-817b-7b94-b9cf-21b6a1afc543'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.218 +0530 [98799] CONTEXT:  SQL statement "SELECT *        FROM jobs WHERE id = NEW.job_id"
+	PL/pgSQL function clusterx_guard_attempt_insert() line 5 at SQL statement
+2026-11-20 00:15:25.218 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-817b-7b94-b9cf-21b6a1afc543'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-817b-7b94-b9cf-21b6a1afc543'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.218 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.218 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."workers" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba44-7eb8-b162-f699fb17f781'
+	LockRows  (cost=0.15..8.18 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using workers_pkey on workers x  (cost=0.15..8.17 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-ba44-7eb8-b162-f699fb17f781'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.218 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."workers" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.218 +0530 [98799] LOG:  duration: 0.103 ms  plan:
+	Query Text: INSERT INTO job_attempts (id, job_id, attempt_number, lease_generation, worker_id,
+						worker_incarnation_id, started_at) VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp())
+	Query Parameters: $1 = '01a1f520-ba62-72a1-ae54-8866a765a54e', $2 = '01a1f520-817b-7b94-b9cf-21b6a1afc543', $3 = '1', $4 = '1', $5 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $6 = '8e024803-5975-4aa9-8936-915c9ddaec0d'
+	Insert on job_attempts  (cost=0.00..0.01 rows=0 width=0) (actual time=0.056..0.056 rows=0.00 loops=1)
+	  Buffers: shared hit=14
+	  ->  Result  (cost=0.00..0.01 rows=1 width=284) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.218 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-817b-7b94-b9cf-21b6a1afc543'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-817b-7b94-b9cf-21b6a1afc543'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.218 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.218 +0530 [98799] LOG:  duration: 0.052 ms  plan:
+	Query Text: INSERT INTO job_events (job_id, version, event_type, from_status, to_status, attempt_id, actor, occurred_at, data)
+					VALUES ($1, $2, 'claimed', 'queued', 'running', $3, 'worker:' || $4, clock_timestamp(), jsonb_build_object('attempt_number', $5::int))
+	Query Parameters: $1 = '01a1f520-817b-7b94-b9cf-21b6a1afc543', $2 = '2', $3 = '01a1f520-ba62-72a1-ae54-8866a765a54e', $4 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $5 = '1'
+	Insert on job_events  (cost=0.00..0.02 rows=0 width=0) (actual time=0.026..0.027 rows=0.00 loops=1)
+	  Buffers: shared hit=6 read=1 dirtied=1 written=1
+	  ->  Result  (cost=0.00..0.02 rows=1 width=216) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.218 +0530 [98799] LOG:  duration: 0.081 ms  plan:
+	Query Text: UPDATE jobs SET status = 'running', attempts_used = attempts_used + 1,
+						lease_generation = lease_generation + 1, current_attempt_id = uuidv7(),
+						hard_deadline_at = clock_timestamp() + make_interval(secs => timeout_seconds),
+						lease_expires_at = LEAST(clock_timestamp() + $2::interval, clock_timestamp() + make_interval(secs => timeout_seconds)),
+						version = version + 1, updated_at = clock_timestamp()
+					WHERE id = $1 AND status = 'queued' AND attempts_used < max_attempts
+					RETURNING id, current_attempt_id, attempts_used, max_attempts, lease_generation, version, handler_name,
+						handler_version, payload, lease_expires_at, hard_deadline_at, clock_timestamp()
+	Query Parameters: $1 = '01a1f520-81a3-73a4-b17b-8602b9c14936', $2 = '00:00:30'
+	Update on jobs  (cost=0.42..8.49 rows=1 width=96) (actual time=0.080..0.080 rows=1.00 loops=1)
+	  Buffers: shared hit=24 read=1 dirtied=1 written=1
+	  ->  Index Scan using jobs_pkey on jobs  (cost=0.42..8.49 rows=1 width=96) (actual time=0.010..0.010 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-81a3-73a4-b17b-8602b9c14936'::uuid)
+	        Filter: ((attempts_used < max_attempts) AND (status = 'queued'::text))
+	        Index Searches: 1
+	        Buffers: shared hit=3 read=1 written=1
+2026-11-20 00:15:25.218 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT *        FROM jobs WHERE id = NEW.job_id
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=332) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = '01a1f520-81a3-73a4-b17b-8602b9c14936'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.218 +0530 [98799] CONTEXT:  SQL statement "SELECT *        FROM jobs WHERE id = NEW.job_id"
+	PL/pgSQL function clusterx_guard_attempt_insert() line 5 at SQL statement
+2026-11-20 00:15:25.218 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-81a3-73a4-b17b-8602b9c14936'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-81a3-73a4-b17b-8602b9c14936'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.218 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.218 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."workers" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba44-7eb8-b162-f699fb17f781'
+	LockRows  (cost=0.15..8.18 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using workers_pkey on workers x  (cost=0.15..8.17 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-ba44-7eb8-b162-f699fb17f781'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.218 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."workers" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.218 +0530 [98799] LOG:  duration: 0.101 ms  plan:
+	Query Text: INSERT INTO job_attempts (id, job_id, attempt_number, lease_generation, worker_id,
+						worker_incarnation_id, started_at) VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp())
+	Query Parameters: $1 = '01a1f520-ba62-7993-b251-98d5e9ae23b9', $2 = '01a1f520-81a3-73a4-b17b-8602b9c14936', $3 = '1', $4 = '1', $5 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $6 = '8e024803-5975-4aa9-8936-915c9ddaec0d'
+	Insert on job_attempts  (cost=0.00..0.01 rows=0 width=0) (actual time=0.055..0.055 rows=0.00 loops=1)
+	  Buffers: shared hit=14
+	  ->  Result  (cost=0.00..0.01 rows=1 width=284) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.218 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-81a3-73a4-b17b-8602b9c14936'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-81a3-73a4-b17b-8602b9c14936'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.218 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.218 +0530 [98799] LOG:  duration: 0.050 ms  plan:
+	Query Text: INSERT INTO job_events (job_id, version, event_type, from_status, to_status, attempt_id, actor, occurred_at, data)
+					VALUES ($1, $2, 'claimed', 'queued', 'running', $3, 'worker:' || $4, clock_timestamp(), jsonb_build_object('attempt_number', $5::int))
+	Query Parameters: $1 = '01a1f520-81a3-73a4-b17b-8602b9c14936', $2 = '2', $3 = '01a1f520-ba62-7993-b251-98d5e9ae23b9', $4 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $5 = '1'
+	Insert on job_events  (cost=0.00..0.02 rows=0 width=0) (actual time=0.025..0.025 rows=0.00 loops=1)
+	  Buffers: shared hit=6 read=1 dirtied=1 written=1
+	  ->  Result  (cost=0.00..0.02 rows=1 width=216) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.083 ms  plan:
+	Query Text: UPDATE jobs SET status = 'running', attempts_used = attempts_used + 1,
+						lease_generation = lease_generation + 1, current_attempt_id = uuidv7(),
+						hard_deadline_at = clock_timestamp() + make_interval(secs => timeout_seconds),
+						lease_expires_at = LEAST(clock_timestamp() + $2::interval, clock_timestamp() + make_interval(secs => timeout_seconds)),
+						version = version + 1, updated_at = clock_timestamp()
+					WHERE id = $1 AND status = 'queued' AND attempts_used < max_attempts
+					RETURNING id, current_attempt_id, attempts_used, max_attempts, lease_generation, version, handler_name,
+						handler_version, payload, lease_expires_at, hard_deadline_at, clock_timestamp()
+	Query Parameters: $1 = '01a1f520-81e3-7d2f-8f0f-6de6e71b0030', $2 = '00:00:30'
+	Update on jobs  (cost=0.42..8.49 rows=1 width=96) (actual time=0.082..0.082 rows=1.00 loops=1)
+	  Buffers: shared hit=23 read=2 dirtied=1 written=1
+	  ->  Index Scan using jobs_pkey on jobs  (cost=0.42..8.49 rows=1 width=96) (actual time=0.013..0.013 rows=1.00 loops=1)
+	        Index Cond: (id = $1)
+	        Filter: ((attempts_used < max_attempts) AND (status = 'queued'::text))
+	        Index Searches: 1
+	        Buffers: shared hit=2 read=2 written=1
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT *        FROM jobs WHERE id = NEW.job_id
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=332) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = $15)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.219 +0530 [98799] CONTEXT:  SQL statement "SELECT *        FROM jobs WHERE id = NEW.job_id"
+	PL/pgSQL function clusterx_guard_attempt_insert() line 5 at SQL statement
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-81e3-7d2f-8f0f-6de6e71b0030'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = $1)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.219 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."workers" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba44-7eb8-b162-f699fb17f781'
+	LockRows  (cost=0.15..8.18 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using workers_pkey on workers x  (cost=0.15..8.17 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = $1)
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.219 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."workers" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.107 ms  plan:
+	Query Text: INSERT INTO job_attempts (id, job_id, attempt_number, lease_generation, worker_id,
+						worker_incarnation_id, started_at) VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp())
+	Query Parameters: $1 = '01a1f520-ba63-70be-8b5b-fa962dac17b1', $2 = '01a1f520-81e3-7d2f-8f0f-6de6e71b0030', $3 = '1', $4 = '1', $5 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $6 = '8e024803-5975-4aa9-8936-915c9ddaec0d'
+	Insert on job_attempts  (cost=0.00..0.01 rows=0 width=0) (actual time=0.058..0.058 rows=0.00 loops=1)
+	  Buffers: shared hit=14
+	  ->  Result  (cost=0.00..0.01 rows=1 width=284) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-81e3-7d2f-8f0f-6de6e71b0030'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = $1)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.219 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.054 ms  plan:
+	Query Text: INSERT INTO job_events (job_id, version, event_type, from_status, to_status, attempt_id, actor, occurred_at, data)
+					VALUES ($1, $2, 'claimed', 'queued', 'running', $3, 'worker:' || $4, clock_timestamp(), jsonb_build_object('attempt_number', $5::int))
+	Query Parameters: $1 = '01a1f520-81e3-7d2f-8f0f-6de6e71b0030', $2 = '2', $3 = '01a1f520-ba63-70be-8b5b-fa962dac17b1', $4 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $5 = '1'
+	Insert on job_events  (cost=0.00..0.02 rows=0 width=0) (actual time=0.027..0.027 rows=0.00 loops=1)
+	  Buffers: shared hit=6 read=1 dirtied=1 written=1
+	  ->  Result  (cost=0.00..0.02 rows=1 width=216) (actual time=0.002..0.002 rows=1.00 loops=1)
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.079 ms  plan:
+	Query Text: UPDATE jobs SET status = 'running', attempts_used = attempts_used + 1,
+						lease_generation = lease_generation + 1, current_attempt_id = uuidv7(),
+						hard_deadline_at = clock_timestamp() + make_interval(secs => timeout_seconds),
+						lease_expires_at = LEAST(clock_timestamp() + $2::interval, clock_timestamp() + make_interval(secs => timeout_seconds)),
+						version = version + 1, updated_at = clock_timestamp()
+					WHERE id = $1 AND status = 'queued' AND attempts_used < max_attempts
+					RETURNING id, current_attempt_id, attempts_used, max_attempts, lease_generation, version, handler_name,
+						handler_version, payload, lease_expires_at, hard_deadline_at, clock_timestamp()
+	Query Parameters: $1 = '01a1f520-821c-7818-959c-c502eb014464', $2 = '00:00:30'
+	Update on jobs  (cost=0.42..8.49 rows=1 width=96) (actual time=0.079..0.079 rows=1.00 loops=1)
+	  Buffers: shared hit=24 read=1 dirtied=1 written=1
+	  ->  Index Scan using jobs_pkey on jobs  (cost=0.42..8.49 rows=1 width=96) (actual time=0.010..0.010 rows=1.00 loops=1)
+	        Index Cond: (id = $1)
+	        Filter: ((attempts_used < max_attempts) AND (status = 'queued'::text))
+	        Index Searches: 1
+	        Buffers: shared hit=3 read=1 written=1
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT *        FROM jobs WHERE id = NEW.job_id
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=332) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = $15)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.219 +0530 [98799] CONTEXT:  SQL statement "SELECT *        FROM jobs WHERE id = NEW.job_id"
+	PL/pgSQL function clusterx_guard_attempt_insert() line 5 at SQL statement
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-821c-7818-959c-c502eb014464'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = $1)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.219 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."workers" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba44-7eb8-b162-f699fb17f781'
+	LockRows  (cost=0.15..8.18 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using workers_pkey on workers x  (cost=0.15..8.17 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = $1)
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.219 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."workers" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.065 ms  plan:
+	Query Text: INSERT INTO job_attempts (id, job_id, attempt_number, lease_generation, worker_id,
+						worker_incarnation_id, started_at) VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp())
+	Query Parameters: $1 = '01a1f520-ba63-772e-9c64-11d8ab9b0b75', $2 = '01a1f520-821c-7818-959c-c502eb014464', $3 = '1', $4 = '1', $5 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $6 = '8e024803-5975-4aa9-8936-915c9ddaec0d'
+	Insert on job_attempts  (cost=0.00..0.01 rows=0 width=0) (actual time=0.038..0.038 rows=0.00 loops=1)
+	  Buffers: shared hit=12
+	  ->  Result  (cost=0.00..0.01 rows=1 width=284) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-821c-7818-959c-c502eb014464'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = $1)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.219 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.040 ms  plan:
+	Query Text: INSERT INTO job_events (job_id, version, event_type, from_status, to_status, attempt_id, actor, occurred_at, data)
+					VALUES ($1, $2, 'claimed', 'queued', 'running', $3, 'worker:' || $4, clock_timestamp(), jsonb_build_object('attempt_number', $5::int))
+	Query Parameters: $1 = '01a1f520-821c-7818-959c-c502eb014464', $2 = '2', $3 = '01a1f520-ba63-772e-9c64-11d8ab9b0b75', $4 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $5 = '1'
+	Insert on job_events  (cost=0.00..0.02 rows=0 width=0) (actual time=0.026..0.026 rows=0.00 loops=1)
+	  Buffers: shared hit=6 read=1 dirtied=1 written=1
+	  ->  Result  (cost=0.00..0.02 rows=1 width=216) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.079 ms  plan:
+	Query Text: UPDATE jobs SET status = 'running', attempts_used = attempts_used + 1,
+						lease_generation = lease_generation + 1, current_attempt_id = uuidv7(),
+						hard_deadline_at = clock_timestamp() + make_interval(secs => timeout_seconds),
+						lease_expires_at = LEAST(clock_timestamp() + $2::interval, clock_timestamp() + make_interval(secs => timeout_seconds)),
+						version = version + 1, updated_at = clock_timestamp()
+					WHERE id = $1 AND status = 'queued' AND attempts_used < max_attempts
+					RETURNING id, current_attempt_id, attempts_used, max_attempts, lease_generation, version, handler_name,
+						handler_version, payload, lease_expires_at, hard_deadline_at, clock_timestamp()
+	Query Parameters: $1 = '01a1f520-8261-7b93-ba85-8455d7865c34', $2 = '00:00:30'
+	Update on jobs  (cost=0.42..8.49 rows=1 width=96) (actual time=0.079..0.079 rows=1.00 loops=1)
+	  Buffers: shared hit=24 read=1 dirtied=1 written=1
+	  ->  Index Scan using jobs_pkey on jobs  (cost=0.42..8.49 rows=1 width=96) (actual time=0.010..0.011 rows=1.00 loops=1)
+	        Index Cond: (id = $1)
+	        Filter: ((attempts_used < max_attempts) AND (status = 'queued'::text))
+	        Index Searches: 1
+	        Buffers: shared hit=3 read=1 written=1
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT *        FROM jobs WHERE id = NEW.job_id
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=332) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = $15)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.219 +0530 [98799] CONTEXT:  SQL statement "SELECT *        FROM jobs WHERE id = NEW.job_id"
+	PL/pgSQL function clusterx_guard_attempt_insert() line 5 at SQL statement
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-8261-7b93-ba85-8455d7865c34'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = $1)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.219 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."workers" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba44-7eb8-b162-f699fb17f781'
+	LockRows  (cost=0.15..8.18 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using workers_pkey on workers x  (cost=0.15..8.17 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = $1)
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.219 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."workers" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.219 +0530 [98799] LOG:  duration: 0.063 ms  plan:
+	Query Text: INSERT INTO job_attempts (id, job_id, attempt_number, lease_generation, worker_id,
+						worker_incarnation_id, started_at) VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp())
+	Query Parameters: $1 = '01a1f520-ba63-7c7f-912d-ed4739b77491', $2 = '01a1f520-8261-7b93-ba85-8455d7865c34', $3 = '1', $4 = '1', $5 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $6 = '8e024803-5975-4aa9-8936-915c9ddaec0d'
+	Insert on job_attempts  (cost=0.00..0.01 rows=0 width=0) (actual time=0.037..0.037 rows=0.00 loops=1)
+	  Buffers: shared hit=12
+	  ->  Result  (cost=0.00..0.01 rows=1 width=284) (actual time=0.000..0.000 rows=1.00 loops=1)
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-8261-7b93-ba85-8455d7865c34'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = $1)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.038 ms  plan:
+	Query Text: INSERT INTO job_events (job_id, version, event_type, from_status, to_status, attempt_id, actor, occurred_at, data)
+					VALUES ($1, $2, 'claimed', 'queued', 'running', $3, 'worker:' || $4, clock_timestamp(), jsonb_build_object('attempt_number', $5::int))
+	Query Parameters: $1 = '01a1f520-8261-7b93-ba85-8455d7865c34', $2 = '2', $3 = '01a1f520-ba63-7c7f-912d-ed4739b77491', $4 = '01a1f520-ba44-7eb8-b162-f699fb17f781', $5 = '1'
+	Insert on job_events  (cost=0.00..0.02 rows=0 width=0) (actual time=0.024..0.024 rows=0.00 loops=1)
+	  Buffers: shared hit=6 read=1 dirtied=1 written=1
+	  ->  Result  (cost=0.00..0.02 rows=1 width=216) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.003 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."job_attempts" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "job_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba5d-7cf0-ba02-72ae0e53a5a4', $2 = '01a1f520-80f2-7ef1-9b3e-c0d58dc359a4'
+	LockRows  (cost=0.15..8.18 rows=1 width=10) (actual time=0.003..0.003 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using job_attempts_id_job_id_key on job_attempts x  (cost=0.15..8.17 rows=1 width=10) (actual time=0.002..0.002 rows=1.00 loops=1)
+	        Index Cond: ((id = '01a1f520-ba5d-7cf0-ba02-72ae0e53a5a4'::uuid) AND (job_id = '01a1f520-80f2-7ef1-9b3e-c0d58dc359a4'::uuid))
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."job_attempts" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "job_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.003 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.002..0.002 rows=1.00 loops=1)
+	  Index Cond: (id = '01a1f520-80f2-7ef1-9b3e-c0d58dc359a4'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Filter: (job_id = '01a1f520-80f2-7ef1-9b3e-c0d58dc359a4'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = '01a1f520-80f2-7ef1-9b3e-c0d58dc359a4'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Filter: (job_id = '01a1f520-80f2-7ef1-9b3e-c0d58dc359a4'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."job_attempts" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "job_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba61-72bb-8c9b-38abd49e93e2', $2 = '01a1f520-811b-7f65-b224-52e20824c89f'
+	LockRows  (cost=0.15..8.18 rows=1 width=10) (actual time=0.002..0.002 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using job_attempts_id_job_id_key on job_attempts x  (cost=0.15..8.17 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: ((id = '01a1f520-ba61-72bb-8c9b-38abd49e93e2'::uuid) AND (job_id = '01a1f520-811b-7f65-b224-52e20824c89f'::uuid))
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."job_attempts" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "job_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.002..0.002 rows=1.00 loops=1)
+	  Index Cond: (id = '01a1f520-811b-7f65-b224-52e20824c89f'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Filter: (job_id = '01a1f520-811b-7f65-b224-52e20824c89f'::uuid)
+	  Rows Removed by Filter: 1
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = '01a1f520-811b-7f65-b224-52e20824c89f'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Filter: (job_id = '01a1f520-811b-7f65-b224-52e20824c89f'::uuid)
+	  Rows Removed by Filter: 1
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."job_attempts" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "job_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba61-7b26-b91d-41a6815def93', $2 = '01a1f520-8144-7e9f-ba6d-1c39536a0d38'
+	LockRows  (cost=0.15..8.18 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using job_attempts_id_job_id_key on job_attempts x  (cost=0.15..8.17 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: ((id = '01a1f520-ba61-7b26-b91d-41a6815def93'::uuid) AND (job_id = '01a1f520-8144-7e9f-ba6d-1c39536a0d38'::uuid))
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."job_attempts" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "job_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = '01a1f520-8144-7e9f-ba6d-1c39536a0d38'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Filter: (job_id = '01a1f520-8144-7e9f-ba6d-1c39536a0d38'::uuid)
+	  Rows Removed by Filter: 2
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = '01a1f520-8144-7e9f-ba6d-1c39536a0d38'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Filter: (job_id = '01a1f520-8144-7e9f-ba6d-1c39536a0d38'::uuid)
+	  Rows Removed by Filter: 2
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."job_attempts" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "job_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba62-72a1-ae54-8866a765a54e', $2 = '01a1f520-817b-7b94-b9cf-21b6a1afc543'
+	LockRows  (cost=0.15..8.18 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using job_attempts_id_job_id_key on job_attempts x  (cost=0.15..8.17 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: ((id = '01a1f520-ba62-72a1-ae54-8866a765a54e'::uuid) AND (job_id = '01a1f520-817b-7b94-b9cf-21b6a1afc543'::uuid))
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."job_attempts" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "job_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = '01a1f520-817b-7b94-b9cf-21b6a1afc543'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Filter: (job_id = '01a1f520-817b-7b94-b9cf-21b6a1afc543'::uuid)
+	  Rows Removed by Filter: 3
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = '01a1f520-817b-7b94-b9cf-21b6a1afc543'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Filter: (job_id = '01a1f520-817b-7b94-b9cf-21b6a1afc543'::uuid)
+	  Rows Removed by Filter: 3
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."job_attempts" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "job_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba62-7993-b251-98d5e9ae23b9', $2 = '01a1f520-81a3-73a4-b17b-8602b9c14936'
+	LockRows  (cost=0.15..8.18 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using job_attempts_id_job_id_key on job_attempts x  (cost=0.15..8.17 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: ((id = '01a1f520-ba62-7993-b251-98d5e9ae23b9'::uuid) AND (job_id = '01a1f520-81a3-73a4-b17b-8602b9c14936'::uuid))
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."job_attempts" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "job_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = '01a1f520-81a3-73a4-b17b-8602b9c14936'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.220 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Filter: (job_id = '01a1f520-81a3-73a4-b17b-8602b9c14936'::uuid)
+	  Rows Removed by Filter: 4
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.220 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = '01a1f520-81a3-73a4-b17b-8602b9c14936'::uuid)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Filter: (job_id = '01a1f520-81a3-73a4-b17b-8602b9c14936'::uuid)
+	  Rows Removed by Filter: 4
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."job_attempts" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "job_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba63-70be-8b5b-fa962dac17b1', $2 = '01a1f520-81e3-7d2f-8f0f-6de6e71b0030'
+	LockRows  (cost=0.15..8.18 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using job_attempts_id_job_id_key on job_attempts x  (cost=0.15..8.17 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: ((id = $1) AND (job_id = $2))
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."job_attempts" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "job_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.002..0.002 rows=1.00 loops=1)
+	  Index Cond: (id = $14)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Filter: (job_id = $14)
+	  Rows Removed by Filter: 5
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = $14)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Filter: (job_id = $14)
+	  Rows Removed by Filter: 5
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."job_attempts" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "job_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba63-772e-9c64-11d8ab9b0b75', $2 = '01a1f520-821c-7818-959c-c502eb014464'
+	LockRows  (cost=0.15..8.18 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using job_attempts_id_job_id_key on job_attempts x  (cost=0.15..8.17 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: ((id = $1) AND (job_id = $2))
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."job_attempts" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "job_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = $14)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Filter: (job_id = $14)
+	  Rows Removed by Filter: 6
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = $14)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Filter: (job_id = $14)
+	  Rows Removed by Filter: 6
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."job_attempts" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "job_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba63-7c7f-912d-ed4739b77491', $2 = '01a1f520-8261-7b93-ba85-8455d7865c34'
+	LockRows  (cost=0.15..8.18 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Index Scan using job_attempts_id_job_id_key on job_attempts x  (cost=0.15..8.17 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: ((id = $1) AND (job_id = $2))
+	        Index Searches: 1
+	        Buffers: shared hit=2
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."job_attempts" x WHERE "id" OPERATOR(pg_catalog.=) $1 AND "job_id" OPERATOR(pg_catalog.=) $2 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = $14)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Filter: (job_id = $14)
+	  Rows Removed by Filter: 7
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = $14)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Filter: (job_id = $14)
+	  Rows Removed by Filter: 7
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.221 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.221 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT $1::text AS explain_marker
+	Query Parameters: $1 = 'MARK list default page'
+	Result  (cost=0.00..0.01 rows=1 width=32) (actual time=0.000..0.000 rows=1.00 loops=1)
+2026-11-20 00:15:25.222 +0530 [98799] LOG:  duration: 0.340 ms  plan:
+	Query Text: SELECT j.id, j.namespace, j.handler_name, j.handler_version, j.status, j.priority, j.attempts_used,
+		j.max_attempts, j.available_at, j.cancel_requested_at, j.terminal_at, j.error_code, j.retried_from_job_id,
+		j.failure_class, j.created_at, j.updated_at, j.version, j.payload, j.result, j.error_message, j.run_after,
+		j.timeout_seconds, j.current_attempt_id, j.lease_generation, j.lease_expires_at, j.hard_deadline_at, j.created_by,
+		(SELECT r.id FROM jobs r WHERE r.retried_from_job_id = j.id), u.reason,
+		CASE WHEN u.reason IS NOT NULL THEN GREATEST(j.available_at, u.last_seen) END, clock_timestamp()
+	FROM jobs j LEFT JOIN LATERAL (
+		SELECT CASE WHEN j.status <> 'queued' THEN NULL
+			WHEN count(w.id) = 0 THEN 'no_capable_worker'
+			WHEN count(w.id) FILTER (WHERE w.last_heartbeat_at > now() - $1::interval) = 0 THEN 'capable_workers_offline'
+			WHEN count(w.id) FILTER (WHERE w.last_heartbeat_at > now() - $1::interval AND w.status = 'active') = 0
+				THEN 'capable_workers_draining' END AS reason,
+			max(w.last_heartbeat_at) AS last_seen
+		FROM worker_capabilities c JOIN workers w ON w.id = c.worker_id AND w.status <> 'deregistered'
+		WHERE j.status = 'queued' AND c.handler_name = j.handler_name AND c.handler_version = j.handler_version) u ON true WHERE j.created_at >= now() - interval '7 days' ORDER BY j.created_at DESC, j.id DESC LIMIT $2
+	Query Parameters: $1 = '00:00:30', $2 = '51'
+	Limit  (cost=16.82..442.45 rows=51 width=364) (actual time=0.067..0.302 rows=51.00 loops=1)
+	  Buffers: shared hit=210 read=30 written=26
+	  ->  Nested Loop Left Join  (cost=16.82..2253357.41 rows=270000 width=364) (actual time=0.066..0.301 rows=51.00 loops=1)
+	        Buffers: shared hit=210 read=30 written=26
+	        ->  Index Scan using jobs_created_idx on jobs j  (cost=0.43..46634.84 rows=270000 width=300) (actual time=0.037..0.225 rows=51.00 loops=1)
+	              Index Cond: (created_at >= (now() - '7 days'::interval))
+	              Index Searches: 1
+	              Buffers: shared hit=24 read=30 written=26
+	        ->  Memoize  (cost=16.39..16.41 rows=1 width=40) (actual time=0.001..0.001 rows=1.00 loops=51)
+	              Cache Key: j.status, j.handler_name, j.handler_version
+	              Cache Mode: binary
+	              Hits: 48  Misses: 3  Evictions: 0  Overflows: 0  Memory Usage: 1kB
+	              Buffers: shared hit=84
+	              ->  Aggregate  (cost=16.38..16.40 rows=1 width=40) (actual time=0.013..0.013 rows=1.00 loops=3)
+	                    Buffers: shared hit=84
+	                    ->  Result  (cost=0.30..16.35 rows=1 width=56) (actual time=0.004..0.010 rows=13.33 loops=3)
+	                          One-Time Filter: (j.status = 'queued'::text)
+	                          Buffers: shared hit=84
+	                          ->  Nested Loop  (cost=0.30..16.35 rows=1 width=56) (actual time=0.005..0.013 rows=20.00 loops=2)
+	                                Buffers: shared hit=84
+	                                ->  Index Scan using worker_capabilities_handler_idx on worker_capabilities c  (cost=0.15..8.17 rows=1 width=16) (actual time=0.003..0.005 rows=20.00 loops=2)
+	                                      Index Cond: ((handler_name = j.handler_name) AND (handler_version = j.handler_version))
+	                                      Index Searches: 2
+	                                      Buffers: shared hit=4
+	                                ->  Index Scan using workers_pkey on workers w  (cost=0.15..8.17 rows=1 width=56) (actual time=0.000..0.000 rows=1.00 loops=40)
+	                                      Index Cond: (id = c.worker_id)
+	                                      Filter: (status <> 'deregistered'::text)
+	                                      Index Searches: 40
+	                                      Buffers: shared hit=80
+	        SubPlan 1
+	          ->  Index Scan using jobs_one_retry_child_idx on jobs r  (cost=0.12..8.14 rows=1 width=16) (actual time=0.000..0.000 rows=0.00 loops=51)
+	                Index Cond: (retried_from_job_id = j.id)
+	                Index Searches: 51
+	                Buffers: shared hit=102
+2026-11-20 00:15:25.222 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT $1::text AS explain_marker
+	Query Parameters: $1 = 'MARK list status=queued handler=sleep_ms'
+	Result  (cost=0.00..0.01 rows=1 width=32) (actual time=0.000..0.000 rows=1.00 loops=1)
+2026-11-20 00:15:25.223 +0530 [98799] LOG:  duration: 0.187 ms  plan:
+	Query Text: SELECT j.id, j.namespace, j.handler_name, j.handler_version, j.status, j.priority, j.attempts_used,
+		j.max_attempts, j.available_at, j.cancel_requested_at, j.terminal_at, j.error_code, j.retried_from_job_id,
+		j.failure_class, j.created_at, j.updated_at, j.version, j.payload, j.result, j.error_message, j.run_after,
+		j.timeout_seconds, j.current_attempt_id, j.lease_generation, j.lease_expires_at, j.hard_deadline_at, j.created_by,
+		(SELECT r.id FROM jobs r WHERE r.retried_from_job_id = j.id), u.reason,
+		CASE WHEN u.reason IS NOT NULL THEN GREATEST(j.available_at, u.last_seen) END, clock_timestamp()
+	FROM jobs j LEFT JOIN LATERAL (
+		SELECT CASE WHEN j.status <> 'queued' THEN NULL
+			WHEN count(w.id) = 0 THEN 'no_capable_worker'
+			WHEN count(w.id) FILTER (WHERE w.last_heartbeat_at > now() - $1::interval) = 0 THEN 'capable_workers_offline'
+			WHEN count(w.id) FILTER (WHERE w.last_heartbeat_at > now() - $1::interval AND w.status = 'active') = 0
+				THEN 'capable_workers_draining' END AS reason,
+			max(w.last_heartbeat_at) AS last_seen
+		FROM worker_capabilities c JOIN workers w ON w.id = c.worker_id AND w.status <> 'deregistered'
+		WHERE j.status = 'queued' AND c.handler_name = j.handler_name AND c.handler_version = j.handler_version) u ON true WHERE j.created_at >= now() - interval '7 days' AND j.status = ANY($2::text[]) AND j.handler_name = $3 ORDER BY j.created_at DESC, j.id DESC LIMIT $4
+	Query Parameters: $1 = '00:00:30', $2 = '{queued}', $3 = 'sleep_ms', $4 = '51'
+	Limit  (cost=16.82..618.55 rows=51 width=364) (actual time=0.039..0.155 rows=51.00 loops=1)
+	  Buffers: shared hit=332 read=5 written=3
+	  ->  Nested Loop Left Join  (cost=16.82..155475.76 rows=13176 width=364) (actual time=0.039..0.153 rows=51.00 loops=1)
+	        Buffers: shared hit=332 read=5 written=3
+	        ->  Index Scan using jobs_created_idx on jobs j  (cost=0.43..47647.34 rows=13176 width=300) (actual time=0.011..0.098 rows=51.00 loops=1)
+	              Index Cond: (created_at >= (now() - '7 days'::interval))
+	              Filter: ((status = ANY ('{queued}'::text[])) AND (handler_name = 'sleep_ms'::text))
+	              Rows Removed by Filter: 137
+	              Index Searches: 1
+	              Buffers: shared hit=188 read=5 written=3
+	        ->  Memoize  (cost=16.39..16.41 rows=1 width=40) (actual time=0.001..0.001 rows=1.00 loops=51)
+	              Cache Key: j.status, j.handler_name, j.handler_version
+	              Cache Mode: binary
+	              Hits: 50  Misses: 1  Evictions: 0  Overflows: 0  Memory Usage: 1kB
+	              Buffers: shared hit=42
+	              ->  Aggregate  (cost=16.38..16.40 rows=1 width=40) (actual time=0.022..0.023 rows=1.00 loops=1)
+	                    Buffers: shared hit=42
+	                    ->  Result  (cost=0.30..16.35 rows=1 width=56) (actual time=0.010..0.019 rows=20.00 loops=1)
+	                          One-Time Filter: (j.status = 'queued'::text)
+	                          Buffers: shared hit=42
+	                          ->  Nested Loop  (cost=0.30..16.35 rows=1 width=56) (actual time=0.010..0.018 rows=20.00 loops=1)
+	                                Buffers: shared hit=42
+	                                ->  Index Scan using worker_capabilities_handler_idx on worker_capabilities c  (cost=0.15..8.17 rows=1 width=16) (actual time=0.006..0.007 rows=20.00 loops=1)
+	                                      Index Cond: ((handler_name = j.handler_name) AND (handler_version = j.handler_version))
+	                                      Index Searches: 1
+	                                      Buffers: shared hit=2
+	                                ->  Index Scan using workers_pkey on workers w  (cost=0.15..8.17 rows=1 width=56) (actual time=0.000..0.000 rows=1.00 loops=20)
+	                                      Index Cond: (id = c.worker_id)
+	                                      Filter: (status <> 'deregistered'::text)
+	                                      Index Searches: 20
+	                                      Buffers: shared hit=40
+	        SubPlan 1
+	          ->  Index Scan using jobs_one_retry_child_idx on jobs r  (cost=0.12..8.14 rows=1 width=16) (actual time=0.000..0.000 rows=0.00 loops=51)
+	                Index Cond: (retried_from_job_id = j.id)
+	                Index Searches: 51
+	                Buffers: shared hit=102
+2026-11-20 00:15:25.223 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT $1::text AS explain_marker
+	Query Parameters: $1 = 'MARK idempotent admission replay (existing key)'
+	Result  (cost=0.00..0.01 rows=1 width=32) (actual time=0.000..0.000 rows=1.00 loops=1)
+2026-11-20 00:15:25.223 +0530 [98799] LOG:  duration: 0.168 ms  plan:
+	Query Text: INSERT INTO jobs (namespace, handler_name, handler_version, payload, priority, status, run_after,
+						available_at, max_attempts, timeout_seconds, created_by, created_at, updated_at)
+					VALUES ($1, $2, $3, $4::jsonb, $5, CASE WHEN $6::timestamptz > now() THEN 'scheduled' ELSE 'queued' END, $6,
+						CASE WHEN $6::timestamptz > now() THEN $6::timestamptz ELSE now() END, $7, $8, $9, now(), now())
+					RETURNING id, status
+	Query Parameters: $1 = 'default', $2 = 'hash_sha256', $3 = '1', $4 = '{"data": "x"}', $5 = '0', $6 = NULL, $7 = '3', $8 = '60', $9 = 'token:bench'
+	Insert on jobs  (cost=0.00..0.02 rows=1 width=462) (actual time=0.165..0.165 rows=1.00 loops=1)
+	  Buffers: shared hit=12 read=4 dirtied=4 written=4
+	  ->  Result  (cost=0.00..0.02 rows=1 width=462) (actual time=0.005..0.005 rows=1.00 loops=1)
+2026-11-20 00:15:25.224 +0530 [98799] LOG:  duration: 0.016 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba67-7a36-b327-ca2102584041'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.014..0.015 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.003..0.003 rows=1.00 loops=1)
+	        Index Cond: (id = $1)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.224 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.224 +0530 [98799] LOG:  duration: 0.496 ms  plan:
+	Query Text: INSERT INTO job_events (job_id, version, event_type, to_status, actor, occurred_at)
+					VALUES ($1, 1, 'admitted', $2, $3, clock_timestamp())
+	Query Parameters: $1 = '01a1f520-ba67-7a36-b327-ca2102584041', $2 = 'queued', $3 = 'token:bench'
+	Insert on job_events  (cost=0.00..0.01 rows=0 width=0) (actual time=0.371..0.371 rows=0.00 loops=1)
+	  Buffers: shared hit=5 read=2 dirtied=1 written=2
+	  ->  Result  (cost=0.00..0.01 rows=1 width=216) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.224 +0530 [98799] LOG:  duration: 0.104 ms  plan:
+	Query Text: INSERT INTO submission_idempotency (principal, namespace, idem_key, fingerprint, job_id, created_at, expires_at)
+						VALUES ($1, $2, $3, $4, $5, now(), now() + $6::interval)
+						ON CONFLICT (principal, namespace, idem_key) DO UPDATE
+							SET fingerprint = EXCLUDED.fingerprint, job_id = EXCLUDED.job_id, created_at = EXCLUDED.created_at,
+							    expires_at = EXCLUDED.expires_at
+							WHERE submission_idempotency.expires_at <= now()
+	Query Parameters: $1 = 'token:bench', $2 = 'default', $3 = 'k-777', $4 = '\x11507a0e2f5e69d5dfa40a62a1bd7b6ee57e6bcd85c67c9b8431b36fff21c437', $5 = '01a1f520-ba67-7a36-b327-ca2102584041', $6 = '24:00:00'
+	Insert on submission_idempotency  (cost=0.00..0.02 rows=0 width=0) (actual time=0.103..0.103 rows=0.00 loops=1)
+	  Conflict Resolution: UPDATE
+	  Conflict Arbiter Indexes: submission_idempotency_pkey
+	  Conflict Filter: (submission_idempotency.expires_at <= now())
+	  Rows Removed by Conflict Filter: 1
+	  Tuples Inserted: 0
+	  Conflicting Tuples: 1
+	  Buffers: shared hit=6 read=1 written=1
+	  ->  Result  (cost=0.00..0.02 rows=1 width=160) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.225 +0530 [98799] LOG:  duration: 0.007 ms  plan:
+	Query Text: SELECT fingerprint, job_id FROM submission_idempotency
+					WHERE principal = $1 AND namespace = $2 AND idem_key = $3 AND expires_at > now()
+	Query Parameters: $1 = 'token:bench', $2 = 'default', $3 = 'k-777'
+	Index Scan using submission_idempotency_pkey on submission_idempotency  (cost=0.42..8.45 rows=1 width=49) (actual time=0.006..0.006 rows=1.00 loops=1)
+	  Index Cond: ((principal = 'token:bench'::text) AND (namespace = 'default'::text) AND (idem_key = 'k-777'::text))
+	  Filter: (expires_at > now())
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.225 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT $1::text AS explain_marker
+	Query Parameters: $1 = 'MARK idempotent admission new key'
+	Result  (cost=0.00..0.01 rows=1 width=32) (actual time=0.000..0.000 rows=1.00 loops=1)
+2026-11-20 00:15:25.225 +0530 [98799] LOG:  duration: 0.104 ms  plan:
+	Query Text: INSERT INTO jobs (namespace, handler_name, handler_version, payload, priority, status, run_after,
+						available_at, max_attempts, timeout_seconds, created_by, created_at, updated_at)
+					VALUES ($1, $2, $3, $4::jsonb, $5, CASE WHEN $6::timestamptz > now() THEN 'scheduled' ELSE 'queued' END, $6,
+						CASE WHEN $6::timestamptz > now() THEN $6::timestamptz ELSE now() END, $7, $8, $9, now(), now())
+					RETURNING id, status
+	Query Parameters: $1 = 'default', $2 = 'hash_sha256', $3 = '1', $4 = '{"data": "x"}', $5 = '0', $6 = NULL, $7 = '3', $8 = '60', $9 = 'token:bench'
+	Insert on jobs  (cost=0.00..0.02 rows=1 width=462) (actual time=0.101..0.102 rows=1.00 loops=1)
+	  Buffers: shared hit=14
+	  ->  Result  (cost=0.00..0.02 rows=1 width=462) (actual time=0.007..0.007 rows=1.00 loops=1)
+2026-11-20 00:15:25.225 +0530 [98799] LOG:  duration: 0.003 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba69-766b-b171-ce96c46567a9'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.003..0.003 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.002..0.002 rows=1.00 loops=1)
+	        Index Cond: (id = $1)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.225 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.225 +0530 [98799] LOG:  duration: 0.041 ms  plan:
+	Query Text: INSERT INTO job_events (job_id, version, event_type, to_status, actor, occurred_at)
+					VALUES ($1, 1, 'admitted', $2, $3, clock_timestamp())
+	Query Parameters: $1 = '01a1f520-ba69-766b-b171-ce96c46567a9', $2 = 'queued', $3 = 'token:bench'
+	Insert on job_events  (cost=0.00..0.01 rows=0 width=0) (actual time=0.019..0.019 rows=0.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Result  (cost=0.00..0.01 rows=1 width=216) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.225 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba69-766b-b171-ce96c46567a9'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.002..0.002 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-ba69-766b-b171-ce96c46567a9'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.225 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.225 +0530 [98799] LOG:  duration: 0.131 ms  plan:
+	Query Text: INSERT INTO submission_idempotency (principal, namespace, idem_key, fingerprint, job_id, created_at, expires_at)
+						VALUES ($1, $2, $3, $4, $5, now(), now() + $6::interval)
+						ON CONFLICT (principal, namespace, idem_key) DO UPDATE
+							SET fingerprint = EXCLUDED.fingerprint, job_id = EXCLUDED.job_id, created_at = EXCLUDED.created_at,
+							    expires_at = EXCLUDED.expires_at
+							WHERE submission_idempotency.expires_at <= now()
+	Query Parameters: $1 = 'token:bench', $2 = 'default', $3 = 'k-new', $4 = '\x11507a0e2f5e69d5dfa40a62a1bd7b6ee57e6bcd85c67c9b8431b36fff21c437', $5 = '01a1f520-ba69-766b-b171-ce96c46567a9', $6 = '24:00:00'
+	Insert on submission_idempotency  (cost=0.00..0.02 rows=0 width=0) (actual time=0.067..0.067 rows=0.00 loops=1)
+	  Conflict Resolution: UPDATE
+	  Conflict Arbiter Indexes: submission_idempotency_pkey
+	  Conflict Filter: (submission_idempotency.expires_at <= now())
+	  Tuples Inserted: 1
+	  Conflicting Tuples: 0
+	  Buffers: shared hit=14
+	  ->  Result  (cost=0.00..0.02 rows=1 width=160) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.225 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = $14)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.225 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.225 +0530 [98799] LOG:  duration: 0.003 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.003..0.003 rows=0.00 loops=1)
+	  Filter: (job_id = $14)
+	  Rows Removed by Filter: 8
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.225 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.226 +0530 [98799] LOG:  duration: 0.025 ms  plan:
+	Query Text: SELECT j.id, j.namespace, j.handler_name, j.handler_version, j.status, j.priority, j.attempts_used,
+		j.max_attempts, j.available_at, j.cancel_requested_at, j.terminal_at, j.error_code, j.retried_from_job_id,
+		j.failure_class, j.created_at, j.updated_at, j.version, j.payload, j.result, j.error_message, j.run_after,
+		j.timeout_seconds, j.current_attempt_id, j.lease_generation, j.lease_expires_at, j.hard_deadline_at, j.created_by,
+		(SELECT r.id FROM jobs r WHERE r.retried_from_job_id = j.id), u.reason,
+		CASE WHEN u.reason IS NOT NULL THEN GREATEST(j.available_at, u.last_seen) END, clock_timestamp()
+	FROM jobs j LEFT JOIN LATERAL (
+		SELECT CASE WHEN j.status <> 'queued' THEN NULL
+			WHEN count(w.id) = 0 THEN 'no_capable_worker'
+			WHEN count(w.id) FILTER (WHERE w.last_heartbeat_at > now() - $1::interval) = 0 THEN 'capable_workers_offline'
+			WHEN count(w.id) FILTER (WHERE w.last_heartbeat_at > now() - $1::interval AND w.status = 'active') = 0
+				THEN 'capable_workers_draining' END AS reason,
+			max(w.last_heartbeat_at) AS last_seen
+		FROM worker_capabilities c JOIN workers w ON w.id = c.worker_id AND w.status <> 'deregistered'
+		WHERE j.status = 'queued' AND c.handler_name = j.handler_name AND c.handler_version = j.handler_version) u ON true WHERE j.id = $2
+	Query Parameters: $1 = '00:00:30', $2 = '01a1f520-ba69-766b-b171-ce96c46567a9'
+	Nested Loop Left Join  (cost=16.80..33.00 rows=1 width=364) (actual time=0.022..0.023 rows=1.00 loops=1)
+	  Buffers: shared hit=48
+	  ->  Index Scan using jobs_pkey on jobs j  (cost=0.42..8.44 rows=1 width=300) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-ba69-766b-b171-ce96c46567a9'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+	  ->  Aggregate  (cost=16.38..16.40 rows=1 width=40) (actual time=0.019..0.019 rows=1.00 loops=1)
+	        Buffers: shared hit=42
+	        ->  Result  (cost=0.30..16.35 rows=1 width=56) (actual time=0.006..0.015 rows=20.00 loops=1)
+	              One-Time Filter: (j.status = 'queued'::text)
+	              Buffers: shared hit=42
+	              ->  Nested Loop  (cost=0.30..16.35 rows=1 width=56) (actual time=0.005..0.013 rows=20.00 loops=1)
+	                    Buffers: shared hit=42
+	                    ->  Index Scan using worker_capabilities_handler_idx on worker_capabilities c  (cost=0.15..8.17 rows=1 width=16) (actual time=0.003..0.004 rows=20.00 loops=1)
+	                          Index Cond: ((handler_name = j.handler_name) AND (handler_version = j.handler_version))
+	                          Index Searches: 1
+	                          Buffers: shared hit=2
+	                    ->  Index Scan using workers_pkey on workers w  (cost=0.15..8.17 rows=1 width=56) (actual time=0.000..0.000 rows=1.00 loops=20)
+	                          Index Cond: (id = c.worker_id)
+	                          Filter: (status <> 'deregistered'::text)
+	                          Index Searches: 20
+	                          Buffers: shared hit=40
+	  SubPlan 1
+	    ->  Index Scan using jobs_one_retry_child_idx on jobs r  (cost=0.12..8.14 rows=1 width=16) (actual time=0.000..0.000 rows=0.00 loops=1)
+	          Index Cond: (retried_from_job_id = j.id)
+	          Index Searches: 1
+	          Buffers: shared hit=2
+2026-11-20 00:15:25.226 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT $1::text AS explain_marker
+	Query Parameters: $1 = 'MARK feed poll (copy of api.Feed.poll SQL)'
+	Result  (cost=0.00..0.01 rows=1 width=32) (actual time=0.000..0.000 rows=1.00 loops=1)
+2026-11-20 00:15:25.226 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT pg_current_snapshot()::text
+	Result  (cost=0.00..0.02 rows=1 width=32) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.227 +0530 [98799] LOG:  duration: 0.098 ms  plan:
+	Query Text: INSERT INTO jobs (namespace, handler_name, handler_version, payload, priority, status, run_after,
+						available_at, max_attempts, timeout_seconds, created_by, created_at, updated_at)
+					VALUES ($1, $2, $3, $4::jsonb, $5, CASE WHEN $6::timestamptz > now() THEN 'scheduled' ELSE 'queued' END, $6,
+						CASE WHEN $6::timestamptz > now() THEN $6::timestamptz ELSE now() END, $7, $8, $9, now(), now())
+					RETURNING id, status
+	Query Parameters: $1 = 'default', $2 = 'hash_sha256', $3 = '1', $4 = '{"data": "x"}', $5 = '0', $6 = NULL, $7 = '3', $8 = '60', $9 = 'token:x'
+	Insert on jobs  (cost=0.00..0.02 rows=1 width=462) (actual time=0.096..0.096 rows=1.00 loops=1)
+	  Buffers: shared hit=14
+	  ->  Result  (cost=0.00..0.02 rows=1 width=462) (actual time=0.005..0.005 rows=1.00 loops=1)
+2026-11-20 00:15:25.227 +0530 [98799] LOG:  duration: 0.012 ms  plan:
+	Query Text: SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+	Query Parameters: $1 = '01a1f520-ba6b-705f-8181-983e707f2d1a'
+	LockRows  (cost=0.42..8.45 rows=1 width=10) (actual time=0.012..0.012 rows=1.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Index Scan using jobs_pkey on jobs x  (cost=0.42..8.44 rows=1 width=10) (actual time=0.011..0.011 rows=1.00 loops=1)
+	        Index Cond: (id = $1)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+2026-11-20 00:15:25.227 +0530 [98799] CONTEXT:  SQL statement "SELECT 1 FROM ONLY "public"."jobs" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x"
+2026-11-20 00:15:25.227 +0530 [98799] LOG:  duration: 0.050 ms  plan:
+	Query Text: INSERT INTO job_events (job_id, version, event_type, to_status, actor, occurred_at)
+					VALUES ($1, 1, 'admitted', $2, $3, clock_timestamp())
+	Query Parameters: $1 = '01a1f520-ba6b-705f-8181-983e707f2d1a', $2 = 'queued', $3 = 'token:x'
+	Insert on job_events  (cost=0.00..0.01 rows=0 width=0) (actual time=0.019..0.019 rows=0.00 loops=1)
+	  Buffers: shared hit=5
+	  ->  Result  (cost=0.00..0.01 rows=1 width=216) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.227 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT status, current_attempt_id              FROM jobs WHERE id = jid
+	Index Scan using jobs_pkey on jobs  (cost=0.42..8.44 rows=1 width=24) (actual time=0.001..0.001 rows=1.00 loops=1)
+	  Index Cond: (id = $14)
+	  Index Searches: 1
+	  Buffers: shared hit=4
+2026-11-20 00:15:25.227 +0530 [98799] CONTEXT:  SQL statement "SELECT status, current_attempt_id              FROM jobs WHERE id = jid"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 13 at SQL statement
+2026-11-20 00:15:25.227 +0530 [98799] LOG:  duration: 0.002 ms  plan:
+	Query Text: SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'
+	Index Scan using job_attempts_worker_active_idx on job_attempts  (cost=0.14..8.16 rows=1 width=16) (actual time=0.001..0.001 rows=0.00 loops=1)
+	  Filter: (job_id = $14)
+	  Rows Removed by Filter: 8
+	  Index Searches: 1
+	  Buffers: shared hit=2
+2026-11-20 00:15:25.227 +0530 [98799] CONTEXT:  SQL statement "SELECT id                FROM job_attempts WHERE job_id = jid AND state = 'active'"
+	PL/pgSQL function clusterx_check_job_attempt_coupling() line 17 at SQL statement
+2026-11-20 00:15:25.227 +0530 [98799] LOG:  duration: 0.022 ms  plan:
+	Query Text: SELECT j.id, j.namespace, j.handler_name, j.handler_version, j.status, j.priority, j.attempts_used,
+		j.max_attempts, j.available_at, j.cancel_requested_at, j.terminal_at, j.error_code, j.retried_from_job_id,
+		j.failure_class, j.created_at, j.updated_at, j.version, j.payload, j.result, j.error_message, j.run_after,
+		j.timeout_seconds, j.current_attempt_id, j.lease_generation, j.lease_expires_at, j.hard_deadline_at, j.created_by,
+		(SELECT r.id FROM jobs r WHERE r.retried_from_job_id = j.id), u.reason,
+		CASE WHEN u.reason IS NOT NULL THEN GREATEST(j.available_at, u.last_seen) END, clock_timestamp()
+	FROM jobs j LEFT JOIN LATERAL (
+		SELECT CASE WHEN j.status <> 'queued' THEN NULL
+			WHEN count(w.id) = 0 THEN 'no_capable_worker'
+			WHEN count(w.id) FILTER (WHERE w.last_heartbeat_at > now() - $1::interval) = 0 THEN 'capable_workers_offline'
+			WHEN count(w.id) FILTER (WHERE w.last_heartbeat_at > now() - $1::interval AND w.status = 'active') = 0
+				THEN 'capable_workers_draining' END AS reason,
+			max(w.last_heartbeat_at) AS last_seen
+		FROM worker_capabilities c JOIN workers w ON w.id = c.worker_id AND w.status <> 'deregistered'
+		WHERE j.status = 'queued' AND c.handler_name = j.handler_name AND c.handler_version = j.handler_version) u ON true WHERE j.id = $2
+	Query Parameters: $1 = '00:00:30', $2 = '01a1f520-ba6b-705f-8181-983e707f2d1a'
+	Nested Loop Left Join  (cost=16.80..33.00 rows=1 width=364) (actual time=0.020..0.020 rows=1.00 loops=1)
+	  Buffers: shared hit=48
+	  ->  Index Scan using jobs_pkey on jobs j  (cost=0.42..8.44 rows=1 width=300) (actual time=0.001..0.001 rows=1.00 loops=1)
+	        Index Cond: (id = '01a1f520-ba6b-705f-8181-983e707f2d1a'::uuid)
+	        Index Searches: 1
+	        Buffers: shared hit=4
+	  ->  Aggregate  (cost=16.38..16.40 rows=1 width=40) (actual time=0.017..0.017 rows=1.00 loops=1)
+	        Buffers: shared hit=42
+	        ->  Result  (cost=0.30..16.35 rows=1 width=56) (actual time=0.004..0.013 rows=20.00 loops=1)
+	              One-Time Filter: (j.status = 'queued'::text)
+	              Buffers: shared hit=42
+	              ->  Nested Loop  (cost=0.30..16.35 rows=1 width=56) (actual time=0.003..0.011 rows=20.00 loops=1)
+	                    Buffers: shared hit=42
+	                    ->  Index Scan using worker_capabilities_handler_idx on worker_capabilities c  (cost=0.15..8.17 rows=1 width=16) (actual time=0.002..0.003 rows=20.00 loops=1)
+	                          Index Cond: ((handler_name = j.handler_name) AND (handler_version = j.handler_version))
+	                          Index Searches: 1
+	                          Buffers: shared hit=2
+	                    ->  Index Scan using workers_pkey on workers w  (cost=0.15..8.17 rows=1 width=56) (actual time=0.000..0.000 rows=1.00 loops=20)
+	                          Index Cond: (id = c.worker_id)
+	                          Filter: (status <> 'deregistered'::text)
+	                          Index Searches: 20
+	                          Buffers: shared hit=40
+	  SubPlan 1
+	    ->  Index Scan using jobs_one_retry_child_idx on jobs r  (cost=0.12..8.14 rows=1 width=16) (actual time=0.000..0.000 rows=0.00 loops=1)
+	          Index Cond: (retried_from_job_id = j.id)
+	          Index Searches: 1
+	          Buffers: shared hit=2
+2026-11-20 00:15:25.228 +0530 [98799] LOG:  duration: 0.005 ms  plan:
+	Query Text: WITH s AS (SELECT pg_current_snapshot() AS cur)
+			SELECT s.cur::text, pg_snapshot_xmax(s.cur) < pg_snapshot_xmax($1::pg_snapshot), e.job_id::text, e.version FROM s LEFT JOIN job_events e
+			  ON e.txid >= pg_snapshot_xmin($1::pg_snapshot) AND NOT pg_visible_in_snapshot(e.txid, $1::pg_snapshot)
+			LIMIT $2
+	Query Parameters: $1 = '1139:1139:', $2 = '501'
+	Limit  (cost=0.30..4.36 rows=1 width=73) (actual time=0.004..0.004 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  ->  Nested Loop Left Join  (cost=0.30..4.36 rows=1 width=73) (actual time=0.003..0.004 rows=1.00 loops=1)
+	        Buffers: shared hit=3
+	        ->  Result  (cost=0.00..0.01 rows=1 width=0) (actual time=0.000..0.000 rows=1.00 loops=1)
+	        ->  Index Scan using job_events_txid_idx on job_events e  (cost=0.30..4.32 rows=1 width=24) (actual time=0.002..0.002 rows=1.00 loops=1)
+	              Index Cond: (txid >= '1139'::xid8)
+	              Filter: (NOT pg_visible_in_snapshot(txid, '1139:1139:'::pg_snapshot))
+	              Index Searches: 1
+	              Buffers: shared hit=3
+2026-11-20 00:15:25.228 +0530 [98799] LOG:  duration: 0.003 ms  plan:
+	Query Text: SELECT $1::text AS explain_marker
+	Query Parameters: $1 = 'MARK ops snapshot (one /metrics scrape)'
+	Result  (cost=0.00..0.01 rows=1 width=32) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.228 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT now(), now() - make_interval(days => $1)
+	Query Parameters: $1 = '30'
+	Result  (cost=0.00..0.02 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=1)
+2026-11-20 00:15:25.260 +0530 [98799] LOG:  duration: 31.544 ms  plan:
+	Query Text: SELECT status, count(*) FROM jobs
+				WHERE status IN ('scheduled', 'queued', 'running', 'retry_wait') GROUP BY status
+				UNION ALL
+				SELECT status, count(*) FROM jobs WHERE terminal_at >= $1 GROUP BY status
+	Query Parameters: $1 = '2026-10-20 18:45:25.228474+00'
+	Gather  (cost=1000.42..14129.01 rows=4 width=16) (actual time=14.388..31.534 rows=3.00 loops=1)
+	  Workers Planned: 2
+	  Workers Launched: 2
+	  Buffers: shared hit=3632 read=2216 dirtied=1 written=1820
+	  ->  Parallel Append  (cost=0.42..13128.61 rows=2 width=16) (actual time=13.595..13.598 rows=1.00 loops=3)
+	        Buffers: shared hit=3632 read=2216 dirtied=1 written=1820
+	        ->  HashAggregate  (cost=13128.58..13128.60 rows=2 width=16) (actual time=26.516..26.516 rows=1.00 loops=1)
+	              Group Key: jobs.status
+	              Buffers: shared hit=3261 read=968 written=903
+	              Worker 0:  Batches: 1  Memory Usage: 32kB
+	              ->  Index Scan using jobs_terminal_idx on jobs  (cost=0.42..12378.10 rows=150096 width=8) (actual time=0.018..15.836 rows=150000.00 loops=1)
+	                    Index Cond: (terminal_at >= '2026-10-20 18:45:25.228474+00'::timestamp with time zone)
+	                    Index Searches: 1
+	                    Buffers: shared hit=3261 read=968 written=903
+	        ->  GroupAggregate  (cost=0.42..7663.20 rows=2 width=16) (actual time=14.270..14.272 rows=2.00 loops=1)
+	              Group Key: jobs_1.status
+	              Buffers: shared hit=371 read=1248 dirtied=1 written=917
+	              ->  Index Only Scan using jobs_status_created_idx on jobs jobs_1  (cost=0.42..7063.74 rows=119889 width=8) (actual time=0.009..10.981 rows=120002.00 loops=1)
+	                    Index Cond: (status = ANY ('{scheduled,queued,running,retry_wait}'::text[]))
+	                    Heap Fetches: 379
+	                    Index Searches: 1
+	                    Buffers: shared hit=371 read=1248 dirtied=1 written=917
+2026-11-20 00:15:25.261 +0530 [98799] LOG:  duration: 0.008 ms  plan:
+	Query Text: SELECT
+					count(*) FILTER (WHERE status <> 'deregistered' AND last_heartbeat_at > now() - $1::interval),
+					count(*) FILTER (WHERE status <> 'deregistered' AND last_heartbeat_at <= now() - $1::interval),
+					count(*) FILTER (WHERE status = 'draining')
+				FROM workers
+	Query Parameters: $1 = '00:00:30'
+	Aggregate  (cost=22.40..22.41 rows=1 width=24) (actual time=0.008..0.008 rows=1.00 loops=1)
+	  Buffers: shared hit=1
+	  ->  Seq Scan on workers  (cost=0.00..13.10 rows=310 width=40) (actual time=0.003..0.004 rows=20.00 loops=1)
+	        Buffers: shared hit=1
+2026-11-20 00:15:25.287 +0530 [98799] LOG:  duration: 24.989 ms  plan:
+	Query Text: WITH q AS (
+					SELECT handler_name, handler_version, count(*) n, min(available_at) oldest
+					FROM jobs WHERE status = 'queued' GROUP BY 1, 2)
+				SELECT EXTRACT(EPOCH FROM now() - min(q.oldest))::float8,
+					coalesce(sum(q.n) FILTER (WHERE NOT EXISTS (
+						SELECT 1 FROM worker_capabilities c JOIN workers w ON w.id = c.worker_id
+						WHERE c.handler_name = q.handler_name AND c.handler_version = q.handler_version
+						  AND w.status = 'active' AND w.last_heartbeat_at > now() - $1::interval)), 0)
+				FROM q
+	Query Parameters: $1 = '00:00:30'
+	Aggregate  (cost=10597.89..10597.91 rows=1 width=40) (actual time=24.863..24.986 rows=1.00 loops=1)
+	  Buffers: shared hit=383 read=1948 dirtied=1 written=1902
+	  ->  Finalize GroupAggregate  (cost=1000.44..10500.30 rows=4 width=32) (actual time=24.229..24.353 rows=4.00 loops=1)
+	        Group Key: jobs.handler_name, jobs.handler_version
+	        Buffers: shared hit=375 read=1948 dirtied=1 written=1902
+	        ->  Gather Merge  (cost=1000.44..10500.16 rows=10 width=32) (actual time=24.208..24.348 rows=10.00 loops=1)
+	              Workers Planned: 2
+	              Workers Launched: 2
+	              Buffers: shared hit=375 read=1948 dirtied=1 written=1902
+	              ->  Partial GroupAggregate  (cost=0.42..9498.98 rows=4 width=32) (actual time=2.817..15.619 rows=3.33 loops=3)
+	                    Group Key: jobs.handler_name, jobs.handler_version
+	                    Buffers: shared hit=375 read=1948 dirtied=1 written=1902
+	                    ->  Parallel Index Only Scan using jobs_claimable_idx on jobs  (cost=0.42..8999.40 rows=49954 width=24) (actual time=0.072..13.575 rows=39998.00 loops=3)
+	                          Heap Fetches: 371
+	                          Index Searches: 1
+	                          Buffers: shared hit=375 read=1948 dirtied=1 written=1902
+	  SubPlan 1
+	    ->  Nested Loop  (cost=0.15..24.38 rows=1 width=0) (actual time=0.014..0.014 rows=0.50 loops=4)
+	          Join Filter: (c.worker_id = w.id)
+	          Buffers: shared hit=8
+	          ->  Index Scan using worker_capabilities_handler_idx on worker_capabilities c  (cost=0.15..8.17 rows=1 width=16) (actual time=0.010..0.010 rows=0.50 loops=4)
+	                Index Cond: ((handler_name = jobs.handler_name) AND (handler_version = jobs.handler_version))
+	                Index Searches: 4
+	                Buffers: shared hit=6
+	          ->  Seq Scan on workers w  (cost=0.00..16.20 rows=1 width=16) (actual time=0.005..0.005 rows=1.00 loops=2)
+	                Filter: ((status = 'active'::text) AND (last_heartbeat_at > (now() - '00:00:30'::interval)))
+	                Buffers: shared hit=2
+2026-11-20 00:15:25.288 +0530 [98799] LOG:  duration: 0.774 ms  plan:
+	Query Text: SELECT
+					(SELECT count(*) FROM workers WHERE status <> 'deregistered'
+						AND last_heartbeat_at <= now() - $1::interval AND last_heartbeat_at > now() - interval '1 hour'),
+					pg_database_size(current_database())
+	Query Parameters: $1 = '00:00:30'
+	Result  (cost=9.56..9.58 rows=1 width=16) (actual time=0.773..0.773 rows=1.00 loops=1)
+	  Buffers: shared hit=3
+	  InitPlan 1
+	    ->  Aggregate  (cost=9.55..9.56 rows=1 width=8) (actual time=0.004..0.004 rows=1.00 loops=1)
+	          Buffers: shared hit=1
+	          ->  Bitmap Heap Scan on workers  (cost=4.18..9.55 rows=2 width=0) (actual time=0.003..0.003 rows=0.00 loops=1)
+	                Recheck Cond: ((last_heartbeat_at <= (now() - '00:00:30'::interval)) AND (last_heartbeat_at > (now() - '01:00:00'::interval)) AND (status <> 'deregistered'::text))
+	                Buffers: shared hit=1
+	                ->  Bitmap Index Scan on workers_liveness_idx  (cost=0.00..4.17 rows=2 width=0) (actual time=0.002..0.002 rows=0.00 loops=1)
+	                      Index Cond: ((last_heartbeat_at <= (now() - '00:00:30'::interval)) AND (last_heartbeat_at > (now() - '01:00:00'::interval)))
+	                      Index Searches: 1
+	                      Buffers: shared hit=1
+2026-11-20 00:15:25.288 +0530 [98799] LOG:  duration: 0.004 ms  plan:
+	Query Text: SELECT state, count(*) FROM job_attempts
+				WHERE finished_at > now() - interval '5 minutes' GROUP BY state
+	HashAggregate  (cost=14.98..15.80 rows=82 width=40) (actual time=0.003..0.003 rows=0.00 loops=1)
+	  Group Key: state
+	  Batches: 1  Memory Usage: 32kB
+	  Buffers: shared hit=1
+	  ->  Seq Scan on job_attempts  (cost=0.00..14.55 rows=87 width=32) (actual time=0.003..0.003 rows=0.00 loops=1)
+	        Filter: (finished_at > (now() - '00:05:00'::interval))
+	        Rows Removed by Filter: 8
+	        Buffers: shared hit=1
+2026-11-20 00:15:25.288 +0530 [98799] LOG:  duration: 0.001 ms  plan:
+	Query Text: SELECT $1::text AS explain_marker
+	Query Parameters: $1 = 'MARK end'
+	Result  (cost=0.00..0.01 rows=1 width=32) (actual time=0.000..0.000 rows=1.00 loops=1)
