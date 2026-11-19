@@ -15,7 +15,7 @@ function loadIndex(): Promise<Entry[]> {
 const words = (s: string) => s.toLowerCase().split(/[^a-z0-9_]+/).filter(Boolean);
 
 /** Every query word must prefix-match a word in the entry. Heading hits outweigh page-title and body hits. */
-export function search(index: Entry[], query: string, limit = 8): Hit[] {
+export function search(index: Entry[], query: string, limit = 6): Hit[] {
   const q = words(query);
   if (!q.length) return [];
   const hits: Hit[] = [];

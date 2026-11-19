@@ -12,7 +12,7 @@ export default function DemoPage() {
         </section>
         <div>
           <h1 className="page-title">Console tour</h1>
-          <p className="lede" style={{ marginTop: "var(--space-3)" }}>The same views the console uses, on sample data. {FIXTURE_LABEL}.</p>
+          <p className="lede" style={{ marginTop: "var(--space-3)" }}>The same views the console is built from, on sample data: overview, jobs (including a failed job and the retry that was created from it), workers, and a step-by-step replay of a worker failure. {FIXTURE_LABEL}.</p>
         </div>
         <DemoTour />
       </div>

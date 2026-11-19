@@ -150,3 +150,12 @@
   .path-list p{color:var(--color-ink-2)}
   .path-list strong{color:var(--color-ink)}
 }
+@layer components {
+  .replay{display:grid;gap:var(--space-4)}
+  .replay-ctl{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+  .replay-state{display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:var(--space-3);margin:0;border:1px solid var(--color-line);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);background:var(--color-canvas)}
+  .replay-state dt{font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--color-ink-2)}
+  .replay-state dd{margin:2px 0 0}
+  .replay-cap{border-left:3px solid var(--color-accent);padding:var(--space-2) var(--space-4);min-height:4.5rem;display:grid;gap:2px;background:var(--color-accent-tint)}
+  .replay-cap b{font-weight:600}
+}

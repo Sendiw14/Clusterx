@@ -14,7 +14,7 @@ export function OnThisPage({ headings, variant }: { headings: Heading[]; variant
     const io = new IntersectionObserver((entries) => {
       const vis = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
       if (vis) setActive(vis.target.id);
-    }, { rootMargin: "-72px 0px -70% 0px" });
+    }, { rootMargin: "-60px 0px -60% 0px" });
     els.forEach((e) => io.observe(e));
     return () => io.disconnect();
   }, [headings, variant]);

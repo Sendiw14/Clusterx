@@ -402,7 +402,7 @@ html[data-rm="1"] .hero-in>*,html[data-rm="1"] dialog[open],html[data-rm="1"] .s
 .dsearch input{flex:1;min-width:0;border:0;background:transparent;outline:none;min-height:2.25rem;font-size:var(--text-ui-md)}
 .dsearch input::-webkit-search-cancel-button{display:none}
 .dsearch kbd{font-family:var(--font-mono);font-size:var(--text-ui-xs);border:1px solid var(--color-line);border-radius:var(--radius-xs);padding:0 5px;background:var(--color-panel);color:var(--color-ink-2)}
-.dsearch-pop{position:absolute;z-index:30;left:0;right:0;top:calc(100% + 6px);background:var(--color-white);border:1px solid var(--color-ink);border-radius:var(--radius-md);box-shadow:var(--shadow-overlay);max-height:min(26rem,60dvh);overflow:auto}
+.dsearch-pop{position:absolute;z-index:30;left:0;right:0;top:calc(100% + 6px);background:var(--color-white);border:1px solid var(--color-ink);border-radius:var(--radius-md);box-shadow:var(--shadow-overlay)}
 @media (min-width:1024px){.dsearch-pop{right:auto;width:min(30rem,calc(100vw - 2rem))}}
 .dsearch ul{list-style:none;margin:0;padding:var(--space-1)}
 .dsearch li[role="option"]{display:grid;gap:1px;padding:var(--space-2) var(--space-3);border-radius:var(--radius-sm);cursor:pointer}

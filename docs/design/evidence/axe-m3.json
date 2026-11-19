@@ -10,6 +10,24 @@
   },
   {
     "route": "/",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/",
     "width": 1440,
     "critical": 0,
     "serious": 0,
@@ -235,6 +253,24 @@
   },
   {
     "route": "/architecture",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/architecture",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/architecture",
     "width": 1440,
     "critical": 0,
     "serious": 0,
@@ -245,6 +281,24 @@
   {
     "route": "/changelog",
     "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/changelog",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/changelog",
+    "width": 1024,
     "critical": 0,
     "serious": 0,
     "moderate": 0,
@@ -263,6 +317,24 @@
   {
     "route": "/demo",
     "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo",
+    "width": 1024,
     "critical": 0,
     "serious": 0,
     "moderate": 0,
@@ -307,6 +379,15 @@
   },
   {
     "route": "/demo [operator/Overview]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [operator/Recovery replay]",
     "width": 1280,
     "critical": 0,
     "serious": 0,
@@ -360,6 +441,15 @@
     "violations": []
   },
   {
+    "route": "/demo [viewer/Recovery replay]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
     "route": "/demo [viewer/Workers]",
     "width": 1280,
     "critical": 0,
@@ -379,6 +469,24 @@
   },
   {
     "route": "/docs",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs",
     "width": 1440,
     "critical": 0,
     "serious": 0,
@@ -389,6 +497,24 @@
   {
     "route": "/docs/api",
     "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/api",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/api",
+    "width": 1024,
     "critical": 0,
     "serious": 0,
     "moderate": 0,
@@ -415,6 +541,33 @@
   },
   {
     "route": "/docs/concepts",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/concepts",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/concepts",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/concepts [search open]",
     "width": 1440,
     "critical": 0,
     "serious": 0,
@@ -425,6 +578,24 @@
   {
     "route": "/docs/deployment",
     "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/deployment",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/deployment",
+    "width": 1024,
     "critical": 0,
     "serious": 0,
     "moderate": 0,
@@ -443,6 +614,24 @@
   {
     "route": "/docs/quickstart",
     "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/quickstart",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/quickstart",
+    "width": 1024,
     "critical": 0,
     "serious": 0,
     "moderate": 0,
@@ -461,6 +650,24 @@
   {
     "route": "/docs/reliability",
     "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/reliability",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/reliability",
+    "width": 1024,
     "critical": 0,
     "serious": 0,
     "moderate": 0,
@@ -479,6 +686,24 @@
   {
     "route": "/docs/security",
     "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/security",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/security",
+    "width": 1024,
     "critical": 0,
     "serious": 0,
     "moderate": 0,
@@ -497,6 +722,24 @@
   {
     "route": "/docs/workers",
     "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/workers",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/workers",
+    "width": 1024,
     "critical": 0,
     "serious": 0,
     "moderate": 0,
@@ -515,6 +758,24 @@
   {
     "route": "/login",
     "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/login",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/login",
+    "width": 1024,
     "critical": 0,
     "serious": 0,
     "moderate": 0,
