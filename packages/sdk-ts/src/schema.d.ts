@@ -1342,8 +1342,10 @@ export interface components {
         };
         /**
          * @description Too many requests (in-memory token buckets in the single coordinator, ADR-0001; reset on restart):
-         *     every mutating request per principal (default 20/s, burst 40), failed authentications per TCP peer
-         *     (default 60/min; once empty, every request from that peer gets 429 until it refills) and POST /sessions per
+         *     every mutating request per principal (default 20/s, burst 40), credential-guessing failures per TCP peer
+         *     (`token_invalid`, `assertion_invalid`; default 60/min; once empty, further failing credentials from that
+         *     peer get 429 until it refills, while credentials that verify are still served; session or token
+         *     lifecycle failures such as `session_expired`/`session_revoked`/`token_revoked` never count) and POST /sessions per
          *     GitHub id (default 10/min). `Retry-After` is whole seconds (>= 1).
          */
         RateLimited: {
