@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -92,7 +93,18 @@ type subscriber struct {
 	queue    []Message
 	overflow bool
 	notify   chan struct{}
-	key      string // session id or token id (stream count limit)
+	key      string   // session id or token id (stream count limit)
+	scopes   []string // principal scopes; nil = every hint (internal tests)
+}
+
+// allows reports whether the subscriber may see m: a hint needs the read scope of its entity
+// (RV5-07), so a jobs:read-only token stream never sees worker or metrics hints.
+func (s *subscriber) allows(m Message) bool {
+	if m.Type != "hint" || s.scopes == nil {
+		return true
+	}
+	need := map[string]string{"job": "jobs:read", "worker": "workers:read", "metrics": "metrics:read"}[m.Entity]
+	return need != "" && slices.Contains(s.scopes, need)
 }
 
 // NewHub returns an empty hub.
@@ -104,7 +116,7 @@ func NewHub(log *slog.Logger) *Hub {
 // MaxStreamsPerPrincipal is the per-session / per-token stream limit (close 4429).
 const MaxStreamsPerPrincipal = 5
 
-func (h *Hub) subscribe(key string) (*subscriber, bool) {
+func (h *Hub) subscribe(key string, scopes ...string) (*subscriber, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	n := 0
@@ -116,7 +128,7 @@ func (h *Hub) subscribe(key string) (*subscriber, bool) {
 	if n >= MaxStreamsPerPrincipal || h.closed {
 		return nil, false
 	}
-	s := &subscriber{notify: make(chan struct{}, 1), key: key}
+	s := &subscriber{notify: make(chan struct{}, 1), key: key, scopes: scopes}
 	h.subs[s] = struct{}{}
 	return s, true
 }
@@ -185,7 +197,9 @@ func (h *Hub) publish(m Message) {
 	}
 	subs := make([]*subscriber, 0, len(h.subs))
 	for s := range h.subs {
-		subs = append(subs, s)
+		if s.allows(m) {
+			subs = append(subs, s)
+		}
 	}
 	h.mu.Unlock()
 	for _, s := range subs {
