@@ -127,8 +127,10 @@ submit as the user. Do **not** use `localStorage`.
 - **Keys.** Go reads `CLUSTERX_BFF_JWKS_FILE`: a JWKS of Ed25519 OKP public keys (`{"keys":[{"kty":"OKP","crv":"Ed25519","kid":"…","x":"…"}]}`,
   1..16 keys). A JWK with a private member `d` is refused at start-up. Without the variable every assertion is rejected
   (`assertion_invalid`) and only API tokens work. Rotation = add the new `kid` to the JWKS, restart, switch signing, drop the old `kid`.
-- **Header/claims are strict.** `alg` must be `EdDSA`, `typ` `clusterx-assertion+jwt`, no `crit`. The claim set is closed:
-  `iss, aud, sub, sid, role, purpose, iat, nbf, exp, jti, rid` (unknown claims ⇒ `assertion_invalid`). `jti` is 16..128
+- **Header/claims are strict.** `alg` must be `EdDSA`, `typ` `clusterx-assertion+jwt`; the header members are exactly a subset
+  of `alg, typ, kid` (so no `crit`, `jku`, `x5u` …). The claim set is closed:
+  `iss, aud, sub, sid, role, purpose, iat, nbf, exp, jti, rid` (unknown claims ⇒ `assertion_invalid`). In both objects member
+  names must match exactly (lower case) and appear once; duplicates or case variants ⇒ `assertion_invalid` (RV5-03). `jti` is 16..128
   base64url characters (128 random bits recommended). `exp - iat <= 60 s`; `iat`/`nbf` may lead the Go clock by at most 5 s;
   `exp` may lag it by at most 5 s (`assertion_expired`).
 - **Single use.** Mutations (non-GET/HEAD) and every login assertion consume the `jti` in an in-memory cache (120 s,

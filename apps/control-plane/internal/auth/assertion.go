@@ -7,6 +7,7 @@
 package auth
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
@@ -53,7 +54,7 @@ func invalid(format string, a ...any) error {
 
 // Claims are the verified assertion claims.
 type Claims struct {
-	Kid     string
+	Kid     string `json:"-"` // from the protected header, never from the payload
 	Iss     string `json:"iss"`
 	Aud     string `json:"aud"`
 	Sub     string `json:"sub"`
@@ -129,15 +130,17 @@ func (v *Verifier) Verify(token string, singleUse bool) (Claims, error) {
 		return Claims{}, invalid("bad base64url")
 	}
 	var h struct {
-		Alg  string          `json:"alg"`
-		Typ  string          `json:"typ"`
-		Kid  string          `json:"kid"`
-		Crit json.RawMessage `json:"crit"`
+		Alg string `json:"alg"`
+		Typ string `json:"typ"`
+		Kid string `json:"kid"`
+	}
+	if err := strictKeys(hb, headerKeys); err != nil {
+		return Claims{}, invalid("bad header: %v", err)
 	}
 	if err := json.Unmarshal(hb, &h); err != nil {
 		return Claims{}, invalid("bad header")
 	}
-	if h.Alg != "EdDSA" || h.Typ != HeaderType || h.Crit != nil {
+	if h.Alg != "EdDSA" || h.Typ != HeaderType {
 		return Claims{}, invalid("unsupported header alg=%q typ=%q", h.Alg, h.Typ)
 	}
 	key, ok := v.Keys[h.Kid]
@@ -147,6 +150,9 @@ func (v *Verifier) Verify(token string, singleUse bool) (Claims, error) {
 	// Signature before any claim is trusted (RFC 7515 signing input = header.payload as sent).
 	if len(sig) != ed25519.SignatureSize || !ed25519.Verify(key, []byte(parts[0]+"."+parts[1]), sig) {
 		return Claims{}, invalid("bad signature")
+	}
+	if err := strictKeys(pb, claimKeys); err != nil {
+		return Claims{}, invalid("bad claims: %v", err)
 	}
 	var c Claims
 	dec := json.NewDecoder(strings.NewReader(string(pb)))
@@ -193,6 +199,48 @@ func (v *Verifier) Verify(token string, singleUse bool) (Claims, error) {
 		}
 	}
 	return c, nil
+}
+
+var (
+	headerKeys = map[string]bool{"alg": true, "typ": true, "kid": true}
+	claimKeys  = map[string]bool{"iss": true, "aud": true, "sub": true, "sid": true, "role": true, "purpose": true,
+		"iat": true, "nbf": true, "exp": true, "jti": true, "rid": true}
+)
+
+// strictKeys enforces a closed JSON object (RV5-03): every member name must be in allowed, spelled
+// exactly (encoding/json alone matches names case-insensitively), and appear once (encoding/json
+// alone keeps the last duplicate).
+func strictKeys(b []byte, allowed map[string]bool) error {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+		return errors.New("not a JSON object")
+	}
+	seen := map[string]bool{}
+	for dec.More() {
+		t, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		k, _ := t.(string)
+		if !allowed[k] {
+			return fmt.Errorf("member %q not allowed", k)
+		}
+		if seen[k] {
+			return fmt.Errorf("duplicate member %q", k)
+		}
+		seen[k] = true
+		var skip json.RawMessage
+		if err := dec.Decode(&skip); err != nil {
+			return err
+		}
+	}
+	if _, err := dec.Token(); err != nil {
+		return err
+	}
+	if dec.More() {
+		return errors.New("trailing data")
+	}
+	return nil
 }
 
 // ReplayCache remembers used jti values for ReplayWindow. It is bounded: when full (after purging
