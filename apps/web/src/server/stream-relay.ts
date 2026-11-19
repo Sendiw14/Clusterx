@@ -6,10 +6,32 @@ import { config } from "./config.ts";
 import { readSession } from "./cookies.ts";
 import { requestId } from "./crypto.ts";
 
-/** ADR-0006 section 4: at most 5 browser sockets per session (Go also enforces 4429). */
+/** ADR-0006 section 4: at most 5 browser sockets per session (Go also enforces 4429), plus a per-process ceiling (RV6-08). */
 export const MAX_SOCKETS_PER_SESSION = 5;
+export const MAX_SOCKETS_TOTAL = 256;
 const PING_MS = 25_000;
 const live = new Map<string, number>();
+let total = 0;
+
+/**
+ * Takes a relay slot synchronously, BEFORE the async dial to Go (RV6-08: check-then-act raced). Returns an idempotent
+ * release, or null when the session or the process is full.
+ */
+export function reserveSlot(sid: string): (() => void) | null {
+  if (total >= MAX_SOCKETS_TOTAL || (live.get(sid) ?? 0) >= MAX_SOCKETS_PER_SESSION) return null;
+  live.set(sid, (live.get(sid) ?? 0) + 1);
+  total++;
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    total--;
+    const n = (live.get(sid) ?? 1) - 1;
+    if (n <= 0) live.delete(sid);
+    else live.set(sid, n);
+  };
+}
+export const slotsInUse = () => total;
 
 function refuse(socket: Duplex, status: number, text: string) {
   socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\nCache-Control: no-store\r\n\r\n`);
@@ -28,6 +50,8 @@ export function attachStreamRelay(server: Server, passthrough: (req: IncomingMes
   const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 });
   server.on("upgrade", (req, socket, head) => {
     if (new URL(req.url ?? "/", "http://x").pathname !== "/bff/stream") return passthrough(req, socket, head);
+    // A peer that resets while we answer or dial must not surface as an uncaught `error` (RV6-03).
+    socket.on("error", () => {});
     void accept(req, socket, head).catch((e) => {
       console.error(`[bff] stream relay failure: ${(e as Error).name}`);
       refuse(socket, 502, "Bad Gateway");
@@ -45,42 +69,61 @@ export function attachStreamRelay(server: Server, passthrough: (req: IncomingMes
     if (req.headers.origin !== c.appOrigin) return refuse(socket, 403, "Forbidden");
     const s = readSession(c, req.headers.cookie);
     if (!s) return refuse(socket, 401, "Unauthorized");
-    if ((live.get(s.sid) ?? 0) >= MAX_SOCKETS_PER_SESSION) return refuse(socket, 429, "Too Many Requests");
+    const release = reserveSlot(s.sid);
+    if (!release) return refuse(socket, 429, "Too Many Requests");
+    // The browser socket owns the slot for exactly its lifetime. Until the handshake is handed to `ws`, its closing also
+    // kills the upstream socket (RV6-03: a tab closed or a handshake `ws` aborts after the dial used to leak Go's slot).
+    const conn: { up?: WebSocket; down?: WebSocket } = {};
+    let handedOff = false;
+    socket.once("close", () => {
+      release();
+      if (!handedOff) conn.up?.terminate();
+    });
+    if (socket.destroyed) return release();
     const token = await mintAssertion(c.keyFile, { userId: s.uid, sid: s.sid, role: s.role, rid });
-    const up = new WebSocket(`${c.apiUrl.replace(/^http/, "ws")}/api/v1/stream`, { headers: { Authorization: `Bearer ${token}`, "X-Request-Id": rid }, handshakeTimeout: 10_000, maxPayload: 64 * 1024 });
-    up.once("unexpected-response", (_r, res) => {
+    if (socket.destroyed) return;
+    const ws = new WebSocket(`${c.apiUrl.replace(/^http/, "ws")}/api/v1/stream`, { headers: { Authorization: `Bearer ${token}`, "X-Request-Id": rid }, handshakeTimeout: 10_000, maxPayload: 64 * 1024 });
+    conn.up = ws;
+    // Always listening: an `error` on a socket without a listener would throw and take the process down.
+    ws.on("error", () => {
+      if (handedOff) return void (conn.down?.readyState === WebSocket.OPEN && conn.down.close(1011));
+      refuse(socket, 502, "Bad Gateway");
+    });
+    ws.once("unexpected-response", (_r, res) => {
       res.resume();
       refuse(socket, res.statusCode === 401 || res.statusCode === 403 || res.statusCode === 429 ? res.statusCode : 502, res.statusMessage || "Bad Gateway");
     });
-    up.once("error", () => refuse(socket, 502, "Bad Gateway"));
-    up.once("open", () => {
-      up.removeAllListeners("error");
-      wss.handleUpgrade(req, socket, head, (down) => {
-        live.set(s.sid, (live.get(s.sid) ?? 0) + 1);
-        let alive = true;
-        const timer = setInterval(() => {
-          if (!alive) return down.terminate();
-          alive = false;
-          down.ping();
-        }, PING_MS);
-        down.on("pong", () => { alive = true; });
-        const end = () => {
-          clearInterval(timer);
-          const n = (live.get(s.sid) ?? 1) - 1;
-          if (n <= 0) live.delete(s.sid);
-          else live.set(s.sid, n);
-        };
-        down.on("message", (data, isBinary) => { if (!isBinary && up.readyState === WebSocket.OPEN) up.send(data.toString()); });
-        up.on("message", (data, isBinary) => {
-          if (down.readyState !== WebSocket.OPEN) return;
-          if (down.bufferedAmount > 1_000_000) return down.close(1013);
-          down.send(isBinary ? data : data.toString());
+    ws.once("open", () => {
+      if (socket.destroyed) return ws.terminate();
+      try {
+        wss.handleUpgrade(req, socket, head, (d) => {
+          handedOff = true;
+          conn.down = d;
+          pipe(ws, d);
         });
-        up.on("close", (code) => { if (down.readyState === WebSocket.OPEN) down.close(wireCode(code)); });
-        up.on("error", () => { if (down.readyState === WebSocket.OPEN) down.close(1011); });
-        down.on("close", () => { end(); if (up.readyState === WebSocket.OPEN || up.readyState === WebSocket.CONNECTING) up.close(1000); });
-        down.on("error", () => down.terminate());
-      });
+      } catch {
+        ws.terminate();
+        refuse(socket, 502, "Bad Gateway");
+      }
     });
+  }
+
+  function pipe(up: WebSocket, down: WebSocket) {
+    let alive = true;
+    const timer = setInterval(() => {
+      if (!alive) return down.terminate();
+      alive = false;
+      down.ping();
+    }, PING_MS);
+    down.on("pong", () => { alive = true; });
+    down.on("message", (data, isBinary) => { if (!isBinary && up.readyState === WebSocket.OPEN) up.send(data.toString()); });
+    up.on("message", (data, isBinary) => {
+      if (down.readyState !== WebSocket.OPEN) return;
+      if (down.bufferedAmount > 1_000_000) return down.close(1013);
+      down.send(isBinary ? data : data.toString());
+    });
+    up.on("close", (code) => { if (down.readyState === WebSocket.OPEN) down.close(wireCode(code)); });
+    down.on("close", () => { clearInterval(timer); if (up.readyState === WebSocket.OPEN || up.readyState === WebSocket.CONNECTING) up.close(1000); });
+    down.on("error", () => down.terminate());
   }
 }
