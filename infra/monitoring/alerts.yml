@@ -1,0 +1,80 @@
+# CLUSTERX alert rules (M8). Each alert links its runbook section in docs/operations/incident-runbook.md.
+# Thresholds are starting points measured on the local reference stack (docs/testing/benchmarks.md), not frozen SLOs.
+groups:
+  - name: clusterx
+    rules:
+      - alert: ClusterxControlPlaneDown
+        expr: up{job="clusterx-control-plane"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: Prometheus cannot scrape the control plane.
+          runbook_url: docs/operations/incident-runbook.md#clusterxcontrolplanedown
+
+      - alert: ClusterxDatabaseUnavailable
+        expr: clusterx_db_up == 0
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: The control plane cannot read PostgreSQL; admissions answer 503 and claims pause.
+          runbook_url: docs/operations/incident-runbook.md#clusterxdatabaseunavailable
+
+      - alert: ClusterxQueueAgeHigh
+        expr: clusterx_queue_oldest_age_seconds > 300
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "The oldest eligible queued job has waited {{ $value | humanizeDuration }}."
+          runbook_url: docs/operations/incident-runbook.md#clusterxqueueagehigh
+
+      - alert: ClusterxJobsUnschedulable
+        expr: clusterx_jobs_unschedulable > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value }} queued jobs have no live worker supporting their handler."
+          runbook_url: docs/operations/incident-runbook.md#clusterxjobsunschedulable
+
+      - alert: ClusterxWorkerOffline
+        expr: clusterx_workers_recently_lost > 0
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value }} worker(s) stopped heartbeating without deregistering."
+          runbook_url: docs/operations/incident-runbook.md#clusterxworkeroffline
+
+      - alert: ClusterxNoLiveWorkers
+        expr: clusterx_workers{state="live"} == 0 and on() clusterx_jobs{status="queued"} > 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: Jobs are queued and no worker is live.
+          runbook_url: docs/operations/incident-runbook.md#clusterxworkeroffline
+
+      - alert: ClusterxLeaseExpiriesRepeated
+        expr: clusterx_attempts_finished_5m{state="lease_expired"} >= 3
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value }} attempts lost their lease in the last 5 minutes."
+          runbook_url: docs/operations/incident-runbook.md#clusterxleaseexpiriesrepeated
+
+      - alert: ClusterxFailureRateHigh
+        expr: |
+          (sum(clusterx_attempts_finished_5m{state=~"failed|lease_expired|deadline_exceeded"})
+            / sum(clusterx_attempts_finished_5m)) > 0.25
+          and sum(clusterx_attempts_finished_5m) >= 20
+        for: 2m # the gauge already covers 5 minutes; a 5m `for` would need 10 minutes of failures
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of attempts ended unsuccessfully in the last 5 minutes."
+          runbook_url: docs/operations/incident-runbook.md#clusterxfailureratehigh
+
+      - alert: ClusterxDiskSpaceLow
+        expr: |
+          node_filesystem_avail_bytes{mountpoint="/pgdata"} / node_filesystem_size_bytes{mountpoint="/pgdata"} < 0.10
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "PostgreSQL volume has {{ $value | humanizePercentage }} free."
+          runbook_url: docs/operations/incident-runbook.md#clusterxdiskspacelow

@@ -26,6 +26,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     pids_limit: 128
     mem_limit: 256m
+    stop_grace_period: 40s
   worker-5:
     image: ${CLUSTERX_IMAGE_PREFIX:-clusterx}/worker:local
     profiles: [workers]
@@ -40,6 +41,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     pids_limit: 128
     mem_limit: 256m
+    stop_grace_period: 40s
 secrets:
   worker_credential_4: { file: ./.secrets/worker_credential_4 }
   worker_credential_5: { file: ./.secrets/worker_credential_5 }

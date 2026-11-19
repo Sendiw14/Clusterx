@@ -1,0 +1,27 @@
+2026-11-19T19:17:35Z baseline firing: [ClusterxWorkerOffline]
+clusterx-control-plane up http://control-plane:9091/metrics
+node up http://node-exporter:9100/metrics
+2026-11-19T19:17:35Z phase A: start worker-1; submit 40 permanent failures + 30 x sleep_ms 60 s
+2026-11-19T19:17:38Z SIGKILL worker-1 (holding 4 active attempts)
+2026-11-19T19:17:38Z FIRING ClusterxWorkerOffline
+2026-11-19T19:19:34Z FIRING ClusterxLeaseExpiriesRepeated
+2026-11-19T19:19:59Z FIRING ClusterxFailureRateHigh
+2026-11-19T19:20:29Z FIRING ClusterxNoLiveWorkers
+2026-11-19T19:25:01Z FIRING ClusterxQueueAgeHigh
+2026-11-19T19:25:01Z FIRING ClusterxJobsUnschedulable
+ status | count 
+--------+-------
+ failed |    40
+ queued |    30
+(2 rows)
+
+2026-11-19T19:25:02Z phase B1: fill the 64 MiB drill volume to ~95%
+63963136 bytes (64 MB, 61 MiB) copied, 0.16678 s, 384 MB/s
+2026-11-19T19:27:34Z FIRING ClusterxDiskSpaceLow
+2026-11-19T19:27:34Z phase B2: stop postgres
+2026-11-19T19:28:14Z FIRING ClusterxDatabaseUnavailable
+2026-11-19T19:28:20Z admission during DB outage: HTTP 503
+2026-11-19T19:28:20Z phase B3: stop control-plane
+2026-11-19T19:29:45Z FIRING ClusterxControlPlaneDown
+2026-11-19T19:30:00Z final firing: [ClusterxControlPlaneDown ClusterxDiskSpaceLow]
+2026-11-19T19:30:00Z cleanup: start control-plane, stop monitoring, remove drill volume

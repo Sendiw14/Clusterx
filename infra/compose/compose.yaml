@@ -93,6 +93,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     pids_limit: 128
     mem_limit: 256m
+    stop_grace_period: 40s # > worker CLUSTERX_SHUTDOWN_TIMEOUT (30 s): let the drain finish before SIGKILL
   worker-2:
     <<: *worker
     build: !reset null # only `worker` builds the shared image (avoids parallel same-tag builds)
@@ -110,6 +111,35 @@ services:
       CLUSTERX_WORKER_CREDENTIAL_FILE: /run/secrets/worker_credential_3
     secrets: [worker_credential_3]
 
+  # Optional monitoring (M8): Prometheus with the alert rules in infra/monitoring, plus node-exporter
+  # reporting only the PostgreSQL volume's filesystem (disk-exhaustion alert). Private: loopback port only.
+  #   docker compose --env-file ../../.env --profile monitoring up -d prometheus node-exporter
+  prometheus:
+    image: quay.io/prometheus/prometheus:v3.16.0@sha256:9332054523223e2ddc18d8101799d54a4a8d823b030c53216f063a6c117773cd
+    profiles: [monitoring]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus",
+              "--storage.tsdb.retention.time=15d", "--storage.tsdb.retention.size=1GB"]
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - promdata:/prometheus
+    secrets: [metrics_token]
+    depends_on: [control-plane]
+    ports: ["127.0.0.1:${CLUSTERX_PROMETHEUS_PORT:-9190}:9090"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
+    profiles: [monitoring]
+    command: ["--collector.disable-defaults", "--collector.filesystem"]
+    volumes: ["pgdata:/pgdata:ro"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 64m
+
 secrets:
   postgres_password: { file: ./.secrets/postgres_password }
   app_db_password: { file: ./.secrets/app_db_password }
@@ -125,3 +155,4 @@ secrets:
 
 volumes:
   pgdata:
+  promdata:
