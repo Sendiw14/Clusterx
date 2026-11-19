@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -123,14 +124,32 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 		return strings.TrimSpace(v)
 	}
 	fail := func(format string, a ...any) { errs = append(errs, fmt.Errorf(format, a...)) }
+	// secret reads k, or the file named by k_FILE (RV5-09: secrets mounted as files, not visible in
+	// `docker inspect`). Setting both is an error; trailing whitespace is trimmed.
+	secret := func(k string) string {
+		path := get(k + "_FILE")
+		if path == "" {
+			return get(k)
+		}
+		if get(k) != "" {
+			fail("set %s or %s_FILE, not both", k, k)
+			return ""
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			fail("%s_FILE: cannot read %q", k, path)
+			return ""
+		}
+		return strings.TrimSpace(string(b))
+	}
 
 	c := Config{
 		Env:          Env(get(VarEnv)),
-		DatabaseURL:  get(VarDatabaseURL),
-		MigrateURL:   get(VarMigrateURL),
+		DatabaseURL:  secret(VarDatabaseURL),
+		MigrateURL:   secret(VarMigrateURL),
 		HTTPAddr:     orDefault(get(VarHTTPAddr), ":8080"),
 		MetricsAddr:  orDefault(get(VarMetricsAddr), ":9091"),
-		MetricsToken: get(VarMetricsToken),
+		MetricsToken: secret(VarMetricsToken),
 		GRPCAddr:     orDefault(get(VarGRPCAddr), ":9090"),
 		HTTPTLS:      TLSFiles{CertFile: get(VarHTTPTLSCert), KeyFile: get(VarHTTPTLSKey)},
 		GRPCTLS:      TLSFiles{CertFile: get(VarGRPCTLSCert), KeyFile: get(VarGRPCTLSKey)},
@@ -295,7 +314,7 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 	c.RateMutations = num(VarRateMutations, 20, 0, 10000)
 	c.RateAuthFailures = num(VarRateAuthFailures, 60, 1, 100000)
 	c.RateLogins = num(VarRateLogins, 10, 1, 1000)
-	c.RetentionURL = get(VarRetentionURL)
+	c.RetentionURL = secret(VarRetentionURL)
 	if c.RetentionURL != "" {
 		if pc, err := pgconn.ParseConfig(c.RetentionURL); err != nil {
 			fail("%s is not a valid PostgreSQL connection string", VarRetentionURL)
