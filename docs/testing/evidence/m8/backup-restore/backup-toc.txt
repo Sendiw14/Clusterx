@@ -1,0 +1,146 @@
+;
+; Archive created at 2026-11-19 18:52:56 UTC
+;     dbname: clusterx
+;     TOC Entries: 135
+;     Compression: gzip
+;     Dump Version: 1.16-0
+;     Format: CUSTOM
+;     Integer: 4 bytes
+;     Offset: 8 bytes
+;     Dumped from database version: 18.7 (Debian 18.7-1.pgdg12+2)
+;     Dumped by pg_dump version: 18.7 (Debian 18.7-1.pgdg12+2)
+;
+;
+; Selected TOC Entries:
+;
+2; 3079 16829 EXTENSION - pg_stat_statements 
+3683; 0 0 COMMENT - EXTENSION pg_stat_statements 
+245; 1255 16817 FUNCTION public clusterx_check_job_attempt_coupling() clusterx_admin
+256; 1255 16808 FUNCTION public clusterx_expire_attempt_logs(integer) clusterx_admin
+3684; 0 0 ACL public FUNCTION clusterx_expire_attempt_logs(max_rows integer) clusterx_admin
+242; 1255 16791 FUNCTION public clusterx_forbid_finished_attempt_update() clusterx_admin
+239; 1255 16786 FUNCTION public clusterx_forbid_history_delete() clusterx_admin
+236; 1255 16780 FUNCTION public clusterx_forbid_terminal_job_update() clusterx_admin
+244; 1255 16811 FUNCTION public clusterx_forbid_truncate() clusterx_admin
+241; 1255 16793 FUNCTION public clusterx_forbid_update() clusterx_admin
+240; 1255 16789 FUNCTION public clusterx_forbid_young_audit_delete() clusterx_admin
+238; 1255 16784 FUNCTION public clusterx_guard_attempt_insert() clusterx_admin
+243; 1255 16809 FUNCTION public clusterx_guard_job_delete() clusterx_admin
+237; 1255 16782 FUNCTION public clusterx_guard_job_update() clusterx_admin
+223; 1259 16454 TABLE public api_tokens clusterx_admin
+3685; 0 0 ACL public TABLE api_tokens clusterx_admin
+221; 1259 16405 TABLE public users clusterx_admin
+3686; 0 0 ACL public TABLE users clusterx_admin
+233; 1259 16796 VIEW public api_token_authority clusterx_admin
+3687; 0 0 ACL public TABLE api_token_authority clusterx_admin
+232; 1259 16756 TABLE public audit_events clusterx_admin
+3688; 0 0 ACL public TABLE audit_events clusterx_admin
+228; 1259 16638 TABLE public job_attempts clusterx_admin
+3689; 0 0 ACL public TABLE job_attempts clusterx_admin
+3690; 0 0 ACL public COLUMN job_attempts.log_tail clusterx_admin
+3691; 0 0 ACL public COLUMN job_attempts.log_expired clusterx_admin
+230; 1259 16707 TABLE public job_events clusterx_admin
+3692; 0 0 ACL public TABLE job_events clusterx_admin
+229; 1259 16697 TABLE public job_tombstones clusterx_admin
+3693; 0 0 ACL public TABLE job_tombstones clusterx_admin
+227; 1259 16572 TABLE public jobs clusterx_admin
+3694; 0 0 ACL public TABLE jobs clusterx_admin
+220; 1259 16391 TABLE public schema_migrations clusterx_admin
+3695; 0 0 ACL public TABLE schema_migrations clusterx_admin
+222; 1259 16424 TABLE public sessions clusterx_admin
+3696; 0 0 ACL public TABLE sessions clusterx_admin
+231; 1259 16730 TABLE public submission_idempotency clusterx_admin
+3697; 0 0 ACL public TABLE submission_idempotency clusterx_admin
+226; 1259 16554 TABLE public worker_capabilities clusterx_admin
+3698; 0 0 ACL public TABLE worker_capabilities clusterx_admin
+224; 1259 16484 TABLE public worker_credentials clusterx_admin
+3699; 0 0 ACL public TABLE worker_credentials clusterx_admin
+225; 1259 16514 TABLE public workers clusterx_admin
+3700; 0 0 ACL public TABLE workers clusterx_admin
+3667; 0 16454 TABLE DATA public api_tokens clusterx_admin
+3676; 0 16756 TABLE DATA public audit_events clusterx_admin
+3672; 0 16638 TABLE DATA public job_attempts clusterx_admin
+3674; 0 16707 TABLE DATA public job_events clusterx_admin
+3673; 0 16697 TABLE DATA public job_tombstones clusterx_admin
+3671; 0 16572 TABLE DATA public jobs clusterx_admin
+3664; 0 16391 TABLE DATA public schema_migrations clusterx_admin
+3666; 0 16424 TABLE DATA public sessions clusterx_admin
+3675; 0 16730 TABLE DATA public submission_idempotency clusterx_admin
+3665; 0 16405 TABLE DATA public users clusterx_admin
+3670; 0 16554 TABLE DATA public worker_capabilities clusterx_admin
+3668; 0 16484 TABLE DATA public worker_credentials clusterx_admin
+3669; 0 16514 TABLE DATA public workers clusterx_admin
+3432; 2606 16476 CONSTRAINT public api_tokens api_tokens_pkey clusterx_admin
+3434; 2606 16478 CONSTRAINT public api_tokens api_tokens_secret_hash_key clusterx_admin
+3482; 2606 16777 CONSTRAINT public audit_events audit_events_pkey clusterx_admin
+3460; 2606 16671 CONSTRAINT public job_attempts job_attempts_id_job_id_key clusterx_admin
+3462; 2606 16667 CONSTRAINT public job_attempts job_attempts_job_id_attempt_number_key clusterx_admin
+3464; 2606 16669 CONSTRAINT public job_attempts job_attempts_job_id_lease_generation_key clusterx_admin
+3467; 2606 16665 CONSTRAINT public job_attempts job_attempts_pkey clusterx_admin
+3475; 2606 16724 CONSTRAINT public job_events job_events_pkey clusterx_admin
+3472; 2606 16705 CONSTRAINT public job_tombstones job_tombstones_pkey clusterx_admin
+3455; 2606 16632 CONSTRAINT public jobs jobs_pkey clusterx_admin
+3420; 2606 16404 CONSTRAINT public schema_migrations schema_migrations_pkey clusterx_admin
+3427; 2606 16445 CONSTRAINT public sessions sessions_pkey clusterx_admin
+3429; 2606 16447 CONSTRAINT public sessions sessions_secret_hash_key clusterx_admin
+3479; 2606 16749 CONSTRAINT public submission_idempotency submission_idempotency_pkey clusterx_admin
+3422; 2606 16423 CONSTRAINT public users users_github_user_id_key clusterx_admin
+3424; 2606 16421 CONSTRAINT public users users_pkey clusterx_admin
+3447; 2606 16565 CONSTRAINT public worker_capabilities worker_capabilities_pkey clusterx_admin
+3436; 2606 16501 CONSTRAINT public worker_credentials worker_credentials_pkey clusterx_admin
+3438; 2606 16503 CONSTRAINT public worker_credentials worker_credentials_secret_hash_key clusterx_admin
+3441; 2606 16546 CONSTRAINT public workers workers_current_incarnation_id_key clusterx_admin
+3444; 2606 16544 CONSTRAINT public workers workers_pkey clusterx_admin
+3480; 1259 16828 INDEX public audit_events_idempotency_idx clusterx_admin
+3483; 1259 16779 INDEX public audit_events_target_idx clusterx_admin
+3484; 1259 16778 INDEX public audit_events_time_idx clusterx_admin
+3458; 1259 16823 INDEX public job_attempts_finished_idx clusterx_admin
+3465; 1259 16682 INDEX public job_attempts_one_active_per_job clusterx_admin
+3468; 1259 16824 INDEX public job_attempts_started_idx clusterx_admin
+3469; 1259 16683 INDEX public job_attempts_worker_active_idx clusterx_admin
+3473; 1259 16822 INDEX public job_events_occurred_idx clusterx_admin
+3476; 1259 16827 INDEX public job_events_txid_idx clusterx_admin
+3470; 1259 16706 INDEX public job_tombstones_expired_idx clusterx_admin
+3448; 1259 16689 INDEX public jobs_claimable_idx clusterx_admin
+3449; 1259 16694 INDEX public jobs_created_idx clusterx_admin
+3450; 1259 16690 INDEX public jobs_due_idx clusterx_admin
+3451; 1259 16693 INDEX public jobs_handler_status_created_idx clusterx_admin
+3452; 1259 16691 INDEX public jobs_lease_expiry_idx clusterx_admin
+3453; 1259 16696 INDEX public jobs_one_retry_child_idx clusterx_admin
+3456; 1259 16692 INDEX public jobs_status_created_idx clusterx_admin
+3457; 1259 16695 INDEX public jobs_terminal_idx clusterx_admin
+3425; 1259 16825 INDEX public sessions_expires_idx clusterx_admin
+3430; 1259 16453 INDEX public sessions_user_idx clusterx_admin
+3477; 1259 16755 INDEX public submission_idempotency_expiry_idx clusterx_admin
+3445; 1259 16571 INDEX public worker_capabilities_handler_idx clusterx_admin
+3439; 1259 16552 INDEX public workers_credential_idx clusterx_admin
+3442; 1259 16553 INDEX public workers_liveness_idx clusterx_admin
+3511; 2620 16795 TRIGGER public audit_events audit_events_append_only clusterx_admin
+3512; 2620 16815 TRIGGER public audit_events audit_events_no_truncate clusterx_admin
+3513; 2620 16790 TRIGGER public audit_events audit_events_no_young_delete clusterx_admin
+3502; 2620 16792 TRIGGER public job_attempts job_attempts_finished_immutable clusterx_admin
+3503; 2620 16785 TRIGGER public job_attempts job_attempts_guard_insert clusterx_admin
+3504; 2620 16820 TRIGGER public job_attempts job_attempts_job_coupling clusterx_admin
+3505; 2620 16787 TRIGGER public job_attempts job_attempts_no_delete clusterx_admin
+3506; 2620 16813 TRIGGER public job_attempts job_attempts_no_truncate clusterx_admin
+3508; 2620 16794 TRIGGER public job_events job_events_append_only clusterx_admin
+3509; 2620 16788 TRIGGER public job_events job_events_no_delete clusterx_admin
+3510; 2620 16814 TRIGGER public job_events job_events_no_truncate clusterx_admin
+3507; 2620 16816 TRIGGER public job_tombstones job_tombstones_no_truncate clusterx_admin
+3497; 2620 16818 TRIGGER public jobs jobs_attempt_coupling clusterx_admin
+3498; 2620 16783 TRIGGER public jobs jobs_guard_update clusterx_admin
+3499; 2620 16812 TRIGGER public jobs jobs_no_truncate clusterx_admin
+3500; 2620 16810 TRIGGER public jobs jobs_retention_delete_only clusterx_admin
+3501; 2620 16781 TRIGGER public jobs jobs_terminal_immutable clusterx_admin
+3486; 2606 16479 FK CONSTRAINT public api_tokens api_tokens_owner_user_id_fkey clusterx_admin
+3493; 2606 16672 FK CONSTRAINT public job_attempts job_attempts_job_id_fkey clusterx_admin
+3494; 2606 16677 FK CONSTRAINT public job_attempts job_attempts_worker_id_fkey clusterx_admin
+3495; 2606 16725 FK CONSTRAINT public job_events job_events_job_id_fkey clusterx_admin
+3491; 2606 16684 FK CONSTRAINT public jobs jobs_current_attempt_fk clusterx_admin
+3492; 2606 16633 FK CONSTRAINT public jobs jobs_retried_from_job_id_fkey clusterx_admin
+3485; 2606 16448 FK CONSTRAINT public sessions sessions_user_id_fkey clusterx_admin
+3496; 2606 16750 FK CONSTRAINT public submission_idempotency submission_idempotency_job_id_fkey clusterx_admin
+3490; 2606 16566 FK CONSTRAINT public worker_capabilities worker_capabilities_worker_id_fkey clusterx_admin
+3487; 2606 16504 FK CONSTRAINT public worker_credentials worker_credentials_created_by_fkey clusterx_admin
+3488; 2606 16509 FK CONSTRAINT public worker_credentials worker_credentials_revoked_by_fkey clusterx_admin
+3489; 2606 16547 FK CONSTRAINT public workers workers_credential_id_fkey clusterx_admin

@@ -1,0 +1,87 @@
+submitted=1000 accepted_201=1000 status_counts=map[201:1000] wall_s=0.463 admit_rate_per_s=2159.2 admission_ms p50=7.41 p95=9.72 p99=11.62 max=14.79
+scripts/bench/run.sh: line 27: 36008 Terminated: 15          ( while :; do
+    docker stats --no-stream --format "$(date +%s),{{.Name}},{{.CPUPerc}},{{.MemUsage}}" | grep "$COMPOSE_PROJECT_NAME";
+done ) > "$OUT/docker-stats.csv" 2> /dev/null
+scripts/bench/run.sh: line 27: 36009 Terminated: 15          ( while :; do
+    psqlq -Atc "SELECT extract(epoch FROM now())::int, (SELECT count(*) FROM pg_locks WHERE NOT granted), (SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock'), (SELECT count(*) FROM pg_stat_activity WHERE datname = 'clusterx')" -F,; sleep 1;
+done ) > "$OUT/lock-samples.csv" 2> /dev/null
+wall_s_driver_start_to_all_terminal=5 non_terminal_left=0
+== jobs by status
+  status   | count 
+-----------+-------
+ failed    |   100
+ succeeded |   900
+
+== jobs by workload class
+ handler_name | n | permanent |  status   | jobs | attempts 
+--------------+---+-----------+-----------+------+----------
+ fail_n_times | 1 | false     | succeeded |  100 |      200
+ fail_n_times | 1 | true      | failed    |  100 |      100
+ hash_sha256  | - | false     | succeeded |  600 |      600
+ sleep_ms     | - | false     | succeeded |  200 |      200
+
+== attempts by state
+   state   | count 
+-----------+-------
+ failed    |   200
+ succeeded |   900
+
+== invariants (mismatch/active/non_terminal columns must be 0)
+ jobs | non_terminal | attempts | attempts_used_sum | automatic_retries | attempt_count_mismatch | event_version_mismatch | active_attempts 
+------+--------------+----------+-------------------+-------------------+------------------------+------------------------+-----------------
+ 1000 |            0 |     1100 |              1100 |               100 |                      0 |                      0 |               0
+
+== end-to-end latency (terminal_at - created_at, ms) and throughput
+  n   | p50_ms | p95_ms | p99_ms | max_ms | span_s | jobs_per_s 
+------+--------+--------+--------+--------+--------+------------
+ 1000 |    547 |   2690 |   3540 |   3647 |  3.919 |      255.2
+
+== end-to-end latency by class (ms)
+ handler_name | permanent |  n  | p50_ms | p95_ms | p99_ms 
+--------------+-----------+-----+--------+--------+--------
+ fail_n_times | false     | 100 |   2691 |   3598 |   3635
+ fail_n_times | true      | 100 |    490 |    797 |    825
+ hash_sha256  | false     | 600 |    487 |    795 |    804
+ sleep_ms     | false     | 200 |    590 |    896 |    906
+
+== queue wait (first attempt started_at - created_at, ms)
+ p50_ms | p95_ms | p99_ms 
+--------+--------+--------
+    487 |    794 |    822
+
+== attempts per worker
+   name   |   state   | count 
+----------+-----------+-------
+ worker-1 | failed    |    33
+ worker-1 | succeeded |   158
+ worker-2 | failed    |    46
+ worker-2 | succeeded |   199
+ worker-3 | failed    |    42
+ worker-3 | succeeded |   174
+ worker-4 | failed    |    44
+ worker-4 | succeeded |   184
+ worker-5 | failed    |    35
+ worker-5 | succeeded |   185
+
+== database counters since reset
+ xact_commit | xact_rollback | deadlocks | conflicts | blks_hit | blks_read | temp_bytes | tup_inserted | tup_updated 
+-------------+---------------+-----------+-----------+----------+-----------+------------+--------------+-------------
+        8463 |             0 |         0 |         0 |   394102 |        22 |          0 |         6463 |        3483
+
+== top statements by total time
+ calls | total_ms | mean_ms | max_ms |                                                query                                                 
+-------+----------+---------+--------+------------------------------------------------------------------------------------------------------
+  1100 |      126 |   0.114 |    0.9 | UPDATE jobs SET status = $3, attempts_used = attempts_used + $4, lease_generation = lease_generation
+   900 |      121 |   0.135 |    0.9 | UPDATE jobs j SET status = $8, result = $7::jsonb, terminal_at = clock_timestamp(), current_attempt_
+  1121 |      106 |   0.094 |    3.1 | SELECT w.status, w.capacity - (SELECT count(*) FROM job_attempts a WHERE a.worker_id = w.id AND a.st
+  1000 |      101 |   0.101 |    0.4 | INSERT INTO jobs (namespace, handler_name, handler_version, payload, priority, status, run_after, av
+  1100 |       89 |   0.081 |    5.6 | SELECT 1 FROM workers WHERE id = $1 FOR SHARE
+  1100 |       74 |   0.067 |    0.9 | INSERT INTO job_attempts (id, job_id, attempt_number, lease_generation, worker_id, worker_incarnatio
+  1100 |       53 |   0.048 |    0.4 | UPDATE job_attempts SET state = $2, finished_at = clock_timestamp(), result_sha256 = $3, error_class
+  1121 |       41 |   0.036 |    0.9 | SELECT j.id FROM ( SELECT handler_name, handler_version FROM worker_capabilities WHERE worker_id = $
+  1000 |       39 |   0.039 |    0.3 | SELECT j.id, j.namespace, j.handler_name, j.handler_version, j.status, j.priority, j.attempts_used, 
+  1100 |       39 |   0.035 |    0.5 | INSERT INTO job_events (job_id, version, event_type, from_status, to_status, attempt_id, actor, occu
+  1100 |       36 |   0.033 |    0.3 | INSERT INTO job_events (job_id, version, event_type, from_status, to_status, attempt_id, actor, occu
+  1000 |       36 |   0.036 |    0.5 | INSERT INTO job_events (job_id, version, event_type, to_status, actor, occurred_at) VALUES ($1, $4, 
+
+lock_waits_over_100ms_logged=0

@@ -1,0 +1,67 @@
+== state at backup
+  status   | count 
+-----------+-------
+ canceled  |     3
+ failed    |     5
+ queued    |    11
+ running   |    12
+ scheduled |     5
+ succeeded |    20
+(6 rows)
+
+active_attempts=12
+last_commit_before_backup=2026-11-19 18:52:52.387745+00
+backup_start_epoch=1795114375.715
+backup=/private/tmp/claude-501/-Users-sendiwkithnada-Documents-Clusterx/d0be9e8c-d590-4212-a424-878a0768bde1/scratchpad/m8/backups/clusterx-clusterx-20261119T185256Z.dump bytes=83491 toc_entries=131 started_epoch=1795114376.476 finished_epoch=1795114376.739 seconds=.263
+disaster_epoch=1795114377.916 (control plane + workers stopped; restoring from backup)
+restored=clusterx_restored_185308 from=clusterx-clusterx-20261119T185256Z.dump started_epoch=1795114391.478 finished_epoch=1795114391.816 seconds=.338
+control_plane_ready_on_restored_db_epoch=1795114392.032
+== restored DB immediately after start (before lease recovery)
+  status   | count 
+-----------+-------
+ canceled  |     3
+ failed    |     5
+ queued    |    11
+ running   |    12
+ scheduled |     5
+ succeeded |    20
+(6 rows)
+
+all_non_scheduled_terminal_epoch=1795114449.689 left=0
+== restored DB after recovery
+== jobs by status
+  status   | count 
+-----------+-------
+ canceled  |     3
+ failed    |     5
+ scheduled |     5
+ succeeded |    43
+
+== jobs by workload class
+ handler_name | n | permanent |  status   | jobs | attempts 
+--------------+---+-----------+-----------+------+----------
+ fail_n_times | 1 | true      | failed    |    5 |        5
+ fail_n_times | 2 | false     | succeeded |    3 |        9
+ hash_sha256  | - | false     | scheduled |    5 |        0
+ hash_sha256  | - | false     | succeeded |   20 |       20
+ sleep_ms     | - | false     | canceled  |    3 |        0
+ sleep_ms     | - | false     | succeeded |   20 |       32
+
+== attempts by state
+     state     | count 
+---------------+-------
+ failed        |    11
+ lease_expired |    12
+ succeeded     |    43
+
+== invariants (mismatch/active/non_terminal columns must be 0)
+ jobs | non_terminal | attempts | attempts_used_sum | automatic_retries | attempt_count_mismatch | event_version_mismatch | active_attempts 
+------+--------------+----------+-------------------+-------------------+------------------------+------------------------+-----------------
+   56 |            5 |       66 |                66 |                18 |                      0 |                      0 |               0
+
+== end-to-end latency (terminal_at - created_at, ms) and throughput
+post_backup_jobs_present=0
+stuck_running=0
+lease_expired_attempts=12
+rpo_window_s=2.201 rto_service_s=14.116 rto_work_drained_s=71.773
+switched back to clusterx

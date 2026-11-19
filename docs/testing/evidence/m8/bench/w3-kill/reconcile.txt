@@ -1,0 +1,79 @@
+== jobs by status
+  status   | count 
+-----------+-------
+ failed    |   100
+ succeeded |   900
+
+== jobs by workload class
+ handler_name | n | permanent |  status   | jobs | attempts 
+--------------+---+-----------+-----------+------+----------
+ fail_n_times | 1 | false     | succeeded |  100 |      200
+ fail_n_times | 1 | true      | failed    |  100 |      100
+ hash_sha256  | - | false     | succeeded |  600 |      601
+ sleep_ms     | - | false     | succeeded |  200 |      203
+
+== attempts by state
+       state       | count 
+-------------------+-------
+ deadline_exceeded |     1
+ failed            |   200
+ lease_expired     |     3
+ succeeded         |   900
+
+== invariants (mismatch/active/non_terminal columns must be 0)
+ jobs | non_terminal | attempts | attempts_used_sum | automatic_retries | attempt_count_mismatch | event_version_mismatch | active_attempts 
+------+--------------+----------+-------------------+-------------------+------------------------+------------------------+-----------------
+ 1000 |            0 |     1104 |              1104 |               104 |                      0 |                      0 |               0
+
+== end-to-end latency (terminal_at - created_at, ms) and throughput
+  n   | p50_ms | p95_ms | p99_ms | max_ms | span_s | jobs_per_s 
+------+--------+--------+--------+--------+--------+------------
+ 1000 |   1012 |   2910 |   4502 |  34055 | 34.371 |       29.1
+
+== end-to-end latency by class (ms)
+ handler_name | permanent |  n  | p50_ms | p95_ms | p99_ms 
+--------------+-----------+-----+--------+--------+--------
+ fail_n_times | false     | 100 |   2863 |   4506 |   4554
+ fail_n_times | true      | 100 |    871 |   2002 |   2098
+ hash_sha256  | false     | 600 |    867 |   2002 |   2100
+ sleep_ms     | false     | 200 |    989 |   2119 |  34037
+
+== queue wait (first attempt started_at - created_at, ms)
+ p50_ms | p95_ms | p99_ms 
+--------+--------+--------
+    865 |   2000 |   2099
+
+== attempts per worker
+   name   |       state       | count 
+----------+-------------------+-------
+ worker-1 | failed            |    82
+ worker-1 | succeeded         |   388
+ worker-2 | deadline_exceeded |     1
+ worker-2 | failed            |    31
+ worker-2 | lease_expired     |     3
+ worker-2 | succeeded         |   109
+ worker-3 | failed            |    87
+ worker-3 | succeeded         |   403
+
+== database counters since reset
+ xact_commit | xact_rollback | deadlocks | conflicts | blks_hit | blks_read | temp_bytes | tup_inserted | tup_updated 
+-------------+---------------+-----------+-----------+----------+-----------+------------+--------------+-------------
+        8905 |             0 |         0 |         0 |   436340 |        22 |          0 |         6412 |        3456
+
+== top statements by total time
+ calls | total_ms | mean_ms | max_ms |                                                query                                                 
+-------+----------+---------+--------+------------------------------------------------------------------------------------------------------
+  1000 |      133 |   0.133 |    2.3 | INSERT INTO jobs (namespace, handler_name, handler_version, payload, priority, status, run_after, av
+  1104 |      130 |   0.118 |    2.9 | UPDATE jobs SET status = $3, attempts_used = attempts_used + $4, lease_generation = lease_generation
+  1309 |      119 |   0.091 |    3.6 | SELECT w.status, w.capacity - (SELECT count(*) FROM job_attempts a WHERE a.worker_id = w.id AND a.st
+   900 |      116 |   0.128 |    1.2 | UPDATE jobs j SET status = $8, result = $7::jsonb, terminal_at = clock_timestamp(), current_attempt_
+  1100 |      106 |   0.096 |   11.9 | SELECT 1 FROM workers WHERE id = $1 FOR SHARE
+  1104 |       71 |   0.064 |    0.7 | INSERT INTO job_attempts (id, job_id, attempt_number, lease_generation, worker_id, worker_incarnatio
+  1100 |       54 |   0.049 |    1.1 | UPDATE job_attempts SET state = $2, finished_at = clock_timestamp(), result_sha256 = $3, error_class
+  1309 |       53 |   0.040 |    0.2 | SELECT j.id FROM ( SELECT handler_name, handler_version FROM worker_capabilities WHERE worker_id = $
+  1000 |       49 |   0.049 |    0.7 | SELECT j.id, j.namespace, j.handler_name, j.handler_version, j.status, j.priority, j.attempts_used, 
+  1000 |       49 |   0.049 |    1.3 | INSERT INTO job_events (job_id, version, event_type, to_status, actor, occurred_at) VALUES ($1, $4, 
+  1000 |       47 |   0.047 |    0.9 | INSERT INTO submission_idempotency (principal, namespace, idem_key, fingerprint, job_id, created_at,
+  1100 |       36 |   0.033 |    0.4 | INSERT INTO job_events (job_id, version, event_type, from_status, to_status, attempt_id, actor, occu
+
+lock_waits_over_100ms_logged=0
