@@ -95,3 +95,29 @@ func TestFeedOverflowResyncIsBounded(t *testing.T) {
 		t.Fatalf("resyncs = %d, want exactly 1 (overflow, rate-bounded)", resyncs)
 	}
 }
+
+// RV5R-03(b): a snapshot whose xmax is below the previous cursor's (restore / failover) is a gap.
+// RV5R-06: worker ids no longer listed are dropped from the version map.
+func TestFeedXidRegressionAndWorkerPrune(t *testing.T) {
+	env := testenv.New(t, testenv.FastTiming(30*time.Second), 8)
+	ctx := context.Background()
+	f := &Feed{Pool: env.Store.Pool, Hub: NewHub(nil), MaxRows: 10}
+	var snap string
+	if err := env.Store.Pool.QueryRow(ctx, `SELECT pg_current_snapshot()::text`).Scan(&snap); err != nil {
+		t.Fatal(err)
+	}
+	workers := map[string]int64{"00000000-0000-0000-0000-00000000dead": 3}
+	if gap, err := f.poll(ctx, &snap, workers); err != nil || gap {
+		t.Fatalf("normal poll: gap=%v err=%v", gap, err)
+	}
+	if _, ok := workers["00000000-0000-0000-0000-00000000dead"]; ok {
+		t.Fatal("vanished worker id not pruned")
+	}
+	future := "999999999999:999999999999:"
+	if gap, err := f.poll(ctx, &future, workers); err != nil || !gap {
+		t.Fatalf("xid regression not reported as a gap: gap=%v err=%v", gap, err)
+	}
+	if future == "999999999999:999999999999:" {
+		t.Fatal("cursor not adopted after regression")
+	}
+}

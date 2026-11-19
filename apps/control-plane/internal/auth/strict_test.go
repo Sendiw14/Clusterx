@@ -43,6 +43,7 @@ func TestVerifyStrictJOSE(t *testing.T) {
 		"header duplicate kid":  sign(`{"alg":"EdDSA","typ":"`+HeaderType+`","kid":"k2","kid":"k1"}`, claims("")),
 		"header upper-case ALG": sign(`{"ALG":"EdDSA","typ":"`+HeaderType+`","kid":"k1"}`, claims("")),
 		"payload not object":    sign(hdr, `[]`),
+		"trailing data":         sign(hdr, claims("")+"x"),
 	}
 	for name, tok := range bad {
 		if _, err := v.Verify(tok, false); reason(err) != ReasonInvalid {

@@ -39,3 +39,28 @@ func TestWorkerAuthFailureLimit(t *testing.T) {
 		t.Fatalf("valid credential limited: %v", err)
 	}
 }
+
+// RV5R-04 / R06: revoked or expired worker credentials are lifecycle failures and never charge the
+// per-peer guess bucket.
+func TestWorkerRevokedCredentialNotChargedAsGuess(t *testing.T) {
+	env := testenv.New(t, testenv.FastTiming(30*time.Second), 10)
+	var charged atomic.Int32
+	addr := env.ServeGRPC(t, func(o *workerrpc.Options) {
+		o.AuthFailure = func(string) bool { charged.Add(1); return true }
+	})
+	cred, err := env.Store.CreateWorkerCredential(bg, "w", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.Store.Pool.Exec(bg, `UPDATE worker_credentials SET revoked_at = now() WHERE secret_hash IS NOT NULL`); err != nil {
+		t.Fatal(err)
+	}
+	c := workerv1.NewWorkerServiceClient(testenv.Dial(t, addr, cred.Secret))
+	for range 3 {
+		_, err := c.Heartbeat(bg, &workerv1.HeartbeatRequest{})
+		wantErr(t, err, codes.Unauthenticated, "credential_revoked")
+	}
+	if n := charged.Load(); n != 0 {
+		t.Fatalf("revoked credential charged the guess bucket %d times", n)
+	}
+}

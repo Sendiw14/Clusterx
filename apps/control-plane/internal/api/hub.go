@@ -273,8 +273,12 @@ func (h *Hub) pruneVersions(olderThan time.Duration) {
 // its writer's txid, and a poll reads the rows visible to its own snapshot but not to the previous
 // poll's snapshot. A transaction that commits late is therefore read by the first poll after its
 // commit, however long it ran. A failed poll keeps the cursor and loses nothing. Only overflow (more
-// than MaxRows new rows; the cursor then jumps to the current snapshot) is a real gap: it broadcasts
-// resync{gap_detected}, at most once per ResyncEvery.
+// than MaxRows new rows; the cursor then jumps to the current snapshot) or an xid regression (xmax
+// moved backwards: restore/failover) is a real gap: it broadcasts resync{gap_detected}, at most once
+// per ResyncEvery. Cost: each poll scans the events with txid >= xmin(previous snapshot), so a session
+// holding an xid for a long time (admin psql, long migration) makes polls re-scan everything written
+// since it began (RV5R-03a, operational note; runtime sessions are capped by
+// idle_in_transaction_session_timeout).
 type Feed struct {
 	Pool        *pgxpool.Pool
 	Hub         *Hub
@@ -346,19 +350,22 @@ func (f *Feed) Run(ctx context.Context) {
 // version changes.
 func (f *Feed) poll(ctx context.Context, snap *string, workers map[string]int64) (bool, error) {
 	// pg_current_snapshot() is the statement's own snapshot, so "visible now" and the new cursor agree.
+	// regressed: the current snapshot's xmax is below the previous one (PITR restore or replica
+	// failover under a running coordinator, RV5R-03b); rows may have been skipped, so resync.
 	rows, err := f.Pool.Query(ctx, `WITH s AS (SELECT pg_current_snapshot() AS cur)
-		SELECT s.cur::text, e.job_id::text, e.version FROM s LEFT JOIN job_events e
+		SELECT s.cur::text, pg_snapshot_xmax(s.cur) < pg_snapshot_xmax($1::pg_snapshot), e.job_id::text, e.version FROM s LEFT JOIN job_events e
 		  ON e.txid >= pg_snapshot_xmin($1::pg_snapshot) AND NOT pg_visible_in_snapshot(e.txid, $1::pg_snapshot)
 		LIMIT $2`, *snap, f.MaxRows+1)
 	if err != nil {
 		return false, err
 	}
 	var cur string
+	var regressed bool
 	var evs []evKey
 	for rows.Next() {
 		var job *string
 		var version *int64
-		if err := rows.Scan(&cur, &job, &version); err != nil {
+		if err := rows.Scan(&cur, &regressed, &job, &version); err != nil {
 			rows.Close()
 			return false, err
 		}
@@ -369,7 +376,7 @@ func (f *Feed) poll(ctx context.Context, snap *string, workers map[string]int64)
 	if err := rows.Err(); err != nil {
 		return false, err
 	}
-	overflow := len(evs) > f.MaxRows
+	overflow := len(evs) > f.MaxRows || regressed
 	sort.Slice(evs, func(i, j int) bool {
 		if evs[i].job != evs[j].job {
 			return evs[i].job < evs[j].job
@@ -389,6 +396,7 @@ func (f *Feed) poll(ctx context.Context, snap *string, workers map[string]int64)
 	if err != nil {
 		return overflow, err
 	}
+	present := make(map[string]bool, len(workers))
 	for wrows.Next() {
 		var id string
 		var v int64
@@ -396,10 +404,19 @@ func (f *Feed) poll(ctx context.Context, snap *string, workers map[string]int64)
 			wrows.Close()
 			return overflow, err
 		}
+		present[id] = true
 		if old, ok := workers[id]; !ok || old != v {
 			workers[id] = v
 			f.Hub.PublishWorker(id, v)
 		}
 	}
-	return overflow, wrows.Err()
+	if err := wrows.Err(); err != nil {
+		return overflow, err
+	}
+	for id := range workers { // rows no longer listed (deregistered > 10 min, RV5R-06)
+		if !present[id] {
+			delete(workers, id)
+		}
+	}
+	return overflow, nil
 }

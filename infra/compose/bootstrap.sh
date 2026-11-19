@@ -30,8 +30,11 @@ chmod 644 "$SD"/*; chmod 700 "$SD"; [ ! -e "$SD/bff-dev-private.jwk.json" ] || c
 dc build migrate worker
 if [ ! -s "$SD/bff-dev.jwks.json" ]; then
   # Development BFF key pair (dev-keygen is refused in production): public JWKS for the control plane,
-  # private JWK (0600) for a local BFF. Written through a temporary container mount.
-  dc run --rm --no-deps -v "$PWD/$SD:/out" migrate dev-keygen --out-dir /out >/dev/null
+  # private JWK (0600) for a local BFF. The one-shot container runs as the host user (writable bind
+  # mount on native Linux too) and sees only a fresh empty directory, never the other secrets (RV5R-05).
+  kg=$(mktemp -d "$PWD/.keygen.XXXXXX"); trap 'rm -rf "$kg"' EXIT
+  dc run --rm --no-deps --user "$(id -u):$(id -g)" -v "$kg:/out" migrate dev-keygen --out-dir /out >/dev/null
+  mv "$kg/bff-dev-private.jwk.json" "$SD/"; mv "$kg/bff-dev.jwks.json" "$SD/"
   chmod 600 "$SD/bff-dev-private.jwk.json"; chmod 644 "$SD/bff-dev.jwks.json"
 fi
 dc up -d --wait postgres control-plane
