@@ -253,15 +253,21 @@ func (h *Hub) pruneVersions(olderThan time.Duration) {
 
 // Feed polls PostgreSQL for job events and worker version changes and publishes hints. It is the only
 // source for changes made by workers and the scheduler (same process, but different code paths), so
-// every committed transition reaches the hub within about one interval. A poll that fails, or that
-// finds more rows than it can forward, broadcasts resync{gap_detected}: clients refetch.
+// every committed transition reaches the hub within about one interval.
+//
+// The cursor is a transaction-visibility position, not a clock (RV5-04): each job_events row carries
+// its writer's txid, and a poll reads the rows visible to its own snapshot but not to the previous
+// poll's snapshot. A transaction that commits late is therefore read by the first poll after its
+// commit, however long it ran. A failed poll keeps the cursor and loses nothing. Only overflow (more
+// than MaxRows new rows; the cursor then jumps to the current snapshot) is a real gap: it broadcasts
+// resync{gap_detected}, at most once per ResyncEvery.
 type Feed struct {
-	Pool     *pgxpool.Pool
-	Hub      *Hub
-	Interval time.Duration // default 1 s
-	Lookback time.Duration // overlap re-read to catch late commits; default 10 s
-	MaxRows  int           // per poll; default 2000
-	Log      *slog.Logger
+	Pool        *pgxpool.Pool
+	Hub         *Hub
+	Interval    time.Duration // default 1 s
+	MaxRows     int           // per poll; default 2000
+	ResyncEvery time.Duration // minimum spacing of gap resyncs; default 5 s
+	Log         *slog.Logger
 }
 
 type evKey struct {
@@ -274,118 +280,112 @@ func (f *Feed) Run(ctx context.Context) {
 	if f.Interval <= 0 {
 		f.Interval = time.Second
 	}
-	if f.Lookback <= 0 {
-		f.Lookback = 10 * time.Second
-	}
 	if f.MaxRows <= 0 {
 		f.MaxRows = 2000
 	}
-	var watermark time.Time
-	seen := map[evKey]time.Time{}
+	if f.ResyncEvery <= 0 {
+		f.ResyncEvery = 5 * time.Second
+	}
+	var snap string // pg_snapshot text of the previous poll; "" = not started
 	workers := map[string]int64{}
-	gap := false
+	gap, failing := false, false
+	var lastResync time.Time
 	lastPrune := time.Now()
 	t := time.NewTicker(f.Interval)
 	defer t.Stop()
+	// Polls run with or without subscribers (publishing to nobody is free), so a client that subscribes
+	// mid-interval still gets the hints of transactions that commit around its subscription.
+	_ = f.Pool.QueryRow(ctx, `SELECT pg_current_snapshot()::text`).Scan(&snap)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
 		}
-		if f.Hub.Subscribers() == 0 && !watermark.IsZero() {
-			// Nobody listens: keep only the watermark moving so a new subscriber does not get a backlog.
-			if err := f.Pool.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&watermark); err != nil {
-				gap = true
-			}
+		if snap == "" {
+			_ = f.Pool.QueryRow(ctx, `SELECT pg_current_snapshot()::text`).Scan(&snap)
 			continue
 		}
-		n, err := f.poll(ctx, &watermark, seen, workers)
-		switch {
-		case err != nil:
-			if ctx.Err() == nil && !gap {
-				f.Log.Warn("stream feed poll failed; clients will be told to resync", "err", err)
+		overflow, err := f.poll(ctx, &snap, workers)
+		gap = gap || overflow
+		if err != nil {
+			if ctx.Err() == nil && !failing {
+				f.Log.Warn("stream feed poll failed; retrying from the same cursor", "err", err)
 			}
-			gap = true
+			failing = true
 			continue
-		case gap || n > f.MaxRows:
+		}
+		failing = false
+		if gap && time.Since(lastResync) >= f.ResyncEvery {
 			f.Hub.Resync("gap_detected")
-			gap = false
+			gap, lastResync = false, time.Now()
 		}
 		if time.Since(lastPrune) > time.Minute {
 			lastPrune = time.Now()
-			for k, at := range seen {
-				if time.Since(at) > 2*f.Lookback {
-					delete(seen, k)
-				}
-			}
 			f.Hub.pruneVersions(10 * time.Minute)
 		}
 	}
 }
 
-// poll reads events committed since watermark-lookback and the current worker versions.
-func (f *Feed) poll(ctx context.Context, watermark *time.Time, seen map[evKey]time.Time, workers map[string]int64) (int, error) {
-	var now time.Time
-	if err := f.Pool.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
-		return 0, err
-	}
-	if watermark.IsZero() {
-		*watermark = now
-	}
-	rows, err := f.Pool.Query(ctx, `SELECT job_id::text, version FROM job_events WHERE occurred_at > $1
-		ORDER BY occurred_at LIMIT $2`, watermark.Add(-f.Lookback), f.MaxRows+1)
+// poll publishes the job events committed since the snapshot *snap and advances it; it reports
+// overflow when more than MaxRows rows were new (the excess is skipped). Then it publishes worker
+// version changes.
+func (f *Feed) poll(ctx context.Context, snap *string, workers map[string]int64) (bool, error) {
+	// pg_current_snapshot() is the statement's own snapshot, so "visible now" and the new cursor agree.
+	rows, err := f.Pool.Query(ctx, `WITH s AS (SELECT pg_current_snapshot() AS cur)
+		SELECT s.cur::text, e.job_id::text, e.version FROM s LEFT JOIN job_events e
+		  ON e.txid >= pg_snapshot_xmin($1::pg_snapshot) AND NOT pg_visible_in_snapshot(e.txid, $1::pg_snapshot)
+		LIMIT $2`, *snap, f.MaxRows+1)
 	if err != nil {
-		return 0, err
+		return false, err
 	}
+	var cur string
 	var evs []evKey
 	for rows.Next() {
-		var k evKey
-		if err := rows.Scan(&k.job, &k.version); err != nil {
+		var job *string
+		var version *int64
+		if err := rows.Scan(&cur, &job, &version); err != nil {
 			rows.Close()
-			return 0, err
+			return false, err
 		}
-		evs = append(evs, k)
+		if job != nil {
+			evs = append(evs, evKey{*job, *version})
+		}
 	}
 	if err := rows.Err(); err != nil {
-		return 0, err
+		return false, err
 	}
+	overflow := len(evs) > f.MaxRows
 	sort.Slice(evs, func(i, j int) bool {
 		if evs[i].job != evs[j].job {
 			return evs[i].job < evs[j].job
 		}
 		return evs[i].version < evs[j].version
 	})
-	fresh := 0
 	for _, k := range evs {
-		if _, ok := seen[k]; ok {
-			continue
-		}
-		seen[k] = time.Now()
-		fresh++
 		f.Hub.PublishJob(k.job, k.version)
 	}
-	if fresh > 0 {
+	if len(evs) > 0 {
 		f.Hub.publish(hint("metrics", "", 0))
 	}
-	*watermark = now
+	*snap = cur
 
 	wrows, err := f.Pool.Query(ctx, `SELECT id::text, version FROM workers
 		WHERE status <> 'deregistered' OR deregistered_at > now() - interval '10 minutes'`)
 	if err != nil {
-		return len(evs), err
+		return overflow, err
 	}
 	for wrows.Next() {
 		var id string
 		var v int64
 		if err := wrows.Scan(&id, &v); err != nil {
 			wrows.Close()
-			return len(evs), err
+			return overflow, err
 		}
 		if old, ok := workers[id]; !ok || old != v {
 			workers[id] = v
 			f.Hub.PublishWorker(id, v)
 		}
 	}
-	return len(evs), wrows.Err()
+	return overflow, wrows.Err()
 }

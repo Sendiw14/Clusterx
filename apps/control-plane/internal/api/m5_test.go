@@ -325,6 +325,13 @@ func TestM5_TokensAndWorkerCredentials(t *testing.T) {
 		t.Fatalf("replay: %v", replay)
 	}
 	e.want(e.do("POST", "/api/v1/tokens", e.as(op), strings.Replace(body, `"ci"`, `"cd"`, 1), "Idempotency-Key", "tok-1"), 409, "idempotency_conflict")
+	// RV5-08 / N14: credential idempotency keys are scoped to the actor; another operator reusing the
+	// key gets a fresh token (201 with its own secret), not operator A's replay.
+	op2 := e.login(302, "operator")
+	other := decode[map[string]any](t, e.want2(e.do("POST", "/api/v1/tokens", e.as(op2), body, "Idempotency-Key", "tok-1"), 201))
+	if other["id"] == created["id"] || other["secret"] == nil || other["owner_user_id"] != op2.userID {
+		t.Fatalf("idempotency key leaked across actors: %v", other)
+	}
 	// List never contains secrets or hashes.
 	rec = e.do("GET", "/api/v1/tokens?limit=1", e.as(op), "")
 	if strings.Contains(rec.Body.String(), "cxt_") && strings.Contains(rec.Body.String(), secret[13:]) || strings.Contains(rec.Body.String(), "hash") {
