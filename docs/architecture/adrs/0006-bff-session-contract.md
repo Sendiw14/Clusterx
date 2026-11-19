@@ -47,8 +47,17 @@ error.
 
 ## 3. Browser ↔ BFF
 
-- Cookie `__Host-clusterx_session`: `Secure; HttpOnly; SameSite=Lax; Path=/`; value = opaque 256-bit session
-  secret (Go stores only its SHA-256 in `sessions.secret_hash`). Regenerated at login (fixation defense).
+- Cookie `__Host-clusterx_session`: `Secure; HttpOnly; SameSite=Lax; Path=/`; value = an **authenticated-encrypted
+  (sealed) `{sid, uid}` envelope** with a 1-byte key-version prefix, sealed by the BFF with keys derived from
+  `CLUSTERX_WEB_SESSION_KEY` (label-separated from the CSRF key). The `cxs_` session secret returned by
+  `POST /sessions` is **not** stored in the cookie (Go authenticates BFF requests by assertion `sid`, not by the
+  secret; Go keeps only its SHA-256). Regenerated at login (fixation defense); a still-valid previous session is
+  revoked best-effort at re-login. *(Amended 2026-11-20 per REVIEW-M6-RV-01 RV6-07; supersedes the "value =
+  opaque secret" text.)*
+- **Key-compromise residual (B1/B2):** `CLUSTERX_WEB_SESSION_KEY` lets its holder forge a cookie for any live
+  `sid`; together with the BFF signing key it is equivalent to impersonating any signed-in user. Both keys are
+  BFF-host secrets of the same sensitivity, loaded from files, never bundled or logged. Rotation: add a new key
+  version, accept the previous version for one absolute-session lifetime (12 h), then remove it.
 - Session lifetime (proposed, owner may tune): idle 2 h, absolute 12 h. **Go enforces both (GAP-SESS-01):**
   a session is valid iff `revoked_at IS NULL AND expires_at > now() AND last_activity_at +
   idle_timeout_seconds > now()`. Go bumps `last_activity_at` at most once per 60 s per session on
