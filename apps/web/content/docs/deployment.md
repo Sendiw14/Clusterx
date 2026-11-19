@@ -16,8 +16,9 @@ order: 6
 | --- | --- | --- |
 | `postgres` | PostgreSQL 18.7, image pinned by digest, data in the named volume `pgdata` | 127.0.0.1:5432 (change with `CLUSTERX_PG_PORT`) |
 | `migrate` | One-shot: applies the database migrations as the schema owner, then exits | none |
-| `control-plane` | REST on 8080, gRPC on 9090 (internal), metrics on 9091 | 127.0.0.1:8080 and 127.0.0.1:9091 |
+| `control-plane` | REST on 8080, gRPC on 9090 (internal), metrics on 9091 | 127.0.0.1:8080 and 127.0.0.1:9091 (change with `CLUSTERX_HTTP_PORT`, `CLUSTERX_METRICS_PORT`) |
 | `worker`, `worker-2`, `worker-3` | The reference worker running the three example handlers, one credential each, capacity 4 | none |
+| `retention` | Optional, profile `retention`: one bounded retention pass as the `clusterx_retention_job` login, then exits. Run it from cron: `docker compose --env-file ../../.env --profile retention run --rm retention` | none |
 
 Every published port is bound to loopback. The web console is **not** part of this stack.
 
@@ -27,7 +28,7 @@ Container hardening already present in the compose file: read-only root filesyst
 
 ## Configuration and secrets
 
-Copy `.env.example` to `.env` and fill the three empty values. `.env` must never be committed.
+Copy `.env.example` to `.env` and fill the three empty values. `.env` must never be committed. `bootstrap.sh` turns these into **secrets files** under `infra/compose/.secrets/` (gitignored, directory mode 0700), which compose mounts into the containers; the passwords are not passed as environment variables. The control plane and worker also accept `*_FILE` variants for secret values (for example `CLUSTERX_DATABASE_URL_FILE` and `CLUSTERX_WORKER_CREDENTIAL_FILE`); setting both a value and its file is refused.
 
 | Variable | Purpose |
 | --- | --- |
@@ -35,10 +36,33 @@ Copy `.env.example` to `.env` and fill the three empty values. `.env` must never
 | `CLUSTERX_APP_DB_PASSWORD` | Password of the least-privilege runtime login role the control plane uses |
 | `CLUSTERX_METRICS_TOKEN` | Bearer token required to scrape `/metrics` on the internal listener |
 | `CLUSTERX_PG_PORT` | Optional. Host port for PostgreSQL, default 5432 |
+| `CLUSTERX_HTTP_PORT` | Optional. Host port for the REST API, default 8080 |
+| `CLUSTERX_METRICS_PORT` | Optional. Host port for metrics, default 9091 |
+| `CLUSTERX_IMAGE_PREFIX` | Optional. Image name prefix, default `clusterx`. Set it together with `COMPOSE_PROJECT_NAME` to run a second, separate stack |
+
+`bootstrap.sh` also generates a **development-only** key pair for the web server's service assertions: the private key `.secrets/bff-dev-private.jwk.json` (mode 0600) for a local web server, and the public `bff-dev.jwks.json`, which the control plane loads so that console sessions work. Never use that pair outside development. The retention login's password is generated once and kept in `.secrets/`.
 
 The operator token and the three worker credentials are **generated once** by `bootstrap.sh`, printed once by the control plane's CLI, and written to `infra/compose/.secrets.env` (gitignored, created with owner-only permissions). Only SHA-256 hashes are stored in the database. There are no default credentials.
 
 The control plane reads more settings from `CLUSTERX_*` environment variables: the database URLs, heartbeat interval, liveness timeout, lease TTL, cancel grace, drain grace, scheduler tick and backoff base and cap. Each is validated at start-up against its allowed range and the process refuses to start on a value outside it. The defaults are listed on [Architecture](/architecture).
+
+## The web server's configuration (built; not deployed anywhere)
+
+The Next.js server fails closed: production is the default, and anything missing or unsafe makes it answer `upstream_auth` instead of limping along. All settings are `CLUSTERX_*` environment variables and none is sent to the browser.
+
+| Variable | Purpose |
+| --- | --- |
+| `CLUSTERX_ENV` | `production` (default when unset), `development` or `test` |
+| `CLUSTERX_APP_ORIGIN` | The console's exact origin. Must be `https` in production |
+| `CLUSTERX_API_URL` | Control plane base URL. In production it must be `https`, except for a loopback address |
+| `CLUSTERX_BFF_KEY_FILE` | Path to the Ed25519 private key (JWK with a key id) that signs service assertions. Read once at start |
+| `CLUSTERX_WEB_SESSION_KEY` | Base64, at least 32 bytes. Seals cookies and derives the CSRF key. Treat it like the signing key: it can forge a cookie for any live session |
+| `CLUSTERX_WEB_SESSION_KEY_PREVIOUS` | Optional. The old session key, accepted for reading during a rotation window and never used to seal |
+| `CLUSTERX_GITHUB_CLIENT_ID`, `CLUSTERX_GITHUB_CLIENT_SECRET` | The GitHub OAuth application |
+
+The server is started with `node server.ts` (it hosts the live-update WebSocket relay, which a plain `next start` cannot). OAuth endpoint overrides exist only outside production.
+
+> [!UNVERIFIED] Production mode (TLS, `__Host-` secure cookies, real GitHub) has not been run.
 
 ## Database roles
 

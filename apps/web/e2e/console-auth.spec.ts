@@ -100,6 +100,8 @@ test.describe("session cookie and sign-out", () => {
   test("an expired session returns to /login with the reason and resumes at the page after sign-in", async ({ page }) => {
     await openConsole(page, "expiring", "/app/jobs");
     sql(`UPDATE sessions SET expires_at = now() + interval '1 second', created_at = now() - interval '1 hour' WHERE user_id = (SELECT id FROM users WHERE github_user_id = ${USERS.expiring.id}) AND revoked_at IS NULL`);
+    // Leave the console first: an open console polls and holds a stream, and notices the expiry itself (clearing its cookie), which made this wait racy under load.
+    await page.goto("about:blank");
     await page.waitForTimeout(6000);
     await page.goto("/app/jobs");
     await expect(page).toHaveURL(/\/login\?reason=session_expired&next=%2Fapp%2Fjobs$/);

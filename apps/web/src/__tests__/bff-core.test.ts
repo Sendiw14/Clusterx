@@ -8,12 +8,13 @@ import { GET as proxyGET, POST as proxyPOST } from "@/app/bff/api/v1/[...path]/r
 import { POST as logoutPOST } from "@/app/bff/logout/route";
 import { loadConfig, resetConfigForTests } from "@/server/config";
 import { csrfToken, open, seal } from "@/server/crypto";
+import { csrfOk } from "@/server/bff";
 import { clampNext, readSession, sealSession, type SessionCookie } from "@/server/cookies";
 import { mintAssertion } from "@/server/assertion";
 
 const KEY = Buffer.alloc(32, 7);
 const ORIGIN = "http://localhost:3999";
-const SESSION: SessionCookie = { sid: "0193a0f2-9000-7000-8000-0000000000e1", uid: "0193a0f2-0000-7000-8000-000000000001", login: "octo", role: "operator", sec: "cxs_" + "A".repeat(43), exp: Math.floor(Date.now() / 1000) + 3600 };
+const SESSION: SessionCookie = { sid: "0193a0f2-9000-7000-8000-0000000000e1", uid: "0193a0f2-0000-7000-8000-000000000001", login: "octo", role: "operator", exp: Math.floor(Date.now() / 1000) + 3600 };
 
 let pub: CryptoKey;
 let keyFile: string;
@@ -51,9 +52,8 @@ beforeEach(() => { seen = []; script = () => ({ status: 200, body: {} }); env();
 
 const cfg = () => { const c = loadConfig(); if (!c.ok) throw new Error(c.problems.join()); return c.config; };
 const cookie = () => sealSession(cfg(), SESSION).split(";")[0]!;
-const ctx = (path: string[]) => ({ params: Promise.resolve({ path }) });
-const get = (path: string, headers: Record<string, string> = { cookie: cookie() }) => proxyGET(new Request(`${ORIGIN}/bff/api/v1/${path}`, { headers }), ctx(path.split("?")[0]!.split("/")));
-const post = (path: string, headers: Record<string, string> = {}, body = "{}") => proxyPOST(new Request(`${ORIGIN}/bff/api/v1/${path}`, { method: "POST", body, headers: { cookie: cookie(), origin: ORIGIN, "x-csrf-token": csrfToken(KEY, SESSION.sid), "content-type": "application/json", ...headers } }), ctx(path.split("/")));
+const get = (path: string, headers: Record<string, string> = { cookie: cookie() }) => proxyGET(new Request(`${ORIGIN}/bff/api/v1/${path}`, { headers }));
+const post = (path: string, headers: Record<string, string> = {}, body = "{}") => proxyPOST(new Request(`${ORIGIN}/bff/api/v1/${path}`, { method: "POST", body, headers: { cookie: cookie(), origin: ORIGIN, "x-csrf-token": csrfToken(KEY, SESSION.sid), "content-type": "application/json", ...headers } }));
 const claims = async (h: IncomingMessage["headers"]) => {
   const tok = String(h.authorization).replace("Bearer ", "");
   const { payload, protectedHeader } = await jwtVerify(tok, pub, { issuer: "clusterx-bff", audience: "clusterx-control-plane" });
@@ -77,6 +77,15 @@ describe("config fails closed in production", () => {
     expect(dev.ok).toBe(true);
     expect(loadConfig({ ...full, CLUSTERX_ENV: "development", CLUSTERX_APP_ORIGIN: "http://example.com" }).ok).toBe(false);
   });
+  it("production needs https to the control plane unless it is loopback (RV6-05)", () => {
+    for (const bad of ["http://10.0.0.5:8080", "http://control-plane:8080", "http://api.example.com"]) expect(loadConfig({ ...full, CLUSTERX_API_URL: bad }).ok, bad).toBe(false);
+    for (const good of ["https://api.example.com", "https://10.0.0.5:8443", "http://localhost:8080", "http://127.0.0.1:8080", "http://[::1]:8080"]) expect(loadConfig({ ...full, CLUSTERX_API_URL: good }).ok, good).toBe(true);
+    expect(loadConfig({ ...full, CLUSTERX_ENV: "development", CLUSTERX_API_URL: "http://control-plane:8080" }).ok).toBe(true);
+  });
+  it("an optional previous session key must also be at least 32 bytes (RV6-07)", () => {
+    expect(loadConfig({ ...full, CLUSTERX_WEB_SESSION_KEY_PREVIOUS: Buffer.alloc(32, 3).toString("base64") }).ok).toBe(true);
+    expect(loadConfig({ ...full, CLUSTERX_WEB_SESSION_KEY_PREVIOUS: "AAAA" }).ok).toBe(false);
+  });
   it("cookie names: __Host- only when secure", () => {
     const c = loadConfig(full);
     if (c.ok) expect(c.config.secureCookies).toBe(true);
@@ -90,6 +99,28 @@ describe("sealed cookies and CSRF token", () => {
     expect(open(KEY, "oauth", t)).toBeNull();
     expect(open(Buffer.alloc(32, 9), "session", t)).toBeNull();
   });
+  it("key rotation: the old key still opens existing values, new values use the new key, an unrelated key never does (RV6-07)", () => {
+    const OLD = KEY;
+    const NEW = Buffer.alloc(32, 8);
+    const sealedOld = seal(OLD, "session", { a: 1 });
+    expect(sealedOld).not.toBe(seal(OLD, "session", { a: 1 }));
+    expect(Buffer.from(sealedOld, "base64url")[0]).not.toBe(Buffer.from(seal(NEW, "session", { a: 1 }), "base64url")[0]);
+    expect(open([NEW, OLD], "session", sealedOld)).toEqual({ a: 1 });
+    expect(open([NEW], "session", sealedOld)).toBeNull();
+    const sealedNew = seal(NEW, "session", { a: 2 });
+    expect(open([NEW, OLD], "session", sealedNew)).toEqual({ a: 2 });
+    expect(open([OLD], "session", sealedNew)).toBeNull();
+    expect(open([Buffer.alloc(32, 99)], "session", sealedNew)).toBeNull();
+  });
+  it("CSRF verification accepts the previous key during rotation but tokens are issued with the current one", () => {
+    const c = cfg();
+    const prev = Buffer.alloc(32, 5);
+    const rotated = { ...c, sessionKey: Buffer.alloc(32, 8), previousSessionKey: c.sessionKey };
+    const req = (tok: string) => new Request(ORIGIN, { headers: { origin: ORIGIN, "x-csrf-token": tok } });
+    expect(csrfOk(rotated, req(csrfToken(c.sessionKey, "s1")), "s1")).toBe(true);
+    expect(csrfOk(rotated, req(csrfToken(rotated.sessionKey, "s1")), "s1")).toBe(true);
+    expect(csrfOk(rotated, req(csrfToken(prev, "s1")), "s1")).toBe(false);
+  });
   it("detects tampering and garbage", () => {
     const t = seal(KEY, "session", { a: 1 });
     expect(open(KEY, "session", t.slice(0, -2) + (t.endsWith("AA") ? "BB" : "AA"))).toBeNull();
@@ -101,7 +132,8 @@ describe("sealed cookies and CSRF token", () => {
     const header = sealSession(c, SESSION);
     expect(header).toMatch(/HttpOnly/);
     expect(header).toMatch(/SameSite=Lax/);
-    expect(header).not.toContain(SESSION.sec);
+    const opened = open<Record<string, unknown>>(c.sessionKey, "session", header.split(";")[0]!.split("=")[1]);
+    expect(Object.keys(opened ?? {}).sort()).toEqual(["exp", "login", "role", "sid", "uid"]); // no cxs_ session secret (RV6-07)
     expect(header).not.toContain(SESSION.sid);
     expect(readSession(c, header.split(";")[0])).toMatchObject({ sid: SESSION.sid, role: "operator" });
     expect(readSession(c, sealSession(c, { ...SESSION, exp: 1 }).split(";")[0])).toBeNull();
@@ -120,6 +152,28 @@ describe("sealed cookies and CSRF token", () => {
 });
 
 describe("service assertion", () => {
+  it("iat, nbf and exp come from one clock read even if the second ticks mid-mint: exp - iat === 60 (RV6-04)", async () => {
+    const RealDate = Date;
+    const base = RealDate.now();
+    let reads = 0;
+    class Ticking extends RealDate {
+      constructor(...a: unknown[]) {
+        if (a.length) super(...(a as [number]));
+        else super(base + reads++ * 1000); // every no-arg clock read is a second later than the last
+      }
+      static override now() { return base + reads++ * 1000; }
+    }
+    globalThis.Date = Ticking as DateConstructor;
+    let tok: string;
+    try {
+      tok = await mintAssertion(keyFile, { login: true, githubId: 7, rid: "req_clock" });
+    } finally {
+      globalThis.Date = RealDate;
+    }
+    const { payload } = await jwtVerify(tok, pub, { currentDate: new Date(base + 5000) });
+    expect(payload.exp! - payload.iat!).toBe(60);
+    expect(payload.nbf).toBe(payload.iat);
+  });
   it("normal assertion: EdDSA header, closed claim set, 60 s, fresh jti", async () => {
     const mint = () => mintAssertion(keyFile, { userId: SESSION.uid, sid: SESSION.sid, role: "viewer", rid: "req_abc" });
     const [a, b] = [await mint(), await mint()];
@@ -225,7 +279,7 @@ describe("API proxy", () => {
     for (const h of cases) {
       const merged: Record<string, string> = { cookie: cookie(), "content-type": "application/json", origin: ORIGIN, "x-csrf-token": csrfToken(KEY, SESSION.sid), ...h };
       for (const k of Object.keys(merged)) if (merged[k] === "") delete merged[k];
-      const r = await proxyPOST(new Request(`${ORIGIN}/bff/api/v1/jobs`, { method: "POST", body: "{}", headers: merged }), ctx(["jobs"]));
+      const r = await proxyPOST(new Request(`${ORIGIN}/bff/api/v1/jobs`, { method: "POST", body: "{}", headers: merged }));
       expect(r.status, JSON.stringify(h)).toBe(403);
       expect((await r.json()).code).toBe("csrf_failed");
     }

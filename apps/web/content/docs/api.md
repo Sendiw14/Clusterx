@@ -28,7 +28,7 @@ Tokens are created by an operator. The secret is shown once and only its hash is
 
 Scopes: `jobs:read`, `jobs:write`, `workers:read`, `workers:write`, `metrics:read`, `audit:read`. Tokens never reach token or credential management, or the session routes. Tokens and secrets never belong in browser code.
 
-The web console uses a server-side session instead, through the Next.js server; that path is specified but not built yet. Workers do not use REST at all: they use gRPC with a worker credential.
+The web console uses a server-side session instead, through the Next.js server (built in M6; see [Security](/docs/security)). Workers do not use REST at all: they use gRPC with a worker credential.
 
 A `401` body carries `details.reason`, for example `token_invalid`, `token_revoked`, `token_expired` or `user_disabled`. A `403` carries `details.required` and `details.role` or the missing scope.
 
@@ -84,7 +84,7 @@ List endpoints use opaque cursors. Pass the `next_cursor` of one page as `cursor
 | `run_after` | At most 30 days in the future |
 | Page size | 1 to 200 |
 
-Rate limiting is defined in the contract (`429 rate_limited` with `Retry-After`) but the current build never returns it.
+Rate limiting is implemented: the control plane returns `429 rate_limited` with `Retry-After` when a per-user mutation limit or the failed-authentication limit is exceeded.
 
 ## About the examples
 

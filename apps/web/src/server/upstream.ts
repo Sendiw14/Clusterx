@@ -65,3 +65,12 @@ export function sessionEnded(r: GoResult): "session_expired" | "user_disabled" |
   if (r.status === 401 && (r.reason === "session_expired" || r.reason === "session_revoked")) return "session_expired";
   return null;
 }
+
+/** Best-effort `DELETE /sessions/current` for a session cookie that is being replaced or cleared (RV6-06). Never throws; a session that already ended (401) is fine. */
+export async function revokeSession(cfg: WebConfig, s: { uid: string; sid: string; role: "operator" | "viewer" }, rid: string): Promise<void> {
+  try {
+    await callGo(cfg, { method: "DELETE", path: "/api/v1/sessions/current", as: { userId: s.uid, sid: s.sid, role: s.role, rid } }, 3000);
+  } catch (e) {
+    console.error(`[bff] ${rid} session revoke failed: ${(e as Error).name}`);
+  }
+}

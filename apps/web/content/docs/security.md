@@ -8,7 +8,7 @@ order: 7
 
 This page describes the design and says how much of it is built. It makes **no compliance or certification claims**, and a formal threat model has not been completed.
 
-> [!NOTE] Built and tested today: API tokens with scopes, worker credentials, role checks and viewer masking on the REST API, fencing and database privilege separation. Specified but **not built**: GitHub sign-in, browser sessions, CSRF protection and the Next.js server that signs service assertions. Until those ship, the web console cannot sign anyone in.
+> [!NOTE] Built and tested: API tokens with scopes, worker credentials, role checks and viewer masking on the REST API, fencing and database privilege separation, and (milestones M5 and M6) GitHub sign-in, server-held browser sessions, CSRF protection and the Next.js server that signs service assertions. Run so far only against a mock OAuth server on loopback HTTP: **real GitHub, TLS and production mode (`__Host-` secure cookies) have not been run**, and the fixes for the first independent review of the web layer are pending re-review.
 
 ## Roles
 
@@ -26,11 +26,19 @@ Authorization is decided by the control plane on **every** request. The web inte
 | Worker `hostname` | Visible | Masked |
 | Credential secrets and hashes | Never returned after creation | Never |
 
-## Human sign-in (specified, not built)
+## Human sign-in (built, M6)
 
-The design is GitHub OAuth with a server-held session and an explicit allowlist. A person is either an operator or a viewer. The browser holds a session cookie only and never an API token or worker credential. The Next.js server proxies to the control plane with a short-lived signed assertion (60 seconds at most) and re-checks nothing itself; the control plane verifies the signature and then re-reads the user, role and session from the database.
+Sign-in is GitHub OAuth (authorization code with PKCE and a `state` bound to the browser that started it) plus an explicit allowlist. A GitHub account that is not on the allowlist, or has been disabled, gets no session. A person is either an operator or a viewer. No default accounts exist and none will.
 
-No default accounts exist and none will.
+- **The browser never holds an API token or worker credential.** It holds one sealed (AES-256-GCM), `HttpOnly`, `SameSite=Lax` cookie, which carries the session id, user id, login, a role hint and the expiry. Over HTTPS the cookie is `Secure` and has the `__Host-` prefix. The role shown in the console always comes from the control plane, never from the cookie.
+- **The session itself lives in the control plane**, so it can be revoked. Signing out revokes it there. Signing in again revokes the earlier session of the same browser. A session has an idle and an absolute expiry, and disabling the account ends it on the next call.
+- **Mutations need two checks:** the request `Origin` must equal the console's own origin, and the `X-CSRF-Token` header must match the session. The same Origin rule guards the live-update WebSocket.
+- **The Next.js server signs a short-lived assertion** (EdDSA, 60 seconds at most, a fixed set of claims, a fresh id per request) for every call to the control plane. The control plane verifies the signature and then re-reads the user, role and session from the database. The Next.js server decides nothing about authorization.
+- **The server-side proxy is an allowlist** of the API routes the console uses. Session operations, the stream and anything else answer 404. Request bodies are capped at 1 MiB while they are read.
+- **The console and sign-in pages use a per-request nonce Content-Security-Policy** without `'unsafe-inline'` for scripts. The public pages keep a static policy.
+- **Rotating the web session key** is supported with an optional previous key during a window. The signing key for assertions is read once at start, so rotating it needs a restart of the web server.
+
+> [!UNVERIFIED] Not run: real GitHub, TLS between browser, web server and control plane, production mode with Secure `__Host-` cookies in a browser, idle and absolute expiry by elapsed time, Firefox and WebKit.
 
 ## API tokens (built)
 
@@ -45,6 +53,7 @@ A token **never outranks its owner**: its effective authority is its scopes inte
 - Workers have no database credentials and no REST access.
 - Handlers are precompiled and allowlisted. There is no arbitrary code upload, shell, file path or URL-fetching job type in 1.0.
 - Revoking a credential takes effect for the next claim, renewal or report. A revoked worker may still be running an external side effect: only database writes are fenced.
+- **Draining is not exclusion.** A drain stops new claims for that worker row. A drained worker that a supervisor (`restart: always`, Kubernetes) restarts comes back as a new worker. To keep a host out, **revoke its worker credential**.
 - Use TLS for any non-loopback worker connection. Plaintext is for a private local network only.
 
 ## The public demo
@@ -57,8 +66,8 @@ Boundaries and their main residual risks, from `docs/security/trust-boundaries.m
 
 | Boundary | Protected by | Main residual risk |
 | --- | --- | --- |
-| Browser to web server | Session cookie, CSRF check (specified) | Script injection in the app could act as the user within a session |
-| Web server to control plane | Signed assertion, audience and expiry, then a database re-check | Theft of the signing key lets an attacker impersonate any allowed user until it is rotated |
+| Browser to web server | Sealed session cookie, Origin and CSRF checks, nonce Content-Security-Policy on the console | Script injection in the app could act as the user within a session (the first review found no injection sink) |
+| Web server to control plane | Signed assertion, audience and expiry, then a database re-check; TLS required to a non-loopback control plane in production | Theft of the signing key, or of the web session key (it can forge a cookie for any live session id), lets an attacker impersonate an allowed user until it is rotated |
 | API client to control plane | Hashed scoped token, owner's current role | A leaked token works until it is revoked |
 | Worker to control plane | Per-call credential, worker identity, attempt fence | A revoked worker can still cause external side effects |
 | Control plane to PostgreSQL | Least-privilege role, parameterized queries | A compromised database host is out of scope |
@@ -67,8 +76,8 @@ Boundaries and their main residual risks, from `docs/security/trust-boundaries.m
 Other limits you should know:
 
 - Secrets must not be placed in payloads, results or logs. They are stored and shown to operators.
-- Rate limiting is specified (HTTP 429) but is not implemented in the current build.
-- A formal STRIDE threat model, an independent security review of the browser-facing layer and a dependency and supply-chain audit are **not done**.
+- Rate limiting is implemented in the control plane: HTTP 429 `rate_limited` with `Retry-After`, per-user mutation limits and a bucket for failed authentications.
+- An independent review of the web layer (REVIEW-M6-RV-01) found no critical or high issue and three medium ones (proxy path handling, body size cap, WebSocket relay sockets). They are fixed in the M6 follow-up ticket and **pending independent re-review**. A formal STRIDE threat model, the production security and load gate (M8) and a dependency and supply-chain audit are **not done**.
 
 ## Reporting a vulnerability
 

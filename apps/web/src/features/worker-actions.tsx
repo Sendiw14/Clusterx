@@ -47,7 +47,7 @@ export function WorkerActions({ worker, onChanged }: { worker: WorkerDetail; onC
         {!online ? <span className="meta">You are offline. Changes are disabled until you reconnect.</span> : null}
       </div>
       <ConfirmDialog open={open} title="Drain this worker?" verb="Drain worker" danger pending={pending} onConfirm={() => void drain()} onCancel={() => { if (!pending) setOpen(false); }} error={err ? describeFailure(err) : null}>
-        <p><strong>{worker.name}</strong> has {worker.active_attempts} active attempt{worker.active_attempts === 1 ? "" : "s"}. It stops taking new work immediately.</p>
+        <p><strong>{worker.name}</strong> has {worker.active_attempts} active attempt{worker.active_attempts === 1 ? "" : "s"}. It stops taking new work immediately. Draining does not keep a host out: if a supervisor restarts the worker, it returns as a new worker. To keep a host out, revoke its worker credential.</p>
         <TextInput label="Grace period (seconds)" help="Active attempts may finish within this time. After it, the lease path recovers them (0 to 3600)." inputMode="numeric" value={grace} onChange={(e) => setGrace(e.target.value)} error={valid ? undefined : "Enter a whole number from 0 to 3600."} />
       </ConfirmDialog>
     </div>

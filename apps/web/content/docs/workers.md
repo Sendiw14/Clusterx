@@ -133,6 +133,17 @@ The reference worker, `apps/worker/cmd/clusterx-worker`, runs the three example 
 
 > [!NOTE] Handler log capture is not implemented: attempt `log_tail` is empty in the current build.
 
+## Drain, restart and keeping a host out
+
+A drain (from the console, the API, or a worker's own shutdown) stops new claims for that worker. Running attempts may finish until the drain grace ends; after that the lease path recovers them.
+
+- **Drain is not exclusion.** A drained worker deregisters and exits. If a supervisor (`restart: always`, Kubernetes) restarts it, it joins again as a **new worker row** and takes new claims. To keep a host out, **revoke its worker credential**.
+- **Every graceful restart creates a new worker row** (stop, self-drain, deregister, start). Expect the worker list to grow by one row per restart; old rows show as deregistered.
+- An operator drain sticks to that worker id: if the same process re-registers while still draining, it stays draining and gets no claims until it deregisters.
+- A worker can keep its id across restarts with `CLUSTERX_WORKER_ID` or `CLUSTERX_WORKER_ID_FILE` (needs a writable volume; the compose workers have a read-only filesystem, so this is not wired there).
+
+> [!VERIFIED] Behaviour as recorded in ADR-0003 (RV5-02, RV5R-01) and covered by the control plane's backend tests (HANDOFF-M5-BE-02). It was not re-run for this page.
+
 ## Create and revoke worker credentials
 
 The control plane's CLI creates credentials. The secret is printed once, as a line starting with `secret=`, and is never stored in plain text:

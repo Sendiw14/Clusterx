@@ -1,13 +1,11 @@
 import { open, seal } from "./crypto.ts";
-import type { WebConfig } from "./config.ts";
+import { keyring, type WebConfig } from "./config.ts";
 
 export interface SessionCookie {
   sid: string;
   uid: string;
   login: string;
   role: "operator" | "viewer";
-  /** `cxs_` secret from POST /sessions. Go does not need it for later requests (it checks `sid`); kept sealed because ADR-0006 section 3 names it as the cookie value. */
-  sec: string;
   /** Absolute session expiry, epoch seconds. */
   exp: number;
 }
@@ -36,14 +34,14 @@ export function sealSession(c: WebConfig, s: SessionCookie): string {
   return cookieHeader(c, sessionCookieName(c), seal(c.sessionKey, "session", s), s.exp - now());
 }
 export function readSession(c: WebConfig, cookieHeaderValue: string | null | undefined): SessionCookie | null {
-  const s = open<SessionCookie>(c.sessionKey, "session", parseCookies(cookieHeaderValue).get(sessionCookieName(c)));
+  const s = open<SessionCookie>(keyring(c), "session", parseCookies(cookieHeaderValue).get(sessionCookieName(c)));
   return s && typeof s.sid === "string" && typeof s.uid === "string" && s.exp > now() && (s.role === "operator" || s.role === "viewer") ? s : null;
 }
 export function sealOAuth(c: WebConfig, o: OAuthCookie): string {
   return cookieHeader(c, oauthCookieName(c), seal(c.sessionKey, "oauth", o), 600);
 }
 export function readOAuth(c: WebConfig, cookieHeaderValue: string | null | undefined): OAuthCookie | null {
-  const o = open<OAuthCookie>(c.sessionKey, "oauth", parseCookies(cookieHeaderValue).get(oauthCookieName(c)));
+  const o = open<OAuthCookie>(keyring(c), "oauth", parseCookies(cookieHeaderValue).get(oauthCookieName(c)));
   return o && o.exp > now() ? o : null;
 }
 

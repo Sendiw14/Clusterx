@@ -134,8 +134,8 @@ test.describe("architecture and changelog", () => {
     const t = await page.locator("main").innerText();
     expect(t).toMatch(/No releases yet/);
     expect(t).not.toMatch(/released on|Released:/i);
-    for (const m of ["M1", "M2", "M3", "M4"]) expect(t).toContain(m);
-    expect(t).not.toMatch(/M5: |M6: |M7: /);
+    for (const m of ["M1", "M2", "M3", "M4", "M5", "M6"]) expect(t).toContain(m);
+    expect(t).not.toMatch(/M7: |M8: /);
   });
 });
 
