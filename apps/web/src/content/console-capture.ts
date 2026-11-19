@@ -9,7 +9,7 @@ export const CONSOLE_CAPTURE = {
   route: "/app/jobs",
   date: "2026-11-19",
   /** Commit whose tree the capture was taken from (short SHA); the only later change is the screenshot spec itself. */
-  commit: "91e27a1",
+  commit: "f5f3f10",
   width: 952,
-  height: 495,
+  height: 385,
 } as const;
