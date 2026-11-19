@@ -4,8 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand/v2"
+	"net"
 	"time"
+
+	"github.com/jackc/puddle/v2"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -170,12 +174,25 @@ func classifyDBError(err error) error {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return err
 	}
-	var ce *pgconn.ConnectError
-	if errors.As(err, &ce) || pgconn.SafeToRetry(err) || pgconn.Timeout(err) {
+	if connLost(err) {
 		return fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
 	return err
 }
+
+// connLost reports transport/pool failures that carry no server SQLSTATE (RV5-01): the server or
+// network went away, so the outcome is "not acknowledged" (503 / UNAVAILABLE), never 500.
+func connLost(err error) bool {
+	var ce *pgconn.ConnectError
+	var ne net.Error
+	return errors.As(err, &ce) || pgconn.SafeToRetry(err) || pgconn.Timeout(err) ||
+		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.As(err, &ne) ||
+		errors.Is(err, pgconn.ErrConnClosed) || errors.Is(err, puddle.ErrClosedPool)
+}
+
+// IsUnavailable reports whether err (from any store path, classified or raw) means the database
+// is unavailable. Transport layers use it so an unclassified read path cannot leak a 500.
+func IsUnavailable(err error) bool { return errors.Is(classifyDBError(err), ErrUnavailable) }
 
 func isNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 

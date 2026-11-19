@@ -175,7 +175,7 @@ func (s *service) toStatus(err error) error {
 		}
 		return withReason(codeFor(d.Reason), d.Reason, msg)
 	}
-	if errors.Is(err, store.ErrUnavailable) {
+	if store.IsUnavailable(err) {
 		return withReason(codes.Unavailable, "unavailable", "database unavailable; do not assume the lease is still valid")
 	}
 	if errors.Is(err, context.DeadlineExceeded) {

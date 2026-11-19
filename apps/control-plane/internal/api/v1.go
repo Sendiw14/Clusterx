@@ -173,7 +173,7 @@ func (v *V1) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeErrorDetails(w, r, http.StatusConflict, c.Reason, conflictMessage[c.Reason], d)
 		return
 	}
-	if errors.Is(err, store.ErrUnavailable) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+	if store.IsUnavailable(err) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		w.Header().Set("Retry-After", "2")
 		writeError(w, r, http.StatusServiceUnavailable, "unavailable",
 			"Service temporarily unavailable. The request was not acknowledged; retry with the same Idempotency-Key.")
