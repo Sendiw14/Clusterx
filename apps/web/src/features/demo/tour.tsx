@@ -1,6 +1,6 @@
 "use client";
-import { useMemo, useState } from "react";
-import { Icon, Notice, Segmented } from "@clusterx/ui";
+import { useEffect, useMemo, useState } from "react";
+import { ForceUtcContext, Icon, Notice, Segmented } from "@clusterx/ui";
 import { DataProviderContext } from "@/data/context";
 import { FixtureProvider, type FixtureView } from "@/data/fixture-provider";
 import { JobDetailView } from "@/features/job-detail";
@@ -8,8 +8,9 @@ import { JobsListView, type JobFilters } from "@/features/jobs-list";
 import { OverviewView } from "@/features/overview";
 import { WorkersListView } from "@/features/workers";
 import { ConfigView } from "@/features/config";
+import { RecoveryReplay } from "@/features/demo/replay";
 
-type Screen = "overview" | "jobs" | "workers" | "config";
+type Screen = "overview" | "jobs" | "workers" | "recovery" | "config";
 
 /**
  * Read-only console tour on fixtures. It imports only the fixture provider (ESLint boundary + import-graph test).
@@ -21,16 +22,28 @@ export function DemoTour() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [filters, setFilters] = useState<JobFilters>({});
   const provider = useMemo(() => new FixtureProvider(view), [view]);
+  const [retriedAs, setRetriedAs] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let live = true;
+    provider.listJobs({}).then((r) => {
+      if (!live || !r.ok) return;
+      const m: Record<string, string> = {};
+      for (const j of r.data.items) if (j.retried_from_job_id) m[j.retried_from_job_id] = j.id;
+      setRetriedAs(m);
+    });
+    return () => { live = false; };
+  }, [provider]);
 
   const jobLink = (j: { id: string }) => (
     <button type="button" className="link-btn mono" onClick={() => { setJobId(j.id); setScreen("jobs"); }}>{j.id}</button>
   );
 
   return (
+    <ForceUtcContext value>
     <DataProviderContext provider={provider}>
       <div className="toolbar" style={{ justifyContent: "space-between" }}>
         <Segmented label="Demo screen" value={screen} onChange={(v) => { setScreen(v as Screen); setJobId(null); }} options={[
-          { value: "overview", label: "Overview" }, { value: "jobs", label: "Jobs" }, { value: "workers", label: "Workers" }, { value: "config", label: "Config" },
+          { value: "overview", label: "Overview" }, { value: "jobs", label: "Jobs" }, { value: "workers", label: "Workers" }, { value: "recovery", label: "Recovery replay" }, { value: "config", label: "Config" },
         ]} />
         <fieldset className="seg-fieldset" style={{ border: 0, padding: 0, margin: 0 }}>
           <legend className="sr-only">View as</legend>
@@ -64,7 +77,7 @@ export function DemoTour() {
           <>
             <h2 id="demo-screen-h" className="sr-only">Demo: Job detail</h2>
             <div><button type="button" className="btn btn-sm" onClick={() => setJobId(null)}><Icon name="i-chev-l" />Back to jobs</button></div>
-            <JobDetailView id={jobId} />
+            <JobDetailView id={jobId} jobLink={jobLink} retriedAs={retriedAs[jobId] ?? null} />
             <p className="meta">Operators can cancel a running job or retry a failed one here. Those actions are not available in the demo.</p>
           </>
         ) : null}
@@ -75,6 +88,12 @@ export function DemoTour() {
             <p className="meta">Operators can drain a worker here. That action is not available in the demo.</p>
           </>
         ) : null}
+        {screen === "recovery" ? (
+          <>
+            <h2 id="demo-screen-h" className="sr-only">Demo: Recovery replay</h2>
+            <RecoveryReplay />
+          </>
+        ) : null}
         {screen === "config" ? (
           <>
             <h2 id="demo-screen-h" className="sr-only">Demo: Configuration</h2>
@@ -83,5 +102,6 @@ export function DemoTour() {
         ) : null}
       </section>
     </DataProviderContext>
+    </ForceUtcContext>
   );
 }

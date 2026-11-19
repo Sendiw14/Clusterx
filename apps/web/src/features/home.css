@@ -10,6 +10,9 @@
 .cta-row{display:flex;flex-wrap:wrap;gap:var(--space-3);margin-top:var(--space-6)}
 @media (max-width:479px){.cta-row .btn{width:100%}}
 .hero-note{margin-top:var(--space-4);font-size:var(--text-ui-sm);color:var(--color-ink-2);max-width:34rem}
+.hero-rise{animation:heroin var(--duration-hero) var(--ease-out) both;animation-delay:240ms}
+@media (prefers-reduced-motion:reduce){.hero-rise{animation:none!important}}
+html[data-rm="1"] .hero-rise{animation:none!important}
 .plate{border:1px solid var(--color-ink);border-radius:var(--radius-sm);background:var(--color-white);position:relative}
 .plate::before{content:"";position:absolute;inset:6px -6px -6px 6px;border:1px solid var(--color-line-strong);border-radius:var(--radius-sm);z-index:-1}
 .plate-h{display:flex;justify-content:space-between;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-ink);font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:.06em;text-transform:uppercase}
@@ -89,6 +92,9 @@
 .arch h3{font-size:var(--text-step-0);margin:var(--space-2) 0}
 .arch p{font-size:var(--text-ui-md);color:var(--color-ink-2)}
 .arch .trust{display:inline-block;margin-top:var(--space-3);font-family:var(--font-mono);font-size:var(--text-ui-xs);border:1px dashed var(--color-line-strong);padding:1px 6px;border-radius:var(--radius-xs);color:var(--color-ink-2)}
+.arch .stat{display:block;margin-top:var(--space-2);font-size:var(--text-ui-xs);font-weight:600;color:var(--color-ink)}
+.arch .stat::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--color-success)}
+.arch .stat[data-s="plan"]::before{background:transparent;border:1.5px solid var(--color-ink-2)}
 .preview{border:1px solid var(--color-ink);border-radius:var(--radius-sm);overflow:hidden;background:var(--color-canvas)}
 .preview-bar{display:flex;gap:var(--space-3);align-items:center;padding:var(--space-2) var(--space-4);border-bottom:1px solid var(--color-line);background:var(--color-white);font-family:var(--font-mono);font-size:var(--text-ui-xs);color:var(--color-ink-2);flex-wrap:wrap}
 .preview-in{padding:var(--space-4);display:grid;gap:var(--space-4)}
@@ -109,4 +115,50 @@
 }
 @layer components {
   .stack-grid { display: grid; gap: var(--space-6); grid-template-columns: minmax(0, 1fr); }
+}
+@layer components {
+  .arch-fig{border:1px solid var(--color-ink);border-radius:var(--radius-sm);background:var(--color-white)}
+  .arch-stage{overflow-x:auto;padding:var(--space-3)}
+  .arch-stage svg{min-width:760px;width:100%;height:auto}
+  @media (max-width:479px){.arch-stage{display:none}}
+  #arch-svg text{font-family:var(--font-sans);font-size:16px;fill:var(--color-ink)}
+  #arch-svg .s{font-family:var(--font-mono);font-size:12.5px;fill:var(--color-ink-2)}
+  #arch-svg .t{font-weight:600}
+  #arch-svg .t2{font-family:var(--font-mono);font-size:14px}
+  #arch-svg .tag{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;fill:var(--color-ink-2)}
+  #arch-svg .tb line{stroke:var(--color-line-strong);stroke-width:1;stroke-dasharray:3 5}
+  #arch-svg .tb text{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;fill:var(--color-ink-2)}
+  #arch-svg .node rect,#arch-svg .node polygon{fill:var(--color-white);stroke:var(--color-ink);stroke-width:1.5}
+  #arch-svg .node.dashed rect{stroke:var(--color-ink-2);stroke-dasharray:6 4;fill:var(--color-canvas)}
+  #arch-svg .node.big>rect{stroke-width:2}
+  #arch-svg .sub rect{fill:var(--color-accent-tint);stroke:var(--color-accent)}
+  #arch-svg .sub text{font-size:14.5px}
+  #arch-svg .store .slot{stroke:var(--color-line-strong);stroke-width:1.5;fill:none}
+  #arch-svg .e{stroke:var(--color-ink);stroke-width:1.75}
+  #arch-svg .e.dash{stroke-dasharray:6 4;stroke:var(--color-ink-2)}
+  #arch-svg .ahead{fill:var(--color-ink)}
+  #arch-svg .lbl text{font-family:var(--font-mono);font-size:12px;fill:var(--color-ink-2)}
+  .src-list{list-style:none;display:grid;gap:var(--space-2)}
+  .src-list code{background:var(--color-panel);border:1px solid var(--color-line);border-radius:var(--radius-xs);padding:1px 6px;overflow-wrap:anywhere}
+  .tradeoffs{display:grid;gap:0;border:1px solid var(--color-ink);border-radius:var(--radius-sm);background:var(--color-white)}
+  .tradeoffs>div{padding:var(--space-5)}
+  .tradeoffs>div+div{border-top:1px solid var(--color-line-strong)}
+  @media (min-width:900px){.tradeoffs{grid-template-columns:1fr 1fr}.tradeoffs>div+div{border-top:0;border-left:1px solid var(--color-line-strong)}}
+  .tradeoffs h3{font-size:var(--text-step-1);margin-bottom:var(--space-3)}
+  .tradeoffs ul{padding-left:var(--space-5);display:grid;gap:var(--space-2);color:var(--color-ink-2)}
+  .path-list{list-style:none;counter-reset:p;display:grid;gap:0;border:1px solid var(--color-ink);border-radius:var(--radius-sm);background:var(--color-white)}
+  .path-list>li{counter-increment:p;display:grid;grid-template-columns:2.25rem minmax(0,1fr);gap:var(--space-3);padding:var(--space-4);border-top:1px solid var(--color-line)}
+  .path-list>li:first-child{border-top:0}
+  .path-list>li::before{content:counter(p,decimal-leading-zero);font-family:var(--font-mono);font-size:var(--text-ui-xs);color:var(--color-ink-2);padding-top:.3rem}
+  .path-list p{color:var(--color-ink-2)}
+  .path-list strong{color:var(--color-ink)}
+}
+@layer components {
+  .replay{display:grid;gap:var(--space-4)}
+  .replay-ctl{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+  .replay-state{display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:var(--space-3);margin:0;border:1px solid var(--color-line);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);background:var(--color-canvas)}
+  .replay-state dt{font-family:var(--font-mono);font-size:var(--text-ui-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--color-ink-2)}
+  .replay-state dd{margin:2px 0 0}
+  .replay-cap{border-left:3px solid var(--color-accent);padding:var(--space-2) var(--space-4);min-height:4.5rem;display:grid;gap:2px;background:var(--color-accent-tint)}
+  .replay-cap b{font-weight:600}
 }

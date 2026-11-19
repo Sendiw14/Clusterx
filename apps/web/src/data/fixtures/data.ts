@@ -36,7 +36,11 @@ const SEEDS: Seed[] = [
   { n: 10, handler: "thumbnail", v: 2, status: "failed", priority: 6, attempts: 1, max: 1, createdMin: 70, failure: "permanent", errorCode: "bad_input" },
   { n: 11, handler: "ocr", v: 1, status: "succeeded", priority: 7, attempts: 1, max: 3, createdMin: 90 },
   { n: 12, handler: "export", v: 3, status: "succeeded", priority: 5, attempts: 1, max: 3, createdMin: 120 },
+  /* 13 is the manual retry of failed job 3: a NEW job with a fresh budget and a link back to its parent. */
+  { n: 13, handler: "export", v: 3, status: "succeeded", priority: 5, attempts: 1, max: 3, createdMin: 12 },
 ];
+/** Lineage: job number to the job number it was retried from. */
+const RETRIED_FROM: Record<number, number> = { 13: 3 };
 
 export const jobId = (n: number) => `demo-job-${String(n).padStart(4, "0")}`;
 const workerId = (n: number) => `demo-worker-${n}`;
@@ -67,6 +71,7 @@ export const FIXTURE_JOBS: Job[] = SEEDS.map((s) => ({
   created_by: "user:demo-operator",
   as_of: FIXTURE_AS_OF,
   masked_fields: [],
+  ...(RETRIED_FROM[s.n] ? { retried_from_job_id: jobId(RETRIED_FROM[s.n]!) } : {}),
 }));
 
 const attempt = (job: number, n: number, state: Attempt["state"], extra: Partial<Attempt> = {}): Attempt => ({
@@ -120,6 +125,13 @@ export const FIXTURE_EVENTS: Record<string, JobEvent[]> = {
   ],
 };
 
+FIXTURE_ATTEMPTS[jobId(13)] = [attempt(13, 1, "succeeded", { worker_id: workerId(2), worker_incarnation_id: "demo-inc-91c", finished_at: t(9), log_tail: "claimed attempt 1\nexport finished\nreported success\n" })];
+FIXTURE_EVENTS[jobId(13)] = [
+  ev(13, 1, "retry_created", "queued", 12, "user:demo-operator", { retried_from_job_id: jobId(3) }),
+  ev(13, 2, "claimed", "running", 11, "worker:demo-worker-2", { attempt_number: 1 }),
+  ev(13, 3, "succeeded", "succeeded", 9, "worker:demo-worker-2", { attempt_number: 1 }),
+];
+
 export const FIXTURE_WORKERS: Worker[] = [
   { id: workerId(1), name: "demo-worker-a", status: "active", live: true, version: 4, incarnation_id: "demo-inc-3e8", capacity: 4, active_attempts: 2, protocol_version: 1, sdk_version: "demo", hostname: "demo-host-1.invalid", capabilities: [{ name: "thumbnail", version: 2 }, { name: "ocr", version: 1 }], registered_at: t(600), last_seen_at: t(0.1), masked_fields: [] },
   { id: workerId(2), name: "demo-worker-b", status: "active", live: true, version: 2, incarnation_id: "demo-inc-91c", capacity: 4, active_attempts: 1, protocol_version: 1, sdk_version: "demo", hostname: "demo-host-2.invalid", capabilities: [{ name: "export", version: 3 }, { name: "digest", version: 1 }], registered_at: t(480), last_seen_at: t(0.2), masked_fields: [] },
@@ -136,7 +148,7 @@ export const fixtureWorkerDetail = (w: Worker): WorkerDetail => ({
 
 export const FIXTURE_OVERVIEW: MetricsOverview = {
   as_of: FIXTURE_AS_OF,
-  jobs_by_status: { scheduled: 1, queued: 2, running: 1, retry_wait: 1, succeeded: 4, failed: 2, canceled: 1 },
+  jobs_by_status: { scheduled: 1, queued: 2, running: 1, retry_wait: 1, succeeded: 5, failed: 2, canceled: 1 },
   workers: { live: 3, stale: 1, draining: 1 },
   oldest_queued_age_seconds: 360,
   unschedulable_jobs: 1,

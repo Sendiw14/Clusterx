@@ -59,7 +59,7 @@ function Timeline({ events }: { events: JobEvent[] }) {
 }
 
 /** Job detail: status, fields subject to viewer masking, attempts, event timeline. Cancel and retry are not wired yet, so they are absent. */
-export function JobDetailView({ id, workerLink }: { id: string; workerLink?: (id: string) => ReactNode }) {
+export function JobDetailView({ id, workerLink, jobLink, retriedAs }: { id: string; workerLink?: (id: string) => ReactNode; jobLink?: (j: { id: string }) => ReactNode; retriedAs?: string | null }) {
   void workerLink;
   const provider = useDataProvider();
   const job = useResource(() => provider.getJob(id), `job-${id}-${provider.kind}`);
@@ -86,6 +86,8 @@ export function JobDetailView({ id, workerLink }: { id: string; workerLink?: (id
                     { term: "Updated", value: <Timestamp value={j.updated_at} /> },
                     { term: "Version", value: <span className="mono">{j.version}</span> },
                     { term: "Failure class", value: j.failure_class ?? <span className="meta">None</span> },
+                    { term: "Retried from", value: j.retried_from_job_id ? (jobLink ? jobLink({ id: j.retried_from_job_id }) : <span className="mono">{j.retried_from_job_id}</span>) : <span className="meta">Not a retry</span> },
+                    ...(j.status === "failed" ? [{ term: "Retried as", value: retriedAs ? (jobLink ? jobLink({ id: retriedAs }) : <span className="mono">{retriedAs}</span>) : <span className="meta">No retry job</span> }] : []),
                   ]}
                 />
                 <h3 style={{ margin: "var(--space-5) 0 var(--space-2)", fontSize: "var(--text-ui-lg)" }}>Payload</h3>

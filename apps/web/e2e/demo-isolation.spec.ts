@@ -10,7 +10,7 @@ async function tour(page: Page) {
   const screen = page.getByRole("group", { name: "Demo screen" });
   for (const view of ["operator", "viewer"]) {
     await page.getByRole("radio", { name: `View as ${view}` }).click();
-    for (const name of ["Overview", "Jobs", "Workers", "Config"]) {
+    for (const name of ["Overview", "Jobs", "Workers", "Recovery replay", "Config"]) {
       await screen.getByRole("button", { name }).click();
       await page.waitForLoadState("networkidle");
     }
@@ -49,7 +49,7 @@ test("banner on every demo screen, nothing says Live, no mutation controls, synt
   await page.goto("/demo", { waitUntil: "networkidle" });
   const banner = page.getByRole("region", { name: "Demo notice" });
   const screen = page.getByRole("group", { name: "Demo screen" });
-  for (const name of ["Overview", "Jobs", "Workers", "Config"]) {
+  for (const name of ["Overview", "Jobs", "Workers", "Recovery replay", "Config"]) {
     await screen.getByRole("button", { name }).click();
     await expect(banner).toBeVisible();
     await expect(banner).toContainText("not live");
@@ -87,7 +87,7 @@ test("axe on each demo screen, both views", async ({ page }) => {
   const screen = page.getByRole("group", { name: "Demo screen" });
   for (const view of ["operator", "viewer"]) {
     await page.getByRole("radio", { name: `View as ${view}` }).click();
-    for (const name of ["Overview", "Jobs", "Workers", "Config"]) {
+    for (const name of ["Overview", "Jobs", "Workers", "Recovery replay", "Config"]) {
       await screen.getByRole("button", { name }).click();
       await page.waitForLoadState("networkidle");
       const r = await runAxe(page, `/demo [${view}/${name}]`, 1280);
@@ -120,4 +120,33 @@ test("the trap has teeth: the same check flags the console's BFF calls", async (
   page.on("request", (r) => { if (/^\/(api|bff)\//.test(new URL(r.url()).pathname)) hits.push(new URL(r.url()).pathname); });
   await page.goto("/app/jobs", { waitUntil: "networkidle" });
   expect(hits.some((h) => h.startsWith("/bff/api/v1/jobs"))).toBe(true);
+});
+
+test("recovery replay: keyboard Step reaches the scripted late-report rejection, Reset returns, nothing network", async ({ page }) => {
+  const bad: string[] = [];
+  page.on("request", (r) => { const p = new URL(r.url()).pathname; if (/^\/(api|bff)\//.test(p) || r.method() !== "GET") bad.push(p); });
+  await page.goto("/demo", { waitUntil: "networkidle" });
+  await page.getByRole("group", { name: "Demo screen" }).getByRole("button", { name: "Recovery replay" }).click();
+  const step = page.getByRole("button", { name: "Step", exact: true });
+  await expect(page.getByText("Press Step to begin.")).toBeVisible();
+  await step.focus();
+  for (let i = 0; i < 7; i++) await page.keyboard.press("Enter");
+  await expect(page.getByText(/Step 7 of 7: Late report from worker A: rejected/)).toBeVisible();
+  await expect(page.getByText("Scripted, not a fixture record.")).toBeVisible();
+  await expect(step).toBeDisabled();
+  await page.getByRole("button", { name: "Reset" }).click();
+  await expect(page.getByText("Press Step to begin.")).toBeVisible();
+  await page.getByRole("button", { name: "Show all" }).click();
+  await expect(page.getByText("Step 7 of 7", { exact: false }).first()).toBeVisible();
+  expect(bad).toEqual([]);
+});
+
+test("failed job shows its retry lineage and the link works both ways", async ({ page }) => {
+  await page.goto("/demo", { waitUntil: "networkidle" });
+  await page.getByRole("group", { name: "Demo screen" }).getByRole("button", { name: "Jobs" }).click();
+  await page.getByRole("button", { name: "demo-job-0003" }).first().click();
+  await expect(page.getByText("Retried as")).toBeVisible();
+  await page.getByRole("button", { name: "demo-job-0013" }).first().click();
+  await expect(page.getByText("Retried from")).toBeVisible();
+  await expect(page.getByRole("button", { name: "demo-job-0003" }).first()).toBeVisible();
 });

@@ -1,18 +1,29 @@
 import type { Metadata } from "next";
-import { DocPage, PrevNext } from "@/features/docs";
+import { DocFrame } from "@/features/docs";
+import { ApiReference } from "@/features/api-reference";
+import { docMetadata } from "@/features/docs";
+import { loadDoc } from "@/lib/docs/content";
+import { loadApi } from "@/lib/docs/openapi";
+import { renderMarkdown, type Heading } from "@/lib/docs/markdown";
 
-export const metadata: Metadata = { title: "API reference: Docs" };
+export const metadata: Metadata = docMetadata("api");
 
 export default function Page() {
+  const d = loadDoc("api");
+  const api = loadApi();
+  const md = renderMarkdown(d.body, { sectionLabel: d.title });
+  const generated: Heading[] = [
+    { id: "contract", text: "This build's contract", depth: 2 },
+    { id: "security-schemes", text: "Security schemes", depth: 2 },
+    { id: "error-codes", text: "Error codes and statuses", depth: 2 },
+    { id: "operations", text: "Operations", depth: 2 },
+    ...api.tags.filter((t) => api.operations.some((o) => o.tag === t.name)).map((t) => ({ id: `tag-${t.name}`, text: t.name[0]!.toUpperCase() + t.name.slice(1), depth: 3 as const })),
+    { id: "schemas", text: "Schemas", depth: 2 },
+  ];
   return (
-    <DocPage title="API reference" lead="The versioned REST contract under /api/v1." pending="A reference generated from the frozen OpenAPI document, with per-operation examples, is produced with the documentation milestone. This page is deliberately not hand-written.">
-      <h2 id="errors">Error model</h2>
-      <p>Every error has the same shape: <code>code</code>, <code>message</code>, optional <code>details</code> and a <code>request_id</code>. Quote the request ID when reporting a problem.</p>
-      <h2 id="status">Status codes</h2>
-      <p>The API answers 400, 401, 403, 404, 409, 413, 422, 429, 500 and 503 with that error shape. A 410 means a job expired by retention, which is different from not found.</p>
-      <h2 id="auth">Authentication</h2>
-      <p>Direct clients use scoped, revocable API tokens. Tokens never go in browser code. The console uses a server-side session instead.</p>
-      <PrevNext href="/docs/api" />
-    </DocPage>
+    <DocFrame title={d.title} lead={d.lead} headings={[...md.headings, ...generated]} href="/docs/api">
+      {md.nodes}
+      <ApiReference api={api} />
+    </DocFrame>
   );
 }
