@@ -19,16 +19,10 @@ var githubLoginRe = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$`)
 // (purpose=login, sub=github:<id>, single-use jti) is accepted; API tokens and normal assertions get
 // 403 credential_not_allowed.
 func (v *V1) createSession(w http.ResponseWriter, r *http.Request) {
-	ip := clientIP(r)
-	if ok, wait := v.AuthFailures.Peek(ip); !ok {
-		rateLimited(w, r, wait)
-		return
-	}
 	bearer, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	switch {
 	case !ok || bearer == "":
-		v.AuthFailures.Allow(ip)
-		v.unauthenticatedReason(w, r, "assertion_invalid")
+		v.authFailed(w, r, auth.ReasonInvalid)
 		return
 	case !auth.LooksLikeAssertion(bearer):
 		writeErrorDetails(w, r, http.StatusForbidden, "forbidden", "Sessions cannot be managed with an API token.",
@@ -38,8 +32,7 @@ func (v *V1) createSession(w http.ResponseWriter, r *http.Request) {
 	c, err := v.Verifier.Verify(bearer, true)
 	if e, ok := errors.AsType[*auth.Error](err); ok {
 		v.Log.Warn("login assertion rejected", "request_id", RequestID(r.Context()), "reason", e.Reason, "detail", e.Detail)
-		v.AuthFailures.Allow(ip)
-		v.unauthenticatedReason(w, r, e.Reason)
+		v.authFailed(w, r, e.Reason)
 		return
 	} else if err != nil {
 		v.fail(w, r, err)
