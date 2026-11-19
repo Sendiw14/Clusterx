@@ -25,7 +25,7 @@
 | `/architecture` | Layered topology (SVG plus text alternative), connections and credentials table, job and lease path, default timings, trade-offs, failure domains with evidence column, limitations, repo-relative sources |
 | `/docs` | Index: guided first steps, concept map, all pages, evidence-marker legend; search field in the sidebar |
 | `/docs/quickstart`, `concepts`, `workers`, `reliability`, `deployment`, `security` | Authored in `apps/web/content/docs/*.md`, rendered by `src/lib/docs/markdown.tsx` (no raw HTML) |
-| `/docs/api` | Narrative from `content/docs/api.md` plus generated sections: contract and served status, security schemes, error codes and statuses, 33 operations with parameters, request fields, examples, responses, status chips, and every component schema |
+| `/docs/api` | Narrative from `content/docs/api.md` plus generated sections: contract and served status, security schemes, error codes and statuses, 28 operations with parameters, request fields, examples, responses, status chips, and every component schema |
 | `/docs/search-index.json` | Static build-time index (134 entries: every docs section, every API operation, every schema). No external service |
 | `/changelog` | "Unreleased (pre-1.0)": merged milestones M1 to M4 with merge SHAs and dates; no version number, no release date |
 | `/demo` | Overview, jobs (with filters and dead-letter view), job detail (failed job `demo-job-0003` links to its retry `demo-job-0013` and back), workers, **recovery replay** (7 steps, visitor-driven), config. Operator and viewer views. All times UTC. Fixture provider only |
