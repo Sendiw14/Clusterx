@@ -134,3 +134,65 @@ can read the bind mounts on Linux hosts; `bff-dev-private.jwk.json` is 0600 and 
 5. **Web lane (RV5-07):** token streams without `workers:read`/`metrics:read` no longer receive those hints.
 6. **Docs (web lane owns `apps/web/content/docs/*`):** quickstart/deployment should mention `infra/compose/.secrets/` (secrets files), the dev BFF key pair (`.secrets/bff-dev-private.jwk.json`, development only), the optional `retention` profile, and the new optional `.env` keys (`CLUSTERX_HTTP_PORT`, `CLUSTERX_METRICS_PORT`, `CLUSTERX_IMAGE_PREFIX`). `.secrets.env` is still written (operator token) as before.
 7. **Existing local stacks:** `initdb` runs only on a clean volume, so an existing `clusterx` volume has no `clusterx_retention_job` login; the `retention` service fails auth there until the volume is recreated (or the role is created by hand). The main services keep working (`POSTGRES_PASSWORD_FILE` is only read at init).
+
+## TASK-M5-BE-03 (review round 2 follow-ups, same branch)
+
+Source: REVIEW-M5-RV-01 "## Round 2 (3456189)" (verdict PASS conditional on RV5R-01) and the integrator's TASK-M5-BE-03 message.
+
+| SHA | Items |
+|---|---|
+| `5cffaa6` | **RV5R-01 (MUST):** in `Register`, a `worker_id` naming a deregistered row now falls through to the same candidate selection as an empty `worker_id`: reuse the matching incarnation; `incarnation_mismatch` if the credential has a live non-deregistered row; take over a stale row; otherwise insert. **RV5R-02:** the `worker.incarnation_takeover` audit row is charged to the per-credential `DenialAudit` budget (the takeover itself is unconditional). **RV5-02 ratification** in ADR-0003: drain under a supervisor acts like a rolling restart (revoke the credential to keep a host out); every graceful restart creates a new `workers` row. |
+| `b52de4a` | **RV5R-03(b):** a poll whose snapshot `xmax` is below the previous cursor's (restore/failover) counts as a gap ⇒ `resync{gap_detected}` (rate-bounded), cursor adopted. **RV5R-03(a):** documented only (Feed doc comment: long xid holders make polls rescan from `xmin`). **RV5R-06:** worker version map pruned to the ids the workers query still returns. **RV5R-04:** tests for R04 (trailing data after the claims object), R06 (revoked worker credential never charges the gRPC guess bucket), R07 (`/stream` subscribes with the principal's scopes, end to end). **RV5R-05:** `bootstrap.sh` runs `dev-keygen` as the host uid/gid into a fresh `.keygen.XXXXXX` temp dir (no other secrets mounted), then moves the keys into `.secrets/` (private 0600, public 0644). |
+| (this) | handoff section |
+
+### RV5R-01 before / after
+
+| Run | Exit | Output |
+|---|---|---|
+| Ported proofs `TestRV5R_DeregisteredIdBypassesSingleLiveBinding`, `TestRV5R_TakeoverAuditBudgeted` against `3456189`'s `workers.go` | 1 | `rv5_drain_test.go:127: err = <nil>; want denied incarnation_mismatch`; `rv5_drain_test.go:155: takeover audit rows with the budget spent: 50` |
+| Same tests on `5cffaa6` (`-race`, with all `TestRV5*`, `TestAC09*`, `TestNF*` in store) | 0 | all PASS |
+
+The ported RV5R-01 test asserts the reviewer's condition (exactly one non-deregistered row per credential after 10 attempts with the deregistered id, each answered `incarnation_mismatch`) and, additionally, that once the live row is stale the deregistered id takes it over instead of inserting.
+
+### Mutants (round 3, `<S>/be2/mutants_r3.txt`)
+
+| Mutant | Exit | Killed by |
+|---|---|---|
+| R04-trailing | 1 | `TestVerifyStrictJOSE` `trailing data: got <nil>` |
+| R06-guesslifecycle (`\|\| d == nil` form) | 1 | `TestWorkerRevokedCredentialNotChargedAsGuess` `charged the guess bucket 3 times` |
+| R07-streamscopes | 1 | `TestStreamHintScopeWiring` `jobs:read stream received … entity:worker` |
+| R08-deregresurrect | 1 | `TestRV5_OperatorDrainSurvivesReRegister` |
+| RV5R01 deregistered id skips candidate selection | 1 | `TestRV5R_DeregisteredIdBypassesSingleLiveBinding` |
+| RV5R02 takeover audit unbudgeted | 1 | `TestRV5R_TakeoverAuditBudgeted` `rows … 50` |
+| RV5R03b regression not a gap | 1 | `TestFeedXidRegressionAndWorkerPrune` `gap=false` |
+| RV5R06 no prune | 1 | `TestFeedXidRegressionAndWorkerPrune` `not pruned` |
+
+R02 (feed without `NOT pg_visible_in_snapshot`) stays as the reviewer classified it: equivalent at the client; not addressed.
+
+### Commands (BE-03)
+
+| # | Command | Exit | Result |
+|---|---|---|---|
+| 1 | `apps/control-plane: go vet ./... && go test -race -count=1 ./...` | 0 | 12/12 packages ok incl. chaos, e2e, poc (`<S>/be2/cp_race_be03.txt`) |
+| 2 | `go test -race -count=5 -run TestAC08 -v ./internal/chaos/` | 0 | 5/5 PASS, 0 FAIL (`<S>/be2/ac08_x5_be03.txt`) |
+| 3 | `GOWORK=off go vet ./... && go test -race -count=1 ./...` in `packages/sdk-go`, `apps/worker`, `packages/proto`, `examples/basic-jobs` | 0 each | ok |
+| 4 | Compose check | see below | |
+
+Compose check (BE-03): same isolation as above (worktree-local `.env`, `COMPOSE_PROJECT_NAME=clusterx-m5fix`,
+`CLUSTERX_IMAGE_PREFIX=clusterx-m5fix`, ports 55440/18080/19091); `clusterx/control-plane:local` id `sha256:31e24a20…` identical
+before and after; project `clusterx` still `running(5)`.
+
+| Step | Exit | Evidence |
+|---|---|---|
+| `COMPOSE_PROJECT_NAME=clusterx-m5fix infra/compose/bootstrap.sh`, clean volume | **0** | `Ready: http://127.0.0.1:18080/health/ready` (`<S>/be2/bootstrap_be03.txt`) |
+| readiness; operator-token job `hash_sha256` | — | 200; `succeeded` |
+| JWKS from host-uid keygen | — | `BFF assertion keys loaded` ×1; `.secrets/bff-dev-private.jwk.json` `-rw-------`, `bff-dev.jwks.json` `-rw-r--r--`; no `.keygen.*` dir left |
+| `docker inspect` env (control-plane, worker-1) for `postgres://`, `cxw_`, `cxt_` | — | 0 matches each |
+| `--profile retention run --rm retention` | 0 | |
+| `down -v` (workers + retention profiles), `docker image rm clusterx-m5fix/*` | 0 | 0 `m5fix` volumes left; worktree `.env`, `.secrets/`, `.secrets.env` deleted |
+
+### Still open / NOT RUN (BE-03)
+
+- Linux-host bootstrap run (RV5R-05 fix is reasoned for native Linux, verified on macOS only).
+- Suppressed-audit counter metric (reviewer recommendation, not required): not added.
+- EXPLAIN for `audit_events_idempotency_idx`; feed > 180 events/s; COMMIT-time drop failpoint: unchanged, NOT RUN.
