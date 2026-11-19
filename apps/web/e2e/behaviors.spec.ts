@@ -143,16 +143,14 @@ test.describe("reduced motion", () => {
     await expect(page.locator("html")).not.toHaveAttribute("data-rm", "1");
   });
 
-  test("time zone preference changes rendered timestamps, UTC stays in the title", async ({ page }) => {
-    await page.goto("/demo", { waitUntil: "networkidle" });
-    await page.getByRole("group", { name: "Demo screen" }).getByRole("button", { name: "Jobs" }).click();
-    const t = page.locator("table.tbl time").first();
-    await expect(t).toHaveAttribute("title", /\(UTC\)$/);
+  test("demo fixture times are always UTC, even with a zone preference; the title carries UTC (zone preference itself: Vitest, timestamp-zone.test.tsx)", async ({ page }) => {
     await page.goto("/app/settings/preferences", { waitUntil: "networkidle" });
     await page.getByLabel("Time zone").selectOption("Asia/Tokyo");
     await page.goto("/demo", { waitUntil: "networkidle" });
     await page.getByRole("group", { name: "Demo screen" }).getByRole("button", { name: "Jobs" }).click();
-    await expect(page.locator("table.tbl time").first()).toContainText(/GMT\+9|JST/);
+    const t = page.locator("table.tbl time").first();
+    await expect(t).toHaveAttribute("title", /\(UTC\)$/);
+    await expect(t).toContainText("UTC");
   });
 });
 

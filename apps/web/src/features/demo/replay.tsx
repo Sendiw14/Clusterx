@@ -4,6 +4,7 @@ import { Card, Icon, StatusBadge, Timestamp } from "@clusterx/ui";
 import { useDataProvider } from "@/data/context";
 import type { JobEvent } from "@/data/provider";
 import { Load } from "../common";
+import "@/features/home.css";
 import { useResource } from "../use-resource";
 
 const JOB_ID = "demo-job-0002";

@@ -1,5 +1,9 @@
 "use client";
+import { createContext, useContext } from "react";
 import { browserZone, usePrefs } from "./prefs";
+
+/** Views rendered under /demo show fixture times in UTC so they match the fixture caption. */
+export const ForceUtcContext = createContext(false);
 
 function fmt(d: Date, zone: string): string {
   try {
@@ -26,10 +30,11 @@ function fmt(d: Date, zone: string): string {
  */
 export function Timestamp({ value, utc, frozen }: { value: string | Date | null | undefined; utc?: boolean; frozen?: boolean }) {
   const prefs = usePrefs();
+  const forceUtc = useContext(ForceUtcContext);
   if (!value) return <span className="meta">Not set</span>;
   const d = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(d.getTime())) return <span className="meta">Invalid time</span>;
-  const zone = utc ? "UTC" : prefs.timezone === "browser" ? browserZone() : prefs.timezone;
+  const zone = utc || forceUtc ? "UTC" : prefs.timezone === "browser" ? browserZone() : prefs.timezone;
   return (
     <time dateTime={d.toISOString()} title={`${d.toISOString()} (UTC)`} suppressHydrationWarning data-frozen={frozen ? "true" : undefined}>
       {fmt(d, zone)}

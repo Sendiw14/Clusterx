@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Icon, Notice, Segmented } from "@clusterx/ui";
+import { ForceUtcContext, Icon, Notice, Segmented } from "@clusterx/ui";
 import { DataProviderContext } from "@/data/context";
 import { FixtureProvider, type FixtureView } from "@/data/fixture-provider";
 import { JobDetailView } from "@/features/job-detail";
@@ -39,6 +39,7 @@ export function DemoTour() {
   );
 
   return (
+    <ForceUtcContext value>
     <DataProviderContext provider={provider}>
       <div className="toolbar" style={{ justifyContent: "space-between" }}>
         <Segmented label="Demo screen" value={screen} onChange={(v) => { setScreen(v as Screen); setJobId(null); }} options={[
@@ -101,5 +102,6 @@ export function DemoTour() {
         ) : null}
       </section>
     </DataProviderContext>
+    </ForceUtcContext>
   );
 }

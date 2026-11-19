@@ -25,7 +25,7 @@ export default function HomePage() {
             </div>
             <p className="hero-note" style={{ "--i": 3 } as React.CSSProperties}>At-least-once, not exactly-once: a handler can run twice, so side effects need to be idempotent. The engine guarantees only that the database never records a stale result.</p>
           </div>
-          <Reveal as="figure" className="plate" style={{ margin: 0 }}>
+          <figure className="plate hero-rise" style={{ margin: 0 }}>
             <div className="plate-h"><span>Fig. 1 · one job, two workers</span><span>Illustrative, scripted</span></div>
             <div className="tbl-wrap" role="region" tabIndex={0} aria-label="Scripted example ledger">
               <table className="ledger">
@@ -42,7 +42,7 @@ export default function HomePage() {
               </table>
             </div>
             <figcaption className="plate-f">Worker A went silent, B finished the job, and A&apos;s late report was fenced off. The handler ran twice; the record is still single and coherent.</figcaption>
-          </Reveal>
+          </figure>
         </div>
         <div className="wrap" aria-hidden="true"><hr className="tick-rule" style={{ marginTop: "var(--space-7)" }} /></div>
       </section>

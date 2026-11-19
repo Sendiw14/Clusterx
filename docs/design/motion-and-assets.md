@@ -89,3 +89,20 @@ Icon inventory by purpose (all in the sprite, all with accessible labels where m
 - UI: lock, copy, check, search, menu, close, chevrons (down, right, left), external, info, alert, refresh, plus, minus, play, pause, step, reset, up, down, list, graph, filter, signal-off, dot, pause-bar, clock, arrows.
 
 Rules: icons are decorative (`aria-hidden`) next to text; an icon-only control has an `aria-label`; no icon carries meaning alone. The mark has a title when used as a link target and `aria-hidden` inside the wordmark link that already has text.
+
+## 6. M7 addendum (public site, docs, demo)
+
+Status: implemented and tested on Chromium only. Source: TASK-M7-FE-01.
+
+| ID | Where | What shipped | Reduced-motion result |
+|---|---|---|---|
+| M-HERO | Home hero | Title block unchanged (stagger 60 ms). The "Fig. 1" ledger plate no longer waits for JavaScript: it uses the same CSS keyframe with a 240 ms delay (`.hero-rise`). The first M7 Lighthouse run showed the plate, inside a scroll-reveal wrapper, as the mobile LCP element (4.1 s, 411 ms render delay), which is why | `animation: none`, content visible at first paint |
+| M-SECTION | Home, architecture diagram | As specified (260 ms, once) | Final state at mount |
+| M-ATLAS-* | Home Atlas | Unchanged from M3. Auto-play once at 60 percent visible, never under reduced motion | Verified: no auto-play, Play toggles by keyboard |
+| (none) | Docs search popup, on-this-page highlight, copy button, docs menu drawer | No entrance animation. The current section marker changes instantly | n/a |
+| (none) | Architecture topology SVG | Static. It does not animate; it carries a title, description, a layer list and a connections table | n/a |
+| (none) | Demo recovery replay | Visitor-driven (Step, Show all, Reset). No timers, no auto-play, no animation | n/a |
+
+No scroll hijacking: a wheel event scrolls the document by the native amount (tested). No animation library was added.
+
+Asset inventory changes: the architecture diagram (`/architecture`) is now drawn as an inline SVG reusing the Atlas shapes (service block, chamfered worker, slotted store). The console preview image on `/` is still an HTML sample labelled "preview sample, not a capture of shipped software": a real capture is blocked until the console is connected to live data (M6).
