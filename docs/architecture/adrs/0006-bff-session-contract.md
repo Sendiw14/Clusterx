@@ -40,15 +40,18 @@ Go answers 401 `unauthenticated` with a machine-readable `details.reason`. The B
 | `assertion_invalid` | Bad signature / `kid` / `aud` / `iss` / replayed `jti` — a BFF or config fault, not the user's | **do not** end the session; log with request id | 502 `upstream_auth` (S-ERR with request_id); never a login redirect |
 | `token_*` | Direct API token problems | n/a (BFF never uses API tokens) | — |
 
-A 403 `forbidden` from Go is passed through as 403 (role changed or insufficient). The BFF then refreshes
-the session's effective role (see §5). **No login loop:** login is offered only for the first row group.
+A 403 `forbidden` from Go is passed through as 403 (role changed or insufficient). Go authorizes from
+`users.role` on every request, so role changes take effect on the next request. **Decision (2026-11-20, RV6B-02):**
+after a Go 403, and whenever `/bff/session` runs, the BFF calls `GET /me` and re-seals the cookie with the DB role
+so later assertions carry the current hint (no repeated `assertion.role_mismatch` audit rows). **No login loop:** login is offered only for the first row group.
 If a fresh login immediately produces `assertion_invalid` again, the UI still shows the 502 infrastructure
 error.
 
 ## 3. Browser ↔ BFF
 
 - Cookie `__Host-clusterx_session`: `Secure; HttpOnly; SameSite=Lax; Path=/`; value = an **authenticated-encrypted
-  (sealed) `{sid, uid, login, role, exp}` envelope** with a 1-byte key-version prefix, sealed by the BFF with keys derived from
+  (sealed) `{sid, uid, login, role, exp}` envelope** with a 1-byte key-version prefix (`login`, `role`, `exp` are display/assertion hints only, never authoritative; CSRF tokens
+  from the previous key version also verify during a rotation), sealed by the BFF with keys derived from
   `CLUSTERX_WEB_SESSION_KEY` (label-separated from the CSRF key). The `cxs_` session secret returned by
   `POST /sessions` is **not** stored in the cookie (Go authenticates BFF requests by assertion `sid`, not by the
   secret; Go keeps only its SHA-256). Regenerated at login (fixation defense); a still-valid previous session is
