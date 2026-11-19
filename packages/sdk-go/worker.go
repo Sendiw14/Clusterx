@@ -203,6 +203,7 @@ func (w *Worker) Run(ctx context.Context) error {
 	hb.Go(func() { w.heartbeatLoop(loopCtx, setFatal) })
 
 	var running sync.WaitGroup
+	coordinatorDrain := false
 	slots := make(chan struct{}, w.o.Capacity)
 	backoff := 100 * time.Millisecond
 claim:
@@ -226,8 +227,11 @@ claim:
 			}
 			switch reason := reasonOf(err); {
 			case reason == "worker_draining":
+				// Operator drain (REST): no new claims; running handlers continue until they finish or the
+				// coordinator's drain deadline denies their renewals (lease lost => handler canceled). Then
+				// the worker deregisters and Run returns nil (restarting it registers an active worker).
 				w.log.Info("coordinator is draining this worker; no new claims")
-				<-loopCtx.Done()
+				coordinatorDrain = true
 				break claim
 			case transient(err):
 				w.log.Warn("claim failed; retrying", "code", status.Code(err).String())
@@ -249,7 +253,10 @@ claim:
 		}
 	}
 
-	if fatal == nil {
+	if fatal == nil && coordinatorDrain {
+		running.Wait()
+		w.deregister()
+	} else if fatal == nil {
 		w.shutdown(&running, hardCancel)
 	} else {
 		running.Wait()
@@ -274,7 +281,11 @@ func (w *Worker) shutdown(running *sync.WaitGroup, hardCancel context.CancelCaus
 		hardCancel(ErrShutdown)
 		<-done
 	}
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	w.deregister()
+}
+
+func (w *Worker) deregister() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if r, err := w.c.Deregister(ctx, &workerv1.DeregisterRequest{Identity: w.id}); err != nil {
 		w.log.Warn("deregister failed", "code", status.Code(err).String())
