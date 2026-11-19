@@ -1,11 +1,10 @@
 import type { NextConfig } from "next";
 import { fileURLToPath } from "node:url";
-import { buildCsp } from "./src/lib/csp";
+import { STATIC_POLICY_SOURCE, buildCsp } from "./src/lib/csp";
 
 const isDev = process.env.NODE_ENV !== "production";
 
-/** Public pages are statically rendered, so they keep a static policy. The console, /login and /auth get a per-request nonce policy from `src/proxy.ts` instead (no second CSP header here). */
-const PUBLIC_ONLY = "/((?!app(?:/|$)|login(?:/|$)|auth(?:/|$)).*)";
+/** Public pages are statically rendered, so they keep a static policy. The console, /login and /auth (any letter case, any depth) get a per-request nonce policy from `src/proxy.ts` instead (no second CSP header here). */
 
 const baseHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -25,7 +24,7 @@ const config: NextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: baseHeaders },
-      { source: PUBLIC_ONLY, headers: [{ key: "Content-Security-Policy", value: buildCsp({ dev: isDev }) }] },
+      { source: STATIC_POLICY_SOURCE, headers: [{ key: "Content-Security-Policy", value: buildCsp({ dev: isDev }) }] },
       {
         source: "/app/:path*",
         headers: [
