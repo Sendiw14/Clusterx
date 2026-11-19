@@ -4,6 +4,18 @@ No version of CLUSTERX has been released. Nothing below is a release, a version 
 
 > [!NOTE] The tag `contract-m1-draft.4` marks an internal contract snapshot. It is not a release.
 
+### M6: operator console (merged 2026-11-19, commit 0a6642b)
+
+- The web console on live data: jobs list, detail, submit, cancel and retry, workers and drain, observability, activity, tokens and worker credentials, settings, and live updates that fall back to polling.
+- The Next.js server: GitHub sign-in (OAuth with PKCE), sealed session cookie, CSRF protection, signed service assertions, a server-side proxy and a WebSocket relay.
+- Live end-to-end tests against the real control plane and worker, with a mock OAuth server standing in for GitHub.
+
+### M5: sessions, mutations and reliability (merged 2026-11-19, commit 03d774e)
+
+- Browser sessions in the control plane, the mutating API (cancel, retry, drain, tokens and worker credentials), audit events, metrics, rate limits and a WebSocket stream of change hints.
+- Review fixes: database connection loss is reported as unavailable instead of an internal error; a drained worker stays drained until it deregisters (see [Worker SDK](/docs/workers)); strict assertion parsing; idempotency and retention fixes. Migrations 0003 and 0004. OpenAPI `1.0.0-draft.7`.
+- Local Docker Compose: secrets as files under `.secrets/`, a development key pair for the web server, an optional retention service, configurable ports and image prefix.
+
 ### M4: engine (merged 2026-11-18, commit 2633090)
 
 - Durable job admission: a job is acknowledged only after its transaction commits. Idempotent submission with `Idempotency-Key`.
@@ -28,10 +40,11 @@ No version of CLUSTERX has been released. Nothing below is a release, a version 
 
 ## Migration notes
 
-None. There is no released version to migrate from, so there are no upgrade steps and no compatibility promise. Database migrations are forward-only and numbered; migrations 0001 and 0002 exist.
+None. There is no released version to migrate from, so there are no upgrade steps and no compatibility promise. Database migrations are forward-only and numbered; migrations 0001 to 0004 exist.
 
 ## Not yet in this history
 
-- Browser sessions, GitHub sign-in and the authenticated web console (milestones M5 and M6) are not merged.
+- Real GitHub sign-in, TLS and production-mode cookies have not been run; the web console has only been tested against a mock OAuth server.
+- The independent review of the web layer found three medium issues; their fixes are not merged yet and are pending re-review.
 - Production deployment, backup and restore, and benchmarks (M8) are not done.
 - Workflow definitions are not part of 1.0.

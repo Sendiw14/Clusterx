@@ -6,7 +6,7 @@ blurb: Clean checkout to a first job and a three-worker local stack, with what w
 order: 1
 ---
 
-This quickstart starts a **local development stack**: PostgreSQL, the Go control plane and three example workers. It is not a production deployment, and it does not include the web console yet. You work with the REST API through `curl`.
+This quickstart starts a **local development stack**: PostgreSQL, the Go control plane and three example workers. It is not a production deployment, and the web console is not part of this compose stack (the console is built, but this guide does not run it). You work with the REST API through `curl`.
 
 > [!VERIFIED] On 2026-11-18 the integrator ran this flow on Colima: `./infra/compose/bootstrap.sh` exited 0 and left 3 live workers, and `POST /api/v1/jobs` with the `hash_sha256` and `fail_n_times` handlers succeeded.
 
@@ -16,7 +16,7 @@ This quickstart starts a **local development stack**: PostgreSQL, the Go control
 
 - Docker with the Compose plugin (Compose V2). The verified run used Colima on macOS.
 - A shell with `git`, `cp`, `curl` and `openssl`.
-- Free loopback ports: 8080 (REST API), 9091 (metrics) and 5432 (PostgreSQL, changeable with `CLUSTERX_PG_PORT` in `.env`). The compose file publishes them on 127.0.0.1 only.
+- Free loopback ports: 8080 (REST API), 9091 (metrics) and 5432 (PostgreSQL). Change them with `CLUSTERX_HTTP_PORT`, `CLUSTERX_METRICS_PORT` and `CLUSTERX_PG_PORT` in `.env`. The compose file publishes them on 127.0.0.1 only.
 - You do not need Go installed: the images are built by Compose.
 
 ## 1. Get the code and set three secrets
@@ -28,7 +28,7 @@ cp .env.example .env
 # fill the three empty values in .env, for example with: openssl rand -hex 24
 ```
 
-Open `.env` and set `POSTGRES_PASSWORD`, `CLUSTERX_APP_DB_PASSWORD` and `CLUSTERX_METRICS_TOKEN`. The compose file refuses to start if any of them is empty. Never commit a filled `.env`.
+Open `.env` and set `POSTGRES_PASSWORD`, `CLUSTERX_APP_DB_PASSWORD` and `CLUSTERX_METRICS_TOKEN`. The compose file refuses to start if any of them is empty. Never commit a filled `.env`. The optional keys `CLUSTERX_HTTP_PORT`, `CLUSTERX_METRICS_PORT` and `CLUSTERX_IMAGE_PREFIX` (image name prefix; set `COMPOSE_PROJECT_NAME` too to run a second, separate stack) can stay at their defaults.
 
 `<repository-url>` is a placeholder: use the address of the repository you cloned from.
 
@@ -40,15 +40,19 @@ Open `.env` and set `POSTGRES_PASSWORD`, `CLUSTERX_APP_DB_PASSWORD` and `CLUSTER
 
 The script, read from `infra/compose/bootstrap.sh`:
 
-1. Starts PostgreSQL and the control plane and waits until they are healthy. Migrations run as a separate one-shot service first.
-2. On the first run, creates **one operator token and three worker credentials** with the control plane's own CLI and writes them, once, to `infra/compose/.secrets.env` (gitignored, mode 0600). No default credentials exist.
-3. Starts three worker containers, `worker-1` to `worker-3`, each with its own credential.
+1. Writes the compose secrets as files under `infra/compose/.secrets/` (gitignored, directory mode 0700): the database passwords and URLs, the metrics token and a generated password for the retention login. Containers read them as files; the passwords are not in their environment.
+2. On the first run, generates a **development-only** key pair for the web server's service assertions (`.secrets/bff-dev-private.jwk.json`, mode 0600, and the public `bff-dev.jwks.json` that the control plane loads). Do not use it outside development.
+3. Starts PostgreSQL and the control plane and waits until they are healthy. Migrations run as a separate one-shot service first.
+4. On the first run, creates **one operator token and three worker credentials** with the control plane's own CLI and writes them, once, to `infra/compose/.secrets.env` (gitignored, mode 0600). No default credentials exist.
+5. Starts three worker containers, `worker-1` to `worker-3`, each with its own credential.
 
 ```text expected
 Ready: http://127.0.0.1:8080/health/ready — operator token is in infra/compose/.secrets.env
 ```
 
 > [!VERIFIED] Exit status 0 and three live workers, integrator, 2026-11-18. The line above is the script's final message.
+
+> [!NOTE] The database roles are created only when the PostgreSQL volume is first created, so a volume from a stack started before the retention login existed has no such login. The optional retention service (see [Deployment](/docs/deployment)) fails to authenticate there until the volume is recreated. The main services keep working.
 
 > [!NOTE] The workers talk to the control plane in plaintext (`CLUSTERX_WORKER_INSECURE=true`) because they share a private compose network. That is acceptable for local development and is not a production setting.
 
@@ -148,7 +152,7 @@ What *was* observed, in the M4 curl guide, using host binaries rather than conta
 | HTTP 403 `forbidden` | The token's role or scope does not allow the operation. Submitting jobs needs an operator token. |
 | HTTP 422 `validation_failed` | The handler or payload is invalid. `details.fields` lists each field as a JSON Pointer. Unknown fields are rejected on purpose. |
 | HTTP 404 `not_found_route` | The route is not served in this build. See the status column in the [API reference](/docs/api). |
-| Port already in use | Another process holds 8080, 9091 or 5432. Change `CLUSTERX_PG_PORT` for PostgreSQL; the other ports are fixed in the compose file. |
+| Port already in use | Another process holds 8080, 9091 or 5432. Change `CLUSTERX_HTTP_PORT`, `CLUSTERX_METRICS_PORT` or `CLUSTERX_PG_PORT` in `.env`. |
 
 Always quote the `request_id` from an error body when reporting a problem.
 

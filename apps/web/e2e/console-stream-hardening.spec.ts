@@ -39,9 +39,13 @@ test.describe("RV6-03 / RV6-08: the stream relay never leaks upstream sockets an
   test("six aborted and six malformed upgrades, then a working socket", async ({ page }) => {
     await openConsole(page, "viewer");
     const cookie = await cookieOf(page);
-    for (let i = 0; i < 6; i++) await aborted(cookie);
-    for (let i = 0; i < 6; i++) expect(await malformed(cookie)).toMatch(/^HTTP\/1\.1 400/);
-    await new Promise((r) => setTimeout(r, 800));
+    const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    await page.goto("about:blank"); // the open console holds one of the session's five slots itself
+    await pause(500);
+    // Slots are reserved before the dial and freed when the browser socket closes, so give each attempt time to settle.
+    for (let i = 0; i < 6; i++) { await aborted(cookie); await pause(250); }
+    for (let i = 0; i < 6; i++) { expect(await malformed(cookie)).toMatch(/^HTTP\/1\.1 400/); await pause(250); }
+    await pause(500);
     expect(await socket(cookie)).toBe("open");
     // The BFF is still serving HTTP afterwards (an unhandled upstream error would have killed the process).
     expect((await raw("GET", "/bff/session", { Cookie: cookie })).status).toBe(200);
