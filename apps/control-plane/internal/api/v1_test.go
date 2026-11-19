@@ -146,8 +146,8 @@ func TestV1AuthMatrix(t *testing.T) {
 		t.Fatalf("Allow: %q", rec.Header().Get("Allow"))
 	}
 	e.want(e.do("POST", "/health/live", "", ""), 405, "method_not_allowed")
-	// M5 routes are not served.
-	e.want(e.do("POST", "/api/v1/jobs/0193a0f2-7c1e-7a10-8000-0000000000a1/cancel", e.op, ""), 404, "not_found_route")
+	// M5: cancel is routed; an unknown job is 404 job_not_found.
+	e.want(e.do("POST", "/api/v1/jobs/0193a0f2-7c1e-7a10-8000-0000000000a1/cancel", e.op, ""), 404, "job_not_found")
 }
 
 func TestV1CreateValidationAndIdempotency(t *testing.T) {

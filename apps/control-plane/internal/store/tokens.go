@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -93,9 +94,30 @@ func (s *Store) RevokeAPIToken(ctx context.Context, id string) error {
 
 // Principal is an authenticated API caller.
 type Principal struct {
-	Ref    string // "token:<uuid>"
-	Role   string // effective role
+	Ref    string // "token:<uuid>" | "user:<uuid>"
+	Role   string // effective role (DB)
 	Scopes []string
+	// Kind is "token" (direct API token) or "session" (BFF service assertion).
+	Kind string
+	// TokenID is set for Kind "token".
+	TokenID string
+	// Session is set for Kind "session".
+	Session *Session
+	// Kid is the BFF key id of a session principal's assertion (audit).
+	Kid string
+	// TokenExpiresAt is the expiry of a token principal (nil = none).
+	TokenExpiresAt *time.Time
+}
+
+// RoleScopes are the scopes a role allows (session principals hold all of them).
+func RoleScopes(role string) []string {
+	var out []string
+	for _, s := range AllScopes {
+		if role == "operator" || strings.HasSuffix(s, ":read") {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // Has reports whether the principal holds scope.
@@ -109,8 +131,10 @@ func (s *Store) AuthenticateToken(ctx context.Context, secret string) (Principal
 	}
 	var id, role, status string
 	var scopes []string
-	err := s.Pool.QueryRow(ctx, `SELECT token_id, effective_role, effective_scopes, status FROM api_token_authority WHERE secret_hash = $1`,
-		HashSecret(secret)).Scan(&id, &role, &scopes, &status)
+	var exp *time.Time
+	err := s.Pool.QueryRow(ctx, `SELECT a.token_id, a.effective_role, a.effective_scopes, a.status, t.expires_at
+		FROM api_token_authority a JOIN api_tokens t ON t.id = a.token_id WHERE a.secret_hash = $1`,
+		HashSecret(secret)).Scan(&id, &role, &scopes, &status, &exp)
 	if isNoRows(err) {
 		return Principal{}, deny("token_invalid")
 	}
@@ -123,7 +147,7 @@ func (s *Store) AuthenticateToken(ctx context.Context, secret string) (Principal
 	// Usage bump, throttled, in its own statement (ADR-0005: asynchronous, never in a mutation tx).
 	_, _ = s.Pool.Exec(ctx, `UPDATE api_tokens SET last_used_at = now() WHERE id = $1
 		AND (last_used_at IS NULL OR last_used_at < now() - interval '60 seconds')`, id)
-	return Principal{Ref: "token:" + id, Role: role, Scopes: scopes}, nil
+	return Principal{Ref: "token:" + id, Role: role, Scopes: scopes, Kind: "token", TokenID: id, TokenExpiresAt: exp}, nil
 }
 
 // ErrPrivilegedRuntime is returned when the runtime connection can run DDL (NF-04).
@@ -142,4 +166,23 @@ func (s *Store) CheckRuntimePrivileges(ctx context.Context) error {
 		return ErrPrivilegedRuntime
 	}
 	return nil
+}
+
+// TokenAuthority re-reads a token's current authority by id (stream re-validation, RV01-13), with the
+// same denial reasons as AuthenticateToken.
+func (s *Store) TokenAuthority(ctx context.Context, tokenID string) (Principal, error) {
+	var role, status string
+	var scopes []string
+	err := s.Pool.QueryRow(ctx, `SELECT effective_role, effective_scopes, status FROM api_token_authority WHERE token_id = $1`,
+		tokenID).Scan(&role, &scopes, &status)
+	if isNoRows(err) {
+		return Principal{}, deny("token_invalid")
+	}
+	if err != nil {
+		return Principal{}, classifyDBError(err)
+	}
+	if status != "ok" {
+		return Principal{}, deny(status)
+	}
+	return Principal{Ref: "token:" + tokenID, Role: role, Scopes: scopes, Kind: "token", TokenID: tokenID}, nil
 }

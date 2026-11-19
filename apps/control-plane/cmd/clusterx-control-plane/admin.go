@@ -64,6 +64,32 @@ func runAdmin(ctx context.Context, cfg config.Config, args []string, out io.Writ
 		}
 		fmt.Fprintf(out, "id=%s\nprefix=%s\nexpires_at=%s\nsecret=%s\n# The secret is shown once and cannot be recovered.\n", c.ID, c.Prefix, exp, c.Secret)
 		return nil
+	case "user upsert":
+		gh := fs.Int64("github-id", 0, "numeric GitHub user id to allowlist")
+		login := fs.String("login", "", "GitHub login (display only)")
+		role := fs.String("role", "", "operator | viewer")
+		if err := fs.Parse(args[2:]); err != nil {
+			return err
+		}
+		if *gh <= 0 || len(*login) < 1 || len(*login) > 39 || (*role != "operator" && *role != "viewer") {
+			return fmt.Errorf("user upsert needs --github-id > 0, --login (1..39) and --role operator|viewer")
+		}
+		id, err := st.UpsertUser(ctx, *gh, *login, *role)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "user_id=%s\nrole=%s\n", id, *role)
+		return nil
+	case "user disable", "user enable":
+		gh := fs.Int64("github-id", 0, "numeric GitHub user id")
+		if err := fs.Parse(args[2:]); err != nil {
+			return err
+		}
+		if err := st.SetUserDisabled(ctx, *gh, args[1] == "disable"); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "%sd=%d\n", args[1], *gh)
+		return nil
 	case "token revoke", "worker-credential revoke":
 		id := fs.String("id", "", "id to revoke")
 		if err := fs.Parse(args[2:]); err != nil {

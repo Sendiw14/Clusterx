@@ -51,6 +51,17 @@ type Config struct {
 	LogLevel        slog.Level
 	ShutdownTimeout time.Duration
 	Timing          Timing
+
+	// M5 (TASK-M5-BE-01)
+	BFFJWKSFile       string        // Ed25519 public keys (JWKS) of the BFF; empty = assertions rejected
+	SessionIdle       time.Duration // idle timeout (ADR-0006 §3)
+	SessionAbsolute   time.Duration // absolute session lifetime
+	StreamOrigins     []string      // WebSocket Origin allowlist (empty: only Origin-less server clients)
+	RateMutations     float64       // per principal per second (burst 2x); 0 disables
+	RateAuthFailures  float64       // failed authentications per TCP peer per minute (burst = value)
+	RateLogins        float64       // session creations per GitHub id per minute (burst = value)
+	RetentionURL      string        // clusterx_retention member DSN; enables the retention loop/command
+	RetentionInterval time.Duration // 0 = no in-process loop (run `retention run` from cron instead)
 }
 
 // Timing is the ADR-0003 timing configuration, validated against its documented bounds.
@@ -88,6 +99,16 @@ const (
 	VarGRPCTLSKey      = "CLUSTERX_GRPC_TLS_KEY_FILE"
 	VarLogLevel        = "CLUSTERX_LOG_LEVEL"
 	VarShutdownTimeout = "CLUSTERX_SHUTDOWN_TIMEOUT"
+
+	VarBFFJWKSFile       = "CLUSTERX_BFF_JWKS_FILE"
+	VarSessionIdle       = "CLUSTERX_SESSION_IDLE_TIMEOUT"
+	VarSessionAbsolute   = "CLUSTERX_SESSION_ABSOLUTE_TTL"
+	VarStreamOrigins     = "CLUSTERX_STREAM_ALLOWED_ORIGINS"
+	VarRateMutations     = "CLUSTERX_RATE_MUTATIONS_PER_SECOND"
+	VarRateAuthFailures  = "CLUSTERX_RATE_AUTH_FAILURES_PER_MINUTE"
+	VarRateLogins        = "CLUSTERX_RATE_LOGINS_PER_MINUTE"
+	VarRetentionURL      = "CLUSTERX_RETENTION_DATABASE_URL"
+	VarRetentionInterval = "CLUSTERX_RETENTION_INTERVAL"
 )
 
 // knownDefaults are placeholder secrets from examples and tutorials; production refuses them.
@@ -242,6 +263,52 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 	}
 	if c.Timing.BackoffCap < c.Timing.BackoffBase {
 		fail("%s must be >= %s", VarBackoffCap, VarBackoffBase)
+	}
+
+	c.BFFJWKSFile = get(VarBFFJWKSFile)
+	c.SessionIdle = dur(VarSessionIdle, 2*time.Hour, time.Minute, 24*time.Hour)
+	c.SessionAbsolute = dur(VarSessionAbsolute, 12*time.Hour, time.Hour, 7*24*time.Hour)
+	if c.SessionAbsolute < c.SessionIdle {
+		fail("%s must be >= %s", VarSessionAbsolute, VarSessionIdle)
+	}
+	for _, o := range strings.Split(get(VarStreamOrigins), ",") {
+		if o = strings.TrimSpace(o); o == "" {
+			continue
+		}
+		if !strings.HasPrefix(o, "https://") && !(strings.HasPrefix(o, "http://") && !prod) || strings.HasSuffix(o, "/") {
+			fail("%s entries must be scheme://host[:port] origins (https in production), got %q", VarStreamOrigins, o)
+		}
+		c.StreamOrigins = append(c.StreamOrigins, o)
+	}
+	num := func(k string, def, lo, hi float64) float64 {
+		v := get(k)
+		if v == "" {
+			return def
+		}
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil || f < lo || f > hi {
+			fail("%s must be a number between %g and %g, got %q", k, lo, hi, v)
+			return def
+		}
+		return f
+	}
+	c.RateMutations = num(VarRateMutations, 20, 0, 10000)
+	c.RateAuthFailures = num(VarRateAuthFailures, 60, 1, 100000)
+	c.RateLogins = num(VarRateLogins, 10, 1, 1000)
+	c.RetentionURL = get(VarRetentionURL)
+	if c.RetentionURL != "" {
+		if pc, err := pgconn.ParseConfig(c.RetentionURL); err != nil {
+			fail("%s is not a valid PostgreSQL connection string", VarRetentionURL)
+		} else if prod && isKnownDefault(pc.Password) {
+			fail("%s uses a default/example password; set a generated secret in production", VarRetentionURL)
+		}
+	}
+	c.RetentionInterval = dur(VarRetentionInterval, 0, 0, 24*time.Hour)
+	if c.RetentionInterval > 0 && c.RetentionInterval < time.Minute {
+		fail("%s must be 0 (off) or at least 1m", VarRetentionInterval)
+	}
+	if c.RetentionInterval > 0 && c.RetentionURL == "" {
+		fail("%s requires %s (a clusterx_retention member)", VarRetentionInterval, VarRetentionURL)
 	}
 
 	if err := errors.Join(errs...); err != nil {

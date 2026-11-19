@@ -9,6 +9,11 @@
 //	clusterx-control-plane token revoke --id UUID
 //	clusterx-control-plane worker-credential create --name NAME [--expires-in-days 0]
 //	clusterx-control-plane worker-credential revoke --id UUID
+//	clusterx-control-plane user upsert --github-id N --login LOGIN --role operator|viewer
+//	clusterx-control-plane user disable|enable --github-id N
+//	clusterx-control-plane retention run               # one bounded retention pass (CLUSTERX_RETENTION_DATABASE_URL)
+//	clusterx-control-plane dev-keygen --out-dir DIR    # development only: BFF key pair (private JWK + public JWKS)
+//	clusterx-control-plane dev-assertion --key-file F --login|--sub user:<uuid> --sid <uuid> ...  # development only
 //
 // The create commands print the secret once on stdout; only its SHA-256 is stored. There are no
 // default credentials.
@@ -37,6 +42,7 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/Sendiw14/Clusterx/apps/control-plane/internal/api"
+	"github.com/Sendiw14/Clusterx/apps/control-plane/internal/auth"
 	"github.com/Sendiw14/Clusterx/apps/control-plane/internal/catalog"
 	"github.com/Sendiw14/Clusterx/apps/control-plane/internal/config"
 	"github.com/Sendiw14/Clusterx/apps/control-plane/internal/migrate"
@@ -82,10 +88,14 @@ func run(args []string) error {
 		return runMigrations(ctx, cfg, migs, log)
 	case len(args) == 0 || (len(args) == 1 && args[0] == "serve"):
 		return serve(ctx, cfg, migs, log)
-	case len(args) >= 2 && (args[0] == "token" || args[0] == "worker-credential"):
+	case len(args) >= 2 && (args[0] == "token" || args[0] == "worker-credential" || args[0] == "user"):
 		return runAdmin(ctx, cfg, args, os.Stdout)
+	case len(args) >= 1 && (args[0] == "dev-keygen" || args[0] == "dev-assertion"):
+		return runDev(cfg, args, os.Stdout)
+	case len(args) >= 2 && args[0] == "retention" && args[1] == "run":
+		return runRetentionOnce(ctx, cfg, log, os.Stdout)
 	default:
-		return fmt.Errorf("usage: clusterx-control-plane [serve|migrate|token create|token revoke|worker-credential create|worker-credential revoke]")
+		return fmt.Errorf("usage: clusterx-control-plane [serve|migrate|token create|token revoke|worker-credential create|worker-credential revoke|user upsert|user disable|user enable|retention run|dev-keygen|dev-assertion]")
 	}
 }
 
@@ -142,9 +152,21 @@ func serve(ctx context.Context, cfg config.Config, migs []migrate.Migration, log
 			log.Warn("could not verify runtime role privileges at start-up", "err", err)
 		}
 	}
+	verifier, err := loadVerifier(cfg, log)
+	if err != nil {
+		return err
+	}
+	hub := api.NewHub(log)
 	v1 := &api.V1{Store: st, Catalog: cat, Environment: string(cfg.Env), Version: version, Commit: commit, Log: log,
 		Timing: api.ConfigTiming{HeartbeatInterval: cfg.Timing.HeartbeatInterval, LivenessTimeout: cfg.Timing.LivenessTimeout,
-			LeaseTTL: cfg.Timing.LeaseTTL, CancelGrace: cfg.Timing.CancelGrace, DrainGrace: cfg.Timing.DrainGrace}}
+			LeaseTTL: cfg.Timing.LeaseTTL, CancelGrace: cfg.Timing.CancelGrace, DrainGrace: cfg.Timing.DrainGrace},
+		Verifier: verifier, Sessions: store.SessionTiming{Absolute: cfg.SessionAbsolute, Idle: cfg.SessionIdle},
+		Mutations:     rateLimiter(cfg.RateMutations, 2*cfg.RateMutations),
+		AuthFailures:  rateLimiter(cfg.RateAuthFailures/60, cfg.RateAuthFailures),
+		Logins:        rateLimiter(cfg.RateLogins/60, cfg.RateLogins),
+		Hub:           hub,
+		StreamOrigins: cfg.StreamOrigins,
+	}
 	apiSrv := newHTTPServer(cfg.HTTPAddr, api.NewHandler(api.DBReadiness(pool, migs), log, httpMetrics, v1), httpTLS, log)
 	metricsSrv := newHTTPServer(cfg.MetricsAddr, api.NewMetricsHandler(reg, cfg.MetricsToken, log, httpMetrics), httpTLS, log)
 	var creds credentials.TransportCredentials
@@ -173,6 +195,10 @@ func serve(ctx context.Context, cfg config.Config, migs []migrate.Migration, log
 	schedCtx, stopSched := context.WithCancel(ctx)
 	defer stopSched()
 	go scheduler.Run(schedCtx, st, cfg.Timing.SchedulerTick, log)
+	go (&api.Feed{Pool: pool, Hub: hub, Log: log}).Run(schedCtx)
+	if cfg.RetentionInterval > 0 {
+		go runRetentionLoop(schedCtx, cfg, log)
+	}
 
 	errc := make(chan error, 3)
 	go func() { errc <- serveHTTP(apiSrv, apiLn) }()
@@ -189,6 +215,7 @@ func serve(ctx context.Context, cfg config.Config, migs []migrate.Migration, log
 		log.Error("listener failed", "err", runErr)
 	}
 	stopSched()
+	hub.Close() // open streams close 1001 (going away); clients reconnect and resync
 	shutdown(cfg.ShutdownTimeout, log, pool, grpcSrv, apiSrv, metricsSrv)
 	return runErr
 }
@@ -277,4 +304,30 @@ func newLogger(level slog.Level) *slog.Logger {
 			return a
 		},
 	}))
+}
+
+// loadVerifier reads the BFF public keys. Without CLUSTERX_BFF_JWKS_FILE every service assertion is
+// rejected (direct API tokens still work), which is logged at start-up.
+func loadVerifier(cfg config.Config, log *slog.Logger) (*auth.Verifier, error) {
+	if cfg.BFFJWKSFile == "" {
+		log.Warn("no BFF assertion keys configured; console sessions are disabled", "var", config.VarBFFJWKSFile)
+		return auth.NewVerifier(nil), nil
+	}
+	keys, err := auth.LoadJWKSFile(cfg.BFFJWKSFile)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", config.VarBFFJWKSFile, err)
+	}
+	kids := make([]string, 0, len(keys))
+	for k := range keys {
+		kids = append(kids, k)
+	}
+	log.Info("BFF assertion keys loaded", "kids", kids)
+	return auth.NewVerifier(keys), nil
+}
+
+func rateLimiter(rate, burst float64) *api.Limiter {
+	if rate <= 0 {
+		return nil
+	}
+	return api.NewLimiter(rate, max(burst, 1))
 }
