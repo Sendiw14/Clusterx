@@ -22,12 +22,12 @@ export function writeAxeEvidence() {
   const sorted = all.sort((a, b) => a.route.localeCompare(b.route) || a.width - b.width);
   const tot = (k: "critical" | "serious" | "moderate" | "minor") => sorted.reduce((n, r) => n + r[k], 0);
   const lines = [
-    "# axe-core results, M7 public site, docs and demo (includes the M3 route shells)",
+    "# axe-core results, M6 (live console on real data) and the public site, docs and demo",
     "",
     "Run by `pnpm --filter web e2e` (Playwright Chromium, `@axe-core/playwright`, tags wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa).",
     "Automated checks cover only part of WCAG: no conformance is claimed (manual screen-reader and keyboard walkthroughs are NOT RUN).",
     "",
-    `Scans: ${sorted.length} (all 24 routes at 320 and 1440, public pages at 390 and 1024, demo screens in both views including the recovery replay, docs search popup open, open mobile menu). Totals: critical ${tot("critical")}, serious ${tot("serious")}, moderate ${tot("moderate")}, minor ${tot("minor")}.`,
+    `Scans: ${sorted.length} (public routes and demo as in M7; every console route on live data as operator at 1440 and 320 and as viewer at 1440 and 390, job detail succeeded and failed, worker detail, the forbidden state, and the retry, create-token, one-time-reveal and jump-to dialogs open). Totals: critical ${tot("critical")}, serious ${tot("serious")}, moderate ${tot("moderate")}, minor ${tot("minor")}.`,
     "",
     "| Scan | Width | Critical | Serious | Moderate | Minor | Rules (nodes) |",
     "|---|---|---|---|---|---|---|",
@@ -35,6 +35,6 @@ export function writeAxeEvidence() {
     "",
   ];
   mkdirSync(EVIDENCE, { recursive: true });
-  writeFileSync(resolve(EVIDENCE, "axe-m7.md"), lines.join("\n"));
-  writeFileSync(resolve(EVIDENCE, "axe-m7.json"), JSON.stringify(sorted, null, 2) + "\n");
+  writeFileSync(resolve(EVIDENCE, "axe-m6.md"), lines.join("\n"));
+  writeFileSync(resolve(EVIDENCE, "axe-m6.json"), JSON.stringify(sorted, null, 2) + "\n");
 }

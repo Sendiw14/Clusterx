@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@clusterx/ui";
-import { Forbidden, Pending } from "@/features/console-views";
+import { Forbidden, NewJobConsole } from "@/features/console-views";
 import { getSession, roleOf } from "@/lib/session";
 
 export const metadata: Metadata = { title: "New job: Console" };
@@ -10,7 +10,7 @@ export default async function Page() {
   return (
     <>
       <PageHeader title="New job" lead="Submit a job to an allowlisted handler." />
-      {role === "viewer" ? <Forbidden role="operator" /> : <Pending what="The submit form" />}
+      {role === "viewer" ? <Forbidden role="operator" /> : <NewJobConsole />}
     </>
   );
 }

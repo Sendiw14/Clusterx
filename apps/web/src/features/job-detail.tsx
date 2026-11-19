@@ -1,10 +1,11 @@
 "use client";
-import type { ReactNode } from "react";
+import { useCallback, type ReactNode } from "react";
 import { Card, CopyButton, DefinitionList, MaskedField, Notice, ReasonChip, StatusBadge, Timestamp } from "@clusterx/ui";
 import { useDataProvider } from "@/data/context";
 import type { Attempt, Job, JobEvent } from "@/data/provider";
+import { JobActions } from "./job-actions";
 import { Load, reasonLabel } from "./common";
-import { useResource } from "./use-resource";
+import { useResource, type LiveMatch } from "./use-resource";
 
 const json = (v: unknown) => JSON.stringify(v, null, 2);
 
@@ -14,7 +15,7 @@ function MaybeJson({ value, masked, empty }: { value: unknown; masked: boolean; 
   return <pre className="jsonblock" tabIndex={0} aria-label="JSON value">{json(value)}</pre>;
 }
 
-function AttemptCard({ a }: { a: Attempt }) {
+function AttemptCard({ a, workerLink }: { a: Attempt; workerLink?: (id: string) => ReactNode }) {
   const logMasked = a.masked_fields.includes("log_tail");
   const errMasked = a.masked_fields.includes("error_message");
   return (
@@ -28,7 +29,7 @@ function AttemptCard({ a }: { a: Attempt }) {
       <div>
         <DefinitionList
           items={[
-            { term: "Worker", value: <span className="mono">{a.worker_id}</span> },
+            { term: "Worker", value: workerLink ? workerLink(a.worker_id) : <span className="mono">{a.worker_id}</span> },
             { term: "Started", value: <Timestamp value={a.started_at} /> },
             { term: "Finished", value: a.finished_at ? <Timestamp value={a.finished_at} /> : <span className="meta">Not finished</span> },
             { term: "Error", value: errMasked ? <MaskedField /> : a.error_message ? a.error_message : <span className="meta">None</span> },
@@ -52,6 +53,7 @@ function Timeline({ events }: { events: JobEvent[] }) {
         <li key={e.version} data-kind={e.to_status === "succeeded" ? "ok" : e.to_status === "failed" ? "bad" : e.event_type === "lease_expired" ? "warn" : undefined}>
           <span className="t"><span className="badge">v{e.version}</span> <Timestamp value={e.occurred_at} /></span>
           <p><strong>{e.event_type.replace(/_/g, " ")}</strong> → {e.to_status.replace("_", " ")} <span className="meta">by {e.actor}</span></p>
+          {e.data ? <p className="meta">{Object.entries(e.data).map(([k, v]) => `${k.replace(/_/g, " ")}: ${String(v)}`).join(" · ")}</p> : null}
         </li>
       ))}
     </ol>
@@ -60,20 +62,24 @@ function Timeline({ events }: { events: JobEvent[] }) {
 
 /** Job detail: status, fields subject to viewer masking, attempts, event timeline. Cancel and retry are not wired yet, so they are absent. */
 export function JobDetailView({ id, workerLink, jobLink, retriedAs }: { id: string; workerLink?: (id: string) => ReactNode; jobLink?: (j: { id: string }) => ReactNode; retriedAs?: string | null }) {
-  void workerLink;
   const provider = useDataProvider();
-  const job = useResource(() => provider.getJob(id), `job-${id}-${provider.kind}`);
-  const attempts = useResource(() => provider.listAttempts(id), `att-${id}-${provider.kind}`);
-  const events = useResource(() => provider.listJobEvents(id), `ev-${id}-${provider.kind}`);
+  // A hint for this job refetches when it names a newer version than the snapshot on screen (AC-16: hints never carry data).
+  const jobMatch = useCallback<LiveMatch<Job>>((e, cur) => e.entity === "job" && e.id === id && e.version > cur.version, [id]);
+  const anyMatch = useCallback<LiveMatch<unknown>>((e) => e.entity === "job" && e.id === id, [id]);
+  const job = useResource(() => provider.getJob(id), `job-${id}-${provider.kind}`, jobMatch);
+  const attempts = useResource(() => provider.listAttempts(id), `att-${id}-${provider.kind}`, anyMatch);
+  const events = useResource(() => provider.listJobEvents(id), `ev-${id}-${provider.kind}`, anyMatch);
+  const reloadAll = () => { job.reload(); attempts.reload(); events.reload(); };
 
   return (
     <>
       <Card>
         <div className="card-h"><h2>Job</h2>{job.state === "ok" ? <CopyButton text={job.data.id} label="Copy ID" ariaLabel="Copy ID of this job" /> : null}</div>
         <div className="card-pad">
-          <Load res={job} rows={3} label="Loading job" errorHeading={job.state === "error" && job.error.code === "job_not_found" ? "No job with that ID" : "The job could not be loaded"}>
+          <Load res={job} rows={3} label="Loading job" errorHeading={job.state === "error" && job.error.code === "job_not_found" ? "No job with that ID" : job.state === "error" && job.error.code === "expired" ? "This job expired by retention" : "The job could not be loaded"}>
             {(j: Job) => (
               <>
+                {provider.kind === "live" ? <JobActions job={j} onChanged={reloadAll} /> : null}
                 {j.status === "queued" && j.unschedulable_reason ? <div style={{ marginBottom: "var(--space-3)" }}><Notice variant="warning" lead={reasonLabel(j.unschedulable_reason)}>This job is queued but no worker can take it right now. This is a reason, not a state.</Notice></div> : null}
                 <DefinitionList
                   items={[
@@ -86,8 +92,14 @@ export function JobDetailView({ id, workerLink, jobLink, retriedAs }: { id: stri
                     { term: "Updated", value: <Timestamp value={j.updated_at} /> },
                     { term: "Version", value: <span className="mono">{j.version}</span> },
                     { term: "Failure class", value: j.failure_class ?? <span className="meta">None</span> },
+                    ...(j.status === "running" || j.lease_expires_at ? [
+                      { term: "Lease expires", value: j.lease_expires_at ? <><Timestamp value={j.lease_expires_at} /> <span className="meta">(as of <Timestamp value={j.as_of} />)</span></> : <span className="meta">No lease</span> },
+                      { term: "Lease generation", value: <span className="mono">{j.lease_generation ?? 0}</span> },
+                      { term: "Hard deadline", value: j.hard_deadline_at ? <Timestamp value={j.hard_deadline_at} /> : <span className="meta">None</span> },
+                    ] : []),
+                    ...(j.cancel_requested_at ? [{ term: "Cancel requested", value: <Timestamp value={j.cancel_requested_at} /> }] : []),
                     { term: "Retried from", value: j.retried_from_job_id ? (jobLink ? jobLink({ id: j.retried_from_job_id }) : <span className="mono">{j.retried_from_job_id}</span>) : <span className="meta">Not a retry</span> },
-                    ...(j.status === "failed" ? [{ term: "Retried as", value: retriedAs ? (jobLink ? jobLink({ id: retriedAs }) : <span className="mono">{retriedAs}</span>) : <span className="meta">No retry job</span> }] : []),
+                    ...(j.status === "failed" ? [{ term: "Retried as", value: (retriedAs ?? j.retried_as_job_id) ? (jobLink ? jobLink({ id: (retriedAs ?? j.retried_as_job_id) as string }) : <span className="mono">{retriedAs ?? j.retried_as_job_id}</span>) : <span className="meta">No retry job</span> }] : []),
                   ]}
                 />
                 <h3 style={{ margin: "var(--space-5) 0 var(--space-2)", fontSize: "var(--text-ui-lg)" }}>Payload</h3>
@@ -105,7 +117,7 @@ export function JobDetailView({ id, workerLink, jobLink, retriedAs }: { id: stri
         <div className="card-h"><h2>Attempts</h2></div>
         <div className="card-pad">
           <Load res={attempts} rows={2} label="Loading attempts" errorHeading="Attempts could not be loaded">
-            {(a) => (a.items.length ? <>{a.items.map((x) => <AttemptCard key={x.id} a={x} />)}</> : <p className="muted">No attempts yet.</p>)}
+            {(a) => (a.items.length ? <>{a.items.map((x) => <AttemptCard key={x.id} a={x} workerLink={workerLink} />)}</> : <p className="muted">No attempts yet.</p>)}
           </Load>
         </div>
       </Card>

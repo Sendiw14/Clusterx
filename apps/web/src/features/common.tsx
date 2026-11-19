@@ -19,4 +19,5 @@ const REASONS: Record<string, string> = {
 };
 export const reasonLabel = (r: string): string => REASONS[r] ?? r;
 
-export const shortId = (id: string) => (id.startsWith("demo-") ? id : id.slice(0, 8));
+/** UUIDv7 ids share their leading digits (a timestamp), so the tail is what tells jobs apart. */
+export const shortId = (id: string) => (id.startsWith("demo-") ? id : id.slice(-8));

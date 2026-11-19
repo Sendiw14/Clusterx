@@ -3,7 +3,7 @@ import { expect, type Page } from "@playwright/test";
 import { recordAxe, type AxeRecord } from "./axe-report";
 
 export const PUBLIC_ROUTES = ["/", "/architecture", "/docs", "/docs/quickstart", "/docs/concepts", "/docs/api", "/docs/workers", "/docs/reliability", "/docs/deployment", "/docs/security", "/changelog", "/login", "/demo"];
-export const CONSOLE_ROUTES = ["/app", "/app/jobs", "/app/jobs/new", "/app/jobs/demo-job-0001", "/app/workers", "/app/workers/demo-worker-1", "/app/observability", "/app/activity", "/app/settings", "/app/settings/tokens", "/app/settings/preferences"];
+export const CONSOLE_ROUTES = ["/app", "/app/jobs", "/app/jobs/new", "/app/workers", "/app/observability", "/app/activity", "/app/settings", "/app/settings/tokens", "/app/settings/preferences"];
 export const ALL_ROUTES = [...PUBLIC_ROUTES, ...CONSOLE_ROUTES];
 export const GATED_ROUTES = ["/app/workflows", "/app/workflows/x", "/app/workflow-runs/x"];
 

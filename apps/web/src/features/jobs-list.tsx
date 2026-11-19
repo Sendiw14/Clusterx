@@ -1,17 +1,32 @@
 "use client";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button, DataTable, EmptyState, FilterChip, Icon, Pagination, ReasonChip, Select, StatusBadge, TextInput, Timestamp, JOB_STATES, Notice, useOnline, type Column } from "@clusterx/ui";
 import { useDataProvider } from "@/data/context";
-import type { JobQuery, JobStatus, JobSummary } from "@/data/provider";
+import { useRealtime } from "@/data/realtime";
+import type { JobQuery, JobSort, JobStatus, JobSummary, UnschedulableReason } from "@/data/provider";
 import { Load, reasonLabel } from "./common";
 import { useResource } from "./use-resource";
 
-export interface JobFilters { status?: JobStatus; handler?: string; priorityMin?: number }
+export interface JobFilters { status?: JobStatus; handler?: string; priorityMin?: number; reason?: UnschedulableReason; sort?: JobSort }
 
+export const SORTS: { value: JobSort; label: string }[] = [
+  { value: "-created_at", label: "Newest first" },
+  { value: "created_at", label: "Oldest first" },
+  { value: "-available_at", label: "Next eligible, latest first" },
+  { value: "available_at", label: "Next eligible, soonest first" },
+  { value: "-priority", label: "Claim order (priority)" },
+];
+export const REASONS: { value: UnschedulableReason; label: string }[] = [
+  { value: "no_capable_worker", label: "No capable worker" },
+  { value: "capable_workers_offline", label: "Capable workers offline" },
+  { value: "capable_workers_draining", label: "Capable workers draining" },
+];
+
+const NEVER = () => false;
 const STATUS_LABEL: Record<JobStatus, string> = { scheduled: "Scheduled", queued: "Queued", running: "Running", retry_wait: "Retry wait", succeeded: "Succeeded", failed: "Failed", canceled: "Canceled" };
 
 export function filtersToQuery(f: JobFilters): JobQuery {
-  return { status: f.status ? [f.status] : undefined, handler_name: f.handler || undefined, priority_min: f.priorityMin };
+  return { status: f.status ? [f.status] : undefined, handler_name: f.handler || undefined, priority_min: f.priorityMin, unschedulable_reason: f.reason ? [f.reason] : undefined, sort: f.sort };
 }
 
 /**
@@ -24,13 +39,19 @@ export function JobsListView({ filters, onFilters, jobLink, headingLevel = 2 }: 
   const [stack, setStack] = useState<string[]>([]);
   const cursor = stack.at(-1);
   const key = JSON.stringify([filters, cursor, provider.kind]);
-  const res = useResource(() => provider.listJobs({ ...filtersToQuery(filters), cursor, limit: 50 }), key);
+  const res = useResource(() => provider.listJobs({ ...filtersToQuery(filters), cursor, limit: 50 }), key, NEVER);
   const H = `h${headingLevel}` as "h2" | "h3";
+  const live = provider.kind === "live";
+  // Rows never reorder under the reader: job hints only flag that a refresh is worth it. Resync and polling refetch.
+  const rt = useRealtime();
+  const [dirty, setDirty] = useState(false);
+  useEffect(() => rt?.subscribe((e) => { if (e.type === "hint" && e.entity === "job") setDirty(true); }), [rt]);
 
   const active = useMemo(() => {
     const chips: { id: string; label: string; remove: () => void }[] = [];
     if (filters.status) chips.push({ id: "status", label: `Status: ${STATUS_LABEL[filters.status]}`, remove: () => change({ ...filters, status: undefined }) });
     if (filters.handler) chips.push({ id: "handler", label: `Handler: ${filters.handler}`, remove: () => change({ ...filters, handler: undefined }) });
+    if (filters.reason) chips.push({ id: "reason", label: `Reason: ${REASONS.find((r) => r.value === filters.reason)?.label ?? filters.reason}`, remove: () => change({ ...filters, reason: undefined }) });
     if (filters.priorityMin !== undefined) chips.push({ id: "priority", label: `Priority ${filters.priorityMin} or higher`, remove: () => change({ ...filters, priorityMin: undefined }) });
     return chips;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -64,6 +85,17 @@ export function JobsListView({ filters, onFilters, jobLink, headingLevel = 2 }: 
               <option value="">0 (any)</option>
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((p) => <option key={p} value={p}>{p === 9 ? "9 (highest)" : `${p} or higher`}</option>)}
             </Select>
+            {live ? (
+              <Select label="Unschedulable reason" help="Queued jobs no worker can take" value={filters.reason ?? ""} onChange={(e) => change({ ...filters, reason: (e.target.value || undefined) as UnschedulableReason | undefined })}>
+                <option value="">Any</option>
+                {REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </Select>
+            ) : null}
+            {live ? (
+              <Select label="Sort" value={filters.sort ?? "-created_at"} onChange={(e) => change({ ...filters, sort: e.target.value === "-created_at" ? undefined : (e.target.value as JobSort) })}>
+                {SORTS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </Select>
+            ) : null}
             <div className="field">
               <span className="label">Dead-letter view</span>
               <button type="button" className="btn" aria-pressed={filters.status === "failed"} onClick={() => change({ ...filters, status: filters.status === "failed" ? undefined : "failed" })}>
@@ -82,6 +114,7 @@ export function JobsListView({ filters, onFilters, jobLink, headingLevel = 2 }: 
 
       <section className="card sect" aria-labelledby="jl-h" style={{ marginTop: "var(--space-4)" }}>
         <H id="jl-h" className="sr-only">Jobs list</H>
+        {dirty ? <div style={{ padding: "var(--space-3) var(--space-4)" }}><Notice variant="info" lead="Jobs changed." actions={<Button size="sm" onClick={() => { setDirty(false); res.reload(); }}>Refresh list</Button>}>The list keeps its order until you refresh it.</Notice></div> : null}
         {!online ? <div style={{ padding: "var(--space-4)" }}><Notice variant="warning" icon="i-signal-off" lead="You are offline.">Showing the last page you loaded. Filters need a connection.</Notice></div> : null}
         <Load res={res} rows={5} label="Loading jobs" errorHeading="Jobs could not be loaded">
           {(page) =>
@@ -97,7 +130,7 @@ export function JobsListView({ filters, onFilters, jobLink, headingLevel = 2 }: 
               <>
                 <DataTable
                   busy={res.refreshing}
-                  caption={<>Jobs, {page.items.length} shown · newest first · as of <Timestamp value={page.as_of} frozen={!online} /></>}
+                  caption={<>Jobs, {page.items.length} shown · as of <Timestamp value={page.as_of} frozen={!online} /></>}
                   columns={columns}
                   rows={page.items}
                   rowKey={(j) => j.id}
@@ -107,7 +140,7 @@ export function JobsListView({ filters, onFilters, jobLink, headingLevel = 2 }: 
                   hasNext={Boolean(page.next_cursor)}
                   onPrev={() => setStack((s) => s.slice(0, -1))}
                   onNext={() => page.next_cursor && setStack((s) => [...s, page.next_cursor as string])}
-                  note="50 per page · sorted by creation time, newest first. Reordering happens only when you refresh."
+                  note={`50 per page · ${SORTS.find((x) => x.value === (filters.sort ?? "-created_at"))?.label.toLowerCase()}. Reordering happens only when you refresh.`}
                 />
               </>
             )

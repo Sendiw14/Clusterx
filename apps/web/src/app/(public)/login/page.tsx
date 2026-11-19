@@ -26,6 +26,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const reason = pick(sp.reason);
   const outcome = (err && Object.hasOwn(ERRORS, err) ? ERRORS[err] : undefined) ?? (reason && Object.hasOwn(REASONS, reason) ? REASONS[reason] : undefined);
   const disabled = err === "user_disabled" || err === "no_entitlement";
+  // Clamped again by the BFF; here it only decides whether to carry the parameter.
+  const nextRaw = pick(sp.next);
+  const next = nextRaw && nextRaw.startsWith("/app") && nextRaw.length <= 512 ? nextRaw : undefined;
 
   return (
     <div className="login">
@@ -36,9 +39,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         {!disabled ? <p className="muted">Sign in with the GitHub account an operator approved. CLUSTERX has no passwords and no shared accounts.</p> : null}
         {!disabled ? (
           <div style={{ marginTop: "var(--space-5)" }}>
-            {/* OAuth lands in M5. Until then the control is shown disabled with its reason visible (never a dead, silent button). */}
-            <button type="button" className="btn btn-primary gh-btn" aria-disabled="true" aria-describedby="signin-why">Sign in with GitHub</button>
-            <p id="signin-why" className="help" style={{ marginTop: "var(--space-2)" }}><Icon name="i-info" /> Sign-in is not enabled in this build. GitHub OAuth and sessions arrive with the authentication milestone.</p>
+            {/* A plain link: the BFF sets the state/PKCE cookie and redirects to GitHub. No script needed. */}
+            <a className="btn btn-primary gh-btn" href={`/auth/github${next ? `?next=${encodeURIComponent(next)}` : ""}`}>Sign in with GitHub</a>
+            <p className="help" style={{ marginTop: "var(--space-2)" }}><Icon name="i-info" /> You are sent to GitHub and back. CLUSTERX never sees your GitHub password.</p>
           </div>
         ) : null}
         <ul className="fine-list">

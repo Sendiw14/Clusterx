@@ -18,8 +18,11 @@ export interface ApiFailure {
   message?: string;
   requestId?: string;
   retryAfterSeconds?: number;
+  /** Go `details` unchanged (validation fields, current `{status, version}` on 409, `retried_as_job_id`, ...). */
+  details?: Record<string, unknown>;
 }
-export type Result<T> = { ok: true; data: T; requestId?: string } | { ok: false; error: ApiFailure };
+/** `status` is the HTTP status (200 vs 201 vs 202 matter for replay and cancel); `replayed` mirrors `Idempotent-Replayed`. */
+export type Result<T> = { ok: true; data: T; requestId?: string; status?: number; replayed?: boolean } | { ok: false; error: ApiFailure };
 
 export interface Page<T> {
   items: T[];
@@ -27,10 +30,14 @@ export interface Page<T> {
   as_of: string;
 }
 
+export type UnschedulableReason = S["UnschedulableReason"];
+export type JobSort = "-created_at" | "created_at" | "-available_at" | "available_at" | "-priority";
 export interface JobQuery {
   status?: JobStatus[];
   handler_name?: string;
   priority_min?: number;
+  unschedulable_reason?: UnschedulableReason[];
+  sort?: JobSort;
   cursor?: string;
   limit?: number;
 }

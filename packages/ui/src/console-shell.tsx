@@ -64,7 +64,7 @@ export function Breadcrumbs({ pathname }: { pathname: string }) {
   const crumbs = segs.map((s, i) => {
     const href = "/" + segs.slice(0, i + 1).join("/");
     const isId = i >= 2 && segs[i - 1] !== "settings" && s !== "new";
-    return { href, label: isId ? s.slice(0, 8) : (TITLES[s] ?? s), mono: isId };
+    return { href, label: isId ? s.slice(-8) : (TITLES[s] ?? s), mono: isId };
   });
   if (crumbs.length === 1) crumbs[0] = { href: "/app", label: "Console", mono: false }, crumbs.push({ href: "/app", label: "Overview", mono: false });
   else if (crumbs[0]) crumbs[0] = { href: "/app", label: "Console", mono: false };

@@ -62,6 +62,11 @@ const ERROR_COPY: Record<string, { title: string; body: string }> = {
   internal: { title: "Something went wrong on the server", body: "The server returned an internal error. Your filters are kept." },
   csrf_failed: { title: "The request was rejected", body: "Reload the page and try again. Nothing was changed." },
   forbidden: { title: "You do not have access to this", body: "Your role cannot perform this action." },
+  expired: { title: "This item expired by retention", body: "It existed, but retention deleted it. It is no longer stored and cannot be retried." },
+  job_not_found: { title: "No job with that ID", body: "Check the ID. It may be mistyped, or the job never existed." },
+  worker_not_found: { title: "No worker with that ID", body: "Check the ID. It may be mistyped, or the worker never registered." },
+  validation_failed: { title: "The request was not valid", body: "One or more filters or values were rejected. Change them and try again." },
+  invalid_cursor: { title: "That page link is no longer valid", body: "Filters changed since the link was made. Go back to the first page." },
   rate_limited: { title: "Too many requests", body: "Wait a moment, then try again." },
   network: { title: "The request did not reach the server", body: "Check your connection and try again." },
 };

@@ -1,8 +1,8 @@
 /**
- * BFF-owned contract types (ADR-0006). Interfaces only: the OAuth flow, session store and proxy are implemented in M5.
+ * BFF-owned contract types (ADR-0006). Types only (safe for client and demo graphs). Implementation lives in `src/server`.
  * BFF-owned failures use the same `{code, message, details?, request_id}` envelope as the Go API.
  */
-export type BffErrorCode = "not_implemented" | "session_expired" | "csrf_failed" | "upstream_auth" | "upstream_unavailable" | "forbidden" | "bad_request";
+export type BffErrorCode = "session_expired" | "csrf_failed" | "upstream_auth" | "upstream_unavailable";
 
 export interface BffErrorBody {
   code: BffErrorCode;
@@ -18,19 +18,4 @@ export interface BffSessionInfo {
   expires_at: string;
   idle_expires_at: string;
   csrf_token: string;
-}
-
-export function requestId(): string {
-  return `req_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
-}
-
-/** Typed 501 envelope returned by every BFF route until M5. Not a stub that pretends to work: it says so. */
-export function notImplemented(what: string): Response {
-  const rid = requestId();
-  const body: BffErrorBody = {
-    code: "not_implemented",
-    message: `${what} is not implemented in this build. The BFF is a skeleton until the authentication milestone.`,
-    request_id: rid,
-  };
-  return Response.json(body, { status: 501, headers: { "X-Request-Id": rid, "Cache-Control": "no-store" } });
 }

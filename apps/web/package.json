@@ -10,17 +10,21 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "build": "next build",
-    "start": "next start",
-    "e2e": "playwright test"
+    "start": "node server.ts",
+    "e2e": "playwright test",
+    "dev:live": "NODE_ENV=development node server.ts"
   },
   "dependencies": {
     "@clusterx/sdk-ts": "workspace:*",
     "@clusterx/ui": "workspace:*",
+    "jose": "6.2.18",
     "marked": "18.2.1",
     "next": "16.4.6",
+    "openid-client": "6.9.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "server-only": "0.0.1",
+    "ws": "8.23.0",
     "yaml": "2.9.1"
   },
   "devDependencies": {
@@ -34,6 +38,7 @@
     "@types/node": "26.6.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@types/ws": "8.18.2",
     "@vitejs/plugin-react": "6.3.0",
     "eslint": "9.39.5",
     "eslint-config-next": "16.4.6",

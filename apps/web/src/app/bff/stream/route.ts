@@ -1,8 +1,13 @@
-import { notImplemented } from "@/lib/bff-contract";
+import { bffError } from "@/server/bff";
+import { requestId } from "@/server/crypto";
 
 export const dynamic = "force-dynamic";
 
-/** Browser to BFF stream (ADR-0006 section 4). A WebSocket relay needs a dedicated server in M6; 501 until then. */
+/**
+ * The browser stream is a WebSocket upgrade handled by `server.ts` (the relay) before Next sees the request
+ * (ADR-0006 section 4). A plain HTTP GET here means the app is running without that server (for example `next dev`):
+ * answer 426 so the client falls back to polling.
+ */
 export function GET() {
-  return notImplemented("The live stream");
+  return bffError(426, "upstream_unavailable", "The live stream needs the CLUSTERX web server. Polling is used instead.", requestId(), { headers: { Upgrade: "websocket" } });
 }

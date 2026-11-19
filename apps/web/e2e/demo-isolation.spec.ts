@@ -1,3 +1,4 @@
+import { openConsole } from "./console";
 import { expect, test, type Page, type Request } from "@playwright/test";
 import { runAxe, watchConsole } from "./helpers";
 
@@ -118,7 +119,8 @@ test("demo jobs filter and dead-letter preset work client-side", async ({ page }
 test("the trap has teeth: the same check flags the console's BFF calls", async ({ page }) => {
   const hits: string[] = [];
   page.on("request", (r) => { if (/^\/(api|bff)\//.test(new URL(r.url()).pathname)) hits.push(new URL(r.url()).pathname); });
-  await page.goto("/app/jobs", { waitUntil: "networkidle" });
+  await openConsole(page, "operator", "/app/jobs");
+  await page.waitForLoadState("networkidle");
   expect(hits.some((h) => h.startsWith("/bff/api/v1/jobs"))).toBe(true);
 });
 
@@ -145,8 +147,8 @@ test("failed job shows its retry lineage and the link works both ways", async ({
   await page.goto("/demo", { waitUntil: "networkidle" });
   await page.getByRole("group", { name: "Demo screen" }).getByRole("button", { name: "Jobs" }).click();
   await page.getByRole("button", { name: "demo-job-0003" }).first().click();
-  await expect(page.getByText("Retried as")).toBeVisible();
+  await expect(page.locator("dt", { hasText: "Retried as" })).toBeVisible();
   await page.getByRole("button", { name: "demo-job-0013" }).first().click();
-  await expect(page.getByText("Retried from")).toBeVisible();
+  await expect(page.locator("dt", { hasText: "Retried from" })).toBeVisible();
   await expect(page.getByRole("button", { name: "demo-job-0003" }).first()).toBeVisible();
 });
