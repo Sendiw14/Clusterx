@@ -17,7 +17,7 @@ export default function NotFound() {
           <div className="cta-row" style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", marginTop: "var(--space-5)" }}>
             <ButtonLink href="/" variant="primary">Home</ButtonLink>
             <ButtonLink href="/docs">Documentation</ButtonLink>
-            <ButtonLink href="/app">Console</ButtonLink>
+            <ButtonLink reload href="/app">Console</ButtonLink>
           </div>
           <p className="meta" style={{ marginTop: "var(--space-5)" }}>Looking for something that moved? Start at <Link href="/docs">the docs index</Link>.</p>
         </div>
