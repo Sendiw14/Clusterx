@@ -32,6 +32,6 @@ async function handler(req: Request) {
     body = read;
   }
   const out = await asUser(g, { method: req.method, path: `${upstream}${url.search}`, body, headers });
-  return "res" in out ? out.res : passThrough(out.go);
+  return "res" in out ? out.res : passThrough(out.go, out.setCookie);
 }
 export { handler as GET, handler as POST, handler as PUT, handler as PATCH, handler as DELETE };

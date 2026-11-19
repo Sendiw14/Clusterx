@@ -236,6 +236,40 @@ describe("API proxy", () => {
     expect(b.headers.get("retry-after")).toBe("7");
   });
 
+  describe("role hint refresh after a Go 403 (RV6B-02)", () => {
+    const forbidden = { code: "forbidden", message: "Your role does not allow this action.", details: { required: "operator", role: "viewer" }, request_id: "r1" };
+    const roleOfSetCookie = (r: Response) => readSession(cfg(), (r.headers.get("set-cookie") ?? "").split(";")[0])?.role;
+
+    it("re-seals the cookie with the database role from GET /me and passes the 403 through unchanged", async () => {
+      script = (_n, req) => (req.url === "/api/v1/me" ? { status: 200, body: { role: "viewer" } } : { status: 403, body: forbidden });
+      const r = await post("jobs");
+      expect(r.status).toBe(403);
+      expect(await r.json()).toEqual(forbidden);
+      expect(roleOfSetCookie(r)).toBe("viewer");
+      expect(seen.map((x) => x.url)).toEqual(["/api/v1/jobs", "/api/v1/me"]);
+      // The refresh call carries the role Go reported, so the demotion writes one mismatch row (Go compares claim and DB role), not two.
+      expect((await claims(seen[0]!.headers)).payload.role).toBe("operator");
+      expect((await claims(seen[1]!.headers)).payload.role).toBe("viewer");
+    });
+    it("sets no cookie when the hint was already right", async () => {
+      script = (_n, req) => (req.url === "/api/v1/me" ? { status: 200, body: { role: "operator" } } : { status: 403, body: { ...forbidden, details: { role: "operator" } } });
+      const r = await post("jobs");
+      expect(r.status).toBe(403);
+      expect(r.headers.get("set-cookie")).toBeNull();
+    });
+    it("keeps the 403 when GET /me fails", async () => {
+      script = (_n, req) => (req.url === "/api/v1/me" ? { status: 500, body: {} } : { status: 403, body: forbidden });
+      const r = await post("jobs");
+      expect(r.status).toBe(403);
+      expect(r.headers.get("set-cookie")).toBeNull();
+    });
+    it("a 200 never triggers a /me call", async () => {
+      const r = await get("jobs");
+      expect(r.status).toBe(200);
+      expect(seen).toHaveLength(1);
+    });
+  });
+
   it("maps ended sessions to 401 session_expired, clears the cookie, keeps the reason", async () => {
     script = () => ({ status: 401, body: { code: "unauthenticated", message: "x", details: { reason: "session_expired", expiry: "idle" }, request_id: "r" } });
     const r = await get("jobs");

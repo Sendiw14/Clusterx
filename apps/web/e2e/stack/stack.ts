@@ -35,6 +35,8 @@ export const USERS = {
   expiring: { id: 1006, login: "e2e-expiring", role: "operator" },
   /** One per spec file that disables or expires sessions, so parallel specs never share a victim. */
   victim: { id: 1007, login: "e2e-victim", role: "operator" },
+  /** Role is changed mid-session by the role-refresh spec only (RV6B-02). */
+  demoted: { id: 1008, login: "e2e-demoted", role: "operator" },
 } as const;
 
 const children: ChildProcess[] = [];

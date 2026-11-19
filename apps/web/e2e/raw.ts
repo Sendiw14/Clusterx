@@ -18,14 +18,14 @@ export async function cookieOf(page: Page): Promise<string> {
   return `${COOKIE_NAME}=${c.value}`;
 }
 
-export interface Raw { status: number; body: string; headers: IncomingMessage["headers"] }
+export interface Raw { status: number; body: string; headers: IncomingMessage["headers"]; rawHeaders: string[] }
 
 export function raw(method: string, path: string, headers: Record<string, string>, body?: Buffer): Promise<Raw> {
   return new Promise((res, rej) => {
     const r = httpRequest({ host: HOST, port: PORT, method, path, headers }, (m) => {
       const chunks: Buffer[] = [];
       m.on("data", (d: Buffer) => chunks.push(d));
-      m.on("end", () => res({ status: m.statusCode ?? 0, body: Buffer.concat(chunks).toString("utf8").slice(0, 400), headers: m.headers }));
+      m.on("end", () => res({ status: m.statusCode ?? 0, body: Buffer.concat(chunks).toString("utf8").slice(0, 400), headers: m.headers, rawHeaders: m.rawHeaders }));
     });
     r.on("error", rej);
     if (body) r.write(body);

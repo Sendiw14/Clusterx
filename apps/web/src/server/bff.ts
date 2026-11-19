@@ -1,5 +1,5 @@
 import { csrfToken, requestId, safeEqual } from "./crypto.ts";
-import { clearCookie, readSession, sessionCookieName, type SessionCookie } from "./cookies.ts";
+import { clearCookie, readSession, sealSession, sessionCookieName, type SessionCookie } from "./cookies.ts";
 import { config, keyring, type WebConfig } from "./config.ts";
 import { PASS_HEADERS, callGo, sessionEnded, type GoResult } from "./upstream.ts";
 
@@ -52,8 +52,28 @@ export function gate(req: Request, opts: { mutating: boolean }): Response | Ctx 
   return { c, rid, session };
 }
 
-/** Calls Go as the session's user and maps the outcomes of ADR-0006 section 2. Returns the raw Go result to forward, or a BFF error. */
-export async function asUser(ctx: Ctx, req: { method: string; path: string; body?: Uint8Array; headers?: Record<string, string> }): Promise<{ go: GoResult } | { res: Response }> {
+/** Set-Cookie value that re-seals the session with the database role, or none when the hint is already right (ADR-0006 section 2, RV6B-02). */
+export const roleCookie = (c: WebConfig, s: SessionCookie, role: "operator" | "viewer"): string[] => (role === s.role ? [] : [sealSession(c, { ...s, role })]);
+
+/**
+ * After a Go 403: asks `GET /me` for the database role and returns the cookie to set if the hint was stale. The refresh
+ * call carries the role Go just reported (a hint only), so the demotion that caused the 403 writes one mismatch row, not two.
+ */
+async function refreshRole(ctx: Ctx, reported: string | undefined): Promise<string[]> {
+  const { c, rid, session: s } = ctx;
+  const hint = reported === "operator" || reported === "viewer" ? reported : s.role;
+  try {
+    const me = await callGo(c, { method: "GET", path: "/api/v1/me", as: { userId: s.uid, sid: s.sid, role: hint, rid } }, 5000);
+    if (me.status !== 200) return [];
+    const role = (JSON.parse(new TextDecoder().decode(me.body)) as { role?: string }).role;
+    return role === "operator" || role === "viewer" ? roleCookie(c, s, role) : [];
+  } catch {
+    return []; // best effort: the 403 itself is the answer
+  }
+}
+
+/** Calls Go as the session's user and maps the outcomes of ADR-0006 section 2. Returns the raw Go result (plus any refreshed role cookie) to forward, or a BFF error. */
+export async function asUser(ctx: Ctx, req: { method: string; path: string; body?: Uint8Array; headers?: Record<string, string> }): Promise<{ go: GoResult; setCookie: string[] } | { res: Response }> {
   const { c, rid, session: s } = ctx;
   let go: GoResult;
   try {
@@ -69,5 +89,5 @@ export async function asUser(ctx: Ctx, req: { method: string; path: string; body
     console.error(`[bff] ${rid} upstream rejected the assertion: ${go.reason ?? go.code ?? "unknown"}`);
     return { res: bffError(502, "upstream_auth", "The console could not authenticate to its API.", rid) };
   }
-  return { go };
+  return { go, setCookie: go.status === 403 ? await refreshRole(ctx, go.role) : [] };
 }
