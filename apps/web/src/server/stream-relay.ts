@@ -6,29 +6,41 @@ import { config } from "./config.ts";
 import { readSession } from "./cookies.ts";
 import { requestId } from "./crypto.ts";
 
-/** ADR-0006 section 4: at most 5 browser sockets per session (Go also enforces 4429), plus a per-process ceiling (RV6-08). */
+/**
+ * ADR-0006 section 4: at most 5 browser sockets per session (Go also enforces 4429), a per-process ceiling (RV6-08) and a
+ * per-user cap across sessions (RV6B-05(b)): one allowlisted user with many sessions (each a fresh OAuth login) cannot push
+ * everyone else's stream to 429 and the polling fallback. 15 is three full sessions; the ceiling still bounds the process.
+ */
 export const MAX_SOCKETS_PER_SESSION = 5;
+export const MAX_SOCKETS_PER_USER = 15;
 export const MAX_SOCKETS_TOTAL = 256;
 const PING_MS = 25_000;
 const live = new Map<string, number>();
+const liveUser = new Map<string, number>();
 let total = 0;
+
+const bump = (m: Map<string, number>, k: string, d: 1 | -1) => {
+  const n = (m.get(k) ?? 0) + d;
+  if (n <= 0) m.delete(k);
+  else m.set(k, n);
+};
 
 /**
  * Takes a relay slot synchronously, BEFORE the async dial to Go (RV6-08: check-then-act raced). Returns an idempotent
- * release, or null when the session or the process is full.
+ * release, or null when the session, the user or the process is full.
  */
-export function reserveSlot(sid: string): (() => void) | null {
-  if (total >= MAX_SOCKETS_TOTAL || (live.get(sid) ?? 0) >= MAX_SOCKETS_PER_SESSION) return null;
-  live.set(sid, (live.get(sid) ?? 0) + 1);
+export function reserveSlot(sid: string, uid: string): (() => void) | null {
+  if (total >= MAX_SOCKETS_TOTAL || (live.get(sid) ?? 0) >= MAX_SOCKETS_PER_SESSION || (liveUser.get(uid) ?? 0) >= MAX_SOCKETS_PER_USER) return null;
+  bump(live, sid, 1);
+  bump(liveUser, uid, 1);
   total++;
   let done = false;
   return () => {
     if (done) return;
     done = true;
     total--;
-    const n = (live.get(sid) ?? 1) - 1;
-    if (n <= 0) live.delete(sid);
-    else live.set(sid, n);
+    bump(live, sid, -1);
+    bump(liveUser, uid, -1);
   };
 }
 export const slotsInUse = () => total;
@@ -69,7 +81,7 @@ export function attachStreamRelay(server: Server, passthrough: (req: IncomingMes
     if (req.headers.origin !== c.appOrigin) return refuse(socket, 403, "Forbidden");
     const s = readSession(c, req.headers.cookie);
     if (!s) return refuse(socket, 401, "Unauthorized");
-    const release = reserveSlot(s.sid);
+    const release = reserveSlot(s.sid, s.uid);
     if (!release) return refuse(socket, 429, "Too Many Requests");
     // The browser socket owns the slot for exactly its lifetime. Until the handshake is handed to `ws`, its closing also
     // kills the upstream socket (RV6-03: a tab closed or a handshake `ws` aborts after the dial used to leak Go's slot).
@@ -79,6 +91,9 @@ export function attachStreamRelay(server: Server, passthrough: (req: IncomingMes
       release();
       if (!handedOff) conn.up?.terminate();
     });
+    // A client that sends FIN without closing (half-open) emits `end` but not `close`, which would hold the slot and the dial
+    // until Go answers or the 10 s handshake timeout (RV6B-05(a)). Before the hand-off nothing is worth keeping: close now.
+    socket.once("end", () => { if (!handedOff) socket.destroy(); });
     if (socket.destroyed) return release();
     const token = await mintAssertion(c.keyFile, { userId: s.uid, sid: s.sid, role: s.role, rid });
     if (socket.destroyed) return;
