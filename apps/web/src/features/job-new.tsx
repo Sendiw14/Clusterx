@@ -117,7 +117,7 @@ function Form({ handlers, cfg }: { handlers: Handler[]; cfg: Config }) {
 
   return (
     <form onSubmit={(e) => void submit(e)} noValidate style={{ display: "grid", gap: "var(--space-4)", maxWidth: "46rem" }}>
-      {replay ? <Notice variant="info" lead="This job was already submitted." actions={<Link className="btn btn-sm" href={`/app/jobs/${replay.id}`}>Open job {replay.id.slice(0, 8)}</Link>}>The same idempotency key and request were seen before, so nothing new was created.</Notice> : null}
+      {replay ? <Notice variant="info" lead="This job was already submitted." actions={<Link className="btn btn-sm" href={`/app/jobs/${replay.id}`}>Open job {replay.id.slice(-8)}</Link>}>The same idempotency key and request were seen before, so nothing new was created.</Notice> : null}
       {fail && !server.length ? <Notice variant="error" lead={fail.code === "idempotency_conflict" ? "Key conflict." : "The job was not submitted."} role="alert">{describeFailure(fail)}{fail.requestId ? <> Request id <span className="mono">{fail.requestId}</span>.</> : null}</Notice> : null}
       {summary.length ? (
         <Notice variant="error" lead={`${summary.length} problem${summary.length === 1 ? "" : "s"} to fix.`} role="alert">

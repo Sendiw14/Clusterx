@@ -35,7 +35,7 @@ export function ActivityView() {
     { key: "o", header: "Outcome", render: (e) => <span className="badge" data-outcome={e.outcome}>{e.outcome}</span> },
     { key: "c", header: "Category", render: (e) => e.category },
     { key: "actor", header: "Actor", render: (e) => <span className="mono">{e.actor}</span> },
-    { key: "s", header: "Subject", render: (e) => (e.subject_type ? <span className="mono">{e.subject_type} {e.subject_id?.slice(0, 8) ?? ""}</span> : <span className="meta">none</span>) },
+    { key: "s", header: "Subject", render: (e) => (e.subject_type ? <span className="mono">{e.subject_type} {e.subject_id?.slice(-8) ?? ""}</span> : <span className="meta">none</span>) },
     { key: "r", header: "Request", render: (e) => (e.request_id ? <span className="mono">{e.request_id}</span> : <span className="meta">none</span>) },
     { key: "d", header: "Details", render: (e) => (e.masked_fields.includes("details") ? <MaskedField /> : e.details ? <code className="mono">{JSON.stringify(e.details)}</code> : <span className="meta">none</span>) },
   ];

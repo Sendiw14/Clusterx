@@ -8,8 +8,8 @@ export const CONSOLE_CAPTURE = {
   file: "/images/console-jobs.png",
   route: "/app/jobs",
   date: "2026-11-19",
-  /** Commit whose tree the capture was taken from (short SHA). */
-  commit: "PENDING",
-  width: 1280,
-  height: 0,
+  /** Commit whose tree the capture was taken from (short SHA); the only later change is the screenshot spec itself. */
+  commit: "91e27a1",
+  width: 952,
+  height: 495,
 } as const;

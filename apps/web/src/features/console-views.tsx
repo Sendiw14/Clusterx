@@ -19,7 +19,7 @@ const REASON_KEYS: string[] = REASONS.map((r) => r.value);
 const SORT_KEYS: string[] = SORTS.map((r) => r.value);
 const STATUSES = ["scheduled", "queued", "running", "retry_wait", "succeeded", "failed", "canceled"];
 
-const jobLink = (j: JobSummary) => <Link className="id mono" href={`/app/jobs/${j.id}`}>{j.id.slice(0, 8)}</Link>;
+const jobLink = (j: JobSummary) => <Link className="id mono" href={`/app/jobs/${j.id}`}>{j.id.slice(-8)}</Link>;
 const workerLink = (w: Worker) => <Link className="id" href={`/app/workers/${w.id}`}>{w.name}</Link>;
 
 export function OverviewConsole() {
@@ -56,9 +56,9 @@ export function JobsConsole() {
   return <JobsListView filters={filters} onFilters={onFilters} jobLink={jobLink} />;
 }
 
-export function JobDetailConsole({ id }: { id: string }) { return <JobDetailView id={id} workerLink={(wid) => <Link className="id mono" href={`/app/workers/${wid}`}>{wid.slice(0, 8)}</Link>} jobLink={(j) => <Link className="id mono" href={`/app/jobs/${j.id}`}>{j.id.slice(0, 8)}</Link>} />; }
+export function JobDetailConsole({ id }: { id: string }) { return <JobDetailView id={id} workerLink={(wid) => <Link className="id mono" href={`/app/workers/${wid}`}>{wid.slice(-8)}</Link>} jobLink={(j) => <Link className="id mono" href={`/app/jobs/${j.id}`}>{j.id.slice(-8)}</Link>} />; }
 export function WorkersConsole() { return <WorkersListView workerLink={workerLink} />; }
-export function WorkerDetailConsole({ id }: { id: string }) { return <WorkerDetailView id={id} jobLink={(jid) => <Link className="id mono" href={`/app/jobs/${jid}`}>{jid.slice(0, 8)}</Link>} />; }
+export function WorkerDetailConsole({ id }: { id: string }) { return <WorkerDetailView id={id} jobLink={(jid) => <Link className="id mono" href={`/app/jobs/${jid}`}>{jid.slice(-8)}</Link>} />; }
 export function SettingsConsole() { return <ConfigView />; }
 export function NewJobConsole() { return <JobNewView />; }
 export function TokensConsole() { return <TokensView />; }

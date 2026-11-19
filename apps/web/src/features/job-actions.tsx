@@ -71,15 +71,15 @@ export function JobActions({ job, onChanged }: { job: Job; onChanged: () => void
         {canCancel ? <Button variant="danger" unavailable={!online} onClick={() => open("cancel")}>Cancel job</Button> : null}
         {job.status === "failed" ? <Button variant="primary" unavailable={!online || !canRetry} onClick={() => open("retry")}>Retry job</Button> : null}
         {!online ? <span className="meta">You are offline. Changes are disabled until you reconnect.</span> : null}
-        {job.status === "failed" && job.retried_as_job_id ? <span className="meta">Already retried as <Link href={`/app/jobs/${job.retried_as_job_id}`}>{job.retried_as_job_id.slice(0, 8)}</Link>.</span> : null}
+        {job.status === "failed" && job.retried_as_job_id ? <span className="meta">Already retried as <Link href={`/app/jobs/${job.retried_as_job_id}`}>{job.retried_as_job_id.slice(-8)}</Link>.</span> : null}
       </div>
       {note ? <div style={{ marginTop: "var(--space-3)" }}><Notice variant="info" lead="Done.">{note}</Notice></div> : null}
       <ConfirmDialog open={dlg === "cancel"} title="Cancel this job?" verb="Cancel job" danger pending={pending} onConfirm={() => void cancel()} onCancel={close} error={err ? describeFailure(err) : null}>
-        <p>Job <span className="mono">{job.id.slice(0, 8)}</span> ({job.handler_name}@{job.handler_version}) is <strong>{job.status.replace("_", " ")}</strong>.</p>
+        <p>Job <span className="mono">{job.id.slice(-8)}</span> ({job.handler_name}@{job.handler_version}) is <strong>{job.status.replace("_", " ")}</strong>.</p>
         <p className="muted">{job.status === "running" ? "It is running now. Canceling asks the worker to stop; the job ends as canceled once the worker acknowledges or the lease expires. Work already done is not undone." : "It has not started. It will end as canceled and never run."}</p>
       </ConfirmDialog>
       <ConfirmDialog open={dlg === "retry"} title="Retry this job?" verb="Create retry" pending={pending} onConfirm={() => void retry()} onCancel={close} error={err ? describeFailure(err) : null}>
-        <p>This creates a <strong>new job</strong> linked to <span className="mono">{job.id.slice(0, 8)}</span> with the same payload. The failed job stays as it is.</p>
+        <p>This creates a <strong>new job</strong> linked to <span className="mono">{job.id.slice(-8)}</span> with the same payload. The failed job stays as it is.</p>
         {existing ? <p>It was already retried: <Link href={`/app/jobs/${existing}`}>open the retry</Link>.</p> : null}
       </ConfirmDialog>
     </div>

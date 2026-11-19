@@ -17,7 +17,7 @@ test.use({ reducedMotion: "reduce" });
 test.describe.configure({ mode: "serial" });
 
 const key = () => `shot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-let ids = { ok: "", failed: "", running: "", worker: "" };
+const ids = { ok: "", failed: "", running: "", worker: "" };
 
 async function settle(page: Page) {
   await page.waitForLoadState("networkidle");
@@ -49,6 +49,8 @@ test("console capture for the home page", async ({ page }) => {
   await openConsole(page, "operator", "/app/jobs");
   await page.setViewportSize({ width: 1280, height: 900 });
   await settle(page);
+  const changed = page.getByRole("button", { name: "Refresh list" });
+  if (await changed.isVisible().catch(() => false)) { await changed.click(); await settle(page); }
   mkdirSync(PUBLIC, { recursive: true });
   await page.locator("section[aria-labelledby=jl-h]").screenshot({ path: resolve(PUBLIC, "console-jobs.png") });
 });
