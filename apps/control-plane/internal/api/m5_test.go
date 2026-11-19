@@ -539,3 +539,80 @@ func (w *refWorker) fail(t *testing.T, a store.AttemptRef) {
 }
 
 var _ = http.MethodGet
+
+// AC-13 route matrix (docs/security/permissions.md): every operation × {operator session, viewer
+// session, operator token (all scopes), viewer token (read scopes), anonymous, forged identity headers}.
+// "allow" means neither 401 nor 403 (the operation may still answer 404/409/422 for the fixture).
+func TestAC13_RouteMatrix(t *testing.T) {
+	e := newM5(t)
+	op := e.login(900, "operator")
+	vw := e.login(901, "viewer")
+	opTok := e.token(902, "operator", store.AllScopes...)
+	vwTok := e.token(903, "viewer", "jobs:read", "workers:read", "metrics:read", "audit:read")
+	job := decode[map[string]any](t, e.want2(e.do("POST", "/api/v1/jobs", opTok, okJob), 201))["id"].(string)
+	w := newRefWorker(t, e.env.Store)
+	const (
+		A = true
+		D = false
+	)
+	routes := []struct {
+		method, path, body string
+		opS, vwS, opT, vwT bool
+	}{
+		{"GET", "/api/v1/jobs", "", A, A, A, A},
+		{"POST", "/api/v1/jobs", okJob, A, D, A, D},
+		{"GET", "/api/v1/jobs/" + job, "", A, A, A, A},
+		{"GET", "/api/v1/jobs/" + job + "/attempts", "", A, A, A, A},
+		{"GET", "/api/v1/jobs/" + job + "/events", "", A, A, A, A},
+		{"POST", "/api/v1/jobs/" + job + "/retry", "", A, D, A, D},
+		{"GET", "/api/v1/workers", "", A, A, A, A},
+		{"GET", "/api/v1/workers/" + w.ref.WorkerID, "", A, A, A, A},
+		{"GET", "/api/v1/metrics/overview", "", A, A, A, A},
+		{"GET", "/api/v1/metrics/timeseries?metric=jobs_admitted&from=" + time.Now().Add(-time.Hour).UTC().Format(time.RFC3339) + "&to=" + time.Now().UTC().Format(time.RFC3339), "", A, A, A, A},
+		{"GET", "/api/v1/audit", "", A, A, A, A},
+		{"GET", "/api/v1/handlers", "", A, A, A, A},
+		{"GET", "/api/v1/config", "", A, A, A, A},
+		{"GET", "/api/v1/me", "", A, A, D, D},
+		{"GET", "/api/v1/tokens", "", A, D, D, D},
+		{"POST", "/api/v1/tokens", `{"name":"m","role":"viewer","scopes":["jobs:read"]}`, A, D, D, D},
+		{"POST", "/api/v1/tokens/0193a0f2-7c1e-7a10-8000-0000000000aa/revoke", "", A, D, D, D},
+		{"GET", "/api/v1/worker-credentials", "", A, D, D, D},
+		{"POST", "/api/v1/worker-credentials", `{"name":"m"}`, A, D, D, D},
+		{"POST", "/api/v1/worker-credentials/0193a0f2-7c1e-7a10-8000-0000000000aa/revoke", "", A, D, D, D},
+		{"POST", "/api/v1/jobs/" + job + "/cancel", "", A, D, A, D},
+		{"POST", "/api/v1/workers/" + w.ref.WorkerID + "/drain", "", A, D, A, D},
+	}
+	for _, rt := range routes {
+		for _, who := range []struct {
+			name  string
+			cred  func() string
+			allow bool
+		}{
+			{"operator-session", func() string { return e.as(op) }, rt.opS},
+			{"viewer-session", func() string { return e.as(vw) }, rt.vwS},
+			{"operator-token", func() string { return opTok }, rt.opT},
+			{"viewer-token", func() string { return vwTok }, rt.vwT},
+		} {
+			rec := e.do(rt.method, rt.path, who.cred(), rt.body)
+			denied := rec.Code == 401 || rec.Code == 403
+			if denied == who.allow {
+				t.Errorf("%s %s as %s: %d (allow=%v) %s", rt.method, rt.path, who.name, rec.Code, who.allow, rec.Body)
+			}
+		}
+		// Anonymous and forged identity headers are never authenticated.
+		for _, hdr := range [][]string{nil, {"X-User", "admin", "X-Forwarded-User", "admin", "X-Clusterx-Role", "operator"}} {
+			if rec := e.do(rt.method, rt.path, "", rt.body, hdr...); rec.Code != 401 {
+				t.Errorf("%s %s anonymous %v: %d", rt.method, rt.path, hdr, rec.Code)
+			}
+		}
+	}
+	// Viewer field masking holds for sessions as for tokens (sensitive fields null + masked_fields).
+	j := decode[map[string]any](t, e.do("GET", "/api/v1/jobs/"+job, e.as(vw), ""))
+	if j["payload"] != nil || len(j["masked_fields"].([]any)) != 3 {
+		t.Fatalf("viewer session masking: %v", j)
+	}
+	x := decode[map[string]any](t, e.do("GET", "/api/v1/workers/"+w.ref.WorkerID, e.as(vw), ""))
+	if x["hostname"] != nil || x["masked_fields"].([]any)[0] != "hostname" {
+		t.Fatalf("viewer worker masking: %v", x)
+	}
+}
