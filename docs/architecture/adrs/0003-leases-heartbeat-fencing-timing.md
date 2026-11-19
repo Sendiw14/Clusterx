@@ -72,6 +72,18 @@ until the drain deadline, then denied (`worker_draining`) so leases expire and n
 (retry/fail, **not** cancel) applies. Re-register with a new incarnation fences all attempts of the
 old incarnation immediately (renew/report denied `incarnation_mismatch`); they are recovered at lease expiry.
 
+**Drain is sticky to the worker id (TASK-M5-BE-02, RV5-02, integrator decision).** Re-registering a
+`draining` worker id (operator or self drain) keeps `status='draining'` and its drain deadline: the new
+incarnation gets no claims (`Claim` → `worker_draining`) until it deregisters. A `deregistered` worker
+id is never resurrected: registering with it creates a **new** worker row (new `worker_id`, active), so
+rejoining after a drain always means a new id (the SDK persists it via `OnRegistered`; operators may
+also delete the id file). **One persisted worker id per process:** if two live processes share one id
+(shared volume, `CLUSTERX_WORKER_ID` in a scaled service), the newest registration supersedes and the
+older incarnation is fenced (`incarnation_mismatch`, its attempts recovered at lease expiry); every
+takeover of a still-live incarnation appends a `security` audit row `worker.incarnation_takeover`
+(previous and new incarnation ids). Tests: `TestRV5_OperatorDrainSurvivesReRegister`,
+`TestRV5_ConcurrentIncarnationsNewestWins`.
+
 ### Timing values (starting configuration, bounds validated at startup — fail closed)
 | Setting | Default | Allowed | Constraint |
 |---|---|---|---|

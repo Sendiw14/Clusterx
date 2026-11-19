@@ -209,6 +209,30 @@ func (s *Store) Register(ctx context.Context, credID string, p RegisterParams) (
 				target = c.id // take over a stale worker of this credential
 			}
 		}
+		if target != "" {
+			// Drain is sticky to the worker id and a deregistered id is never resurrected (RV5-02): a new
+			// incarnation of a draining worker stays draining (Claim answers worker_draining); after
+			// deregistration the process rejoins as a new worker row.
+			var status, prevInc string
+			var live bool
+			err := tx.QueryRow(ctx, `SELECT status, current_incarnation_id, last_heartbeat_at > clock_timestamp() - $3::interval
+				FROM workers WHERE id = $1 AND credential_id = $2 FOR UPDATE`, target, credID, s.Timing.LivenessTimeout).Scan(&status, &prevInc, &live)
+			if isNoRows(err) {
+				return &Denial{Reason: "credential_mismatch", Detail: "credential is not bound to this worker"}
+			} else if err != nil {
+				return err
+			}
+			if status == "deregistered" {
+				target = ""
+			} else if live && prevInc != p.IncarnationID {
+				// Two processes sharing one id supersede each other; each takeover fences the other's attempts.
+				if err := insertAudit(ctx, tx, AuditRow{Category: "security", Action: "worker.incarnation_takeover", Outcome: "allowed",
+					Actor: "worker:" + target, TargetType: "worker", TargetID: target,
+					Details: map[string]any{"previous_incarnation_id": prevInc, "incarnation_id": p.IncarnationID, "credential_id": credID}}); err != nil {
+					return err
+				}
+			}
+		}
 		if target == "" {
 			if err := tx.QueryRow(ctx, `INSERT INTO workers (name, credential_id, current_incarnation_id, capacity, protocol_version,
 					sdk_version, hostname, registered_at, last_heartbeat_at)
@@ -218,11 +242,10 @@ func (s *Store) Register(ctx context.Context, credID string, p RegisterParams) (
 			}
 		} else {
 			tag, err := tx.Exec(ctx, `UPDATE workers SET name = $3, current_incarnation_id = $4, capacity = $5, protocol_version = $6,
-					sdk_version = NULLIF($7, ''), hostname = NULLIF($8, ''), status = 'active', drain_requested_at = NULL,
-					drain_deadline_at = NULL, deregistered_at = NULL, last_heartbeat_at = clock_timestamp(),
+					sdk_version = NULLIF($7, ''), hostname = NULLIF($8, ''), last_heartbeat_at = clock_timestamp(),
 					registered_at = CASE WHEN current_incarnation_id = $4 THEN registered_at ELSE clock_timestamp() END,
-					version = version + CASE WHEN current_incarnation_id = $4 AND status = 'active' THEN 0 ELSE 1 END
-				WHERE id = $1 AND credential_id = $2`,
+					version = version + CASE WHEN current_incarnation_id = $4 THEN 0 ELSE 1 END
+				WHERE id = $1 AND credential_id = $2 AND status <> 'deregistered'`,
 				target, credID, p.Name, p.IncarnationID, p.Capacity, p.ProtocolVersion, p.SDKVersion, p.Hostname)
 			if err != nil {
 				return err

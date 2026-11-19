@@ -1,0 +1,78 @@
+package store
+
+import (
+	"context"
+	"testing"
+	"time"
+)
+
+func reRegister(t *testing.T, s *Store, w WorkerRef) WorkerRef {
+	t.Helper()
+	inc := NewUUID()
+	r, err := s.Register(context.Background(), w.CredentialID, RegisterParams{WorkerID: w.WorkerID, IncarnationID: inc, Name: "w",
+		ProtocolVersion: 1, Capacity: 2, Capabilities: []Capability{{"sleep_ms", 1}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return WorkerRef{WorkerID: r.WorkerID, IncarnationID: inc, CredentialID: w.CredentialID}
+}
+
+// RV5-02: an operator drain is sticky to the worker id; re-registering does not undo it.
+func TestRV5_OperatorDrainSurvivesReRegister(t *testing.T) {
+	s := newTestStore(t, 30*time.Second)
+	ctx := context.Background()
+	w := newWorker(t, s, 2, "sleep_ms")
+	if err := s.OperatorDrain(ctx, w.WorkerID, time.Hour, "user:op", AuditMeta{}); err != nil {
+		t.Fatal(err)
+	}
+	w2 := reRegister(t, s, w)
+	if w2.WorkerID != w.WorkerID {
+		t.Fatalf("draining worker got a new id")
+	}
+	if st := q[string](t, s, `SELECT status FROM workers WHERE id = $1`, w.WorkerID); st != "draining" {
+		t.Fatalf("status after re-register = %s, want draining", st)
+	}
+	admit(t, s, "sleep_ms")
+	_, err := s.Claim(ctx, w2, 1, nil)
+	wantDenied(t, err, "worker_draining")
+
+	// After deregistration the id is never resurrected: the process rejoins as a new active worker.
+	if _, err := s.Deregister(ctx, w2); err != nil {
+		t.Fatal(err)
+	}
+	w3 := reRegister(t, s, w2)
+	if w3.WorkerID == w.WorkerID {
+		t.Fatal("deregistered worker row resurrected")
+	}
+	if st := q[string](t, s, `SELECT status FROM workers WHERE id = $1`, w.WorkerID); st != "deregistered" {
+		t.Fatalf("old row status = %s", st)
+	}
+	if got, err := s.Claim(ctx, w3, 1, nil); err != nil || len(got) != 1 {
+		t.Fatalf("new worker claim: %d %v", len(got), err)
+	}
+}
+
+// RV5-02: two processes sharing one worker id: the newest incarnation supersedes, the older is fenced,
+// and each live takeover is a security audit row.
+func TestRV5_ConcurrentIncarnationsNewestWins(t *testing.T) {
+	s := newTestStore(t, 30*time.Second)
+	ctx := context.Background()
+	a := newWorker(t, s, 2, "sleep_ms")
+	admit(t, s, "sleep_ms")
+	att := claimOne(t, s, a)
+	b := reRegister(t, s, a)
+	_, err := s.Claim(ctx, a, 1, nil)
+	wantDenied(t, err, "incarnation_mismatch")
+	_, err = s.RenewLease(ctx, att)
+	wantDenied(t, err, "incarnation_mismatch")
+	a2 := reRegister(t, s, a) // the old process re-registers: it is now the newest, b is fenced
+	_, err = s.Claim(ctx, b, 1, nil)
+	wantDenied(t, err, "incarnation_mismatch")
+	if _, err := s.Claim(ctx, a2, 1, nil); err != nil {
+		t.Fatal(err)
+	}
+	if n := q[int64](t, s, `SELECT count(*) FROM audit_events WHERE action = 'worker.incarnation_takeover' AND category = 'security'
+		AND target_id = $1`, a.WorkerID); n != 2 {
+		t.Fatalf("takeover audit rows = %d, want 2", n)
+	}
+}
