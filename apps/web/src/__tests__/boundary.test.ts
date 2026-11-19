@@ -9,7 +9,7 @@ const UI_SRC = resolve(here, "../../../../packages/ui/src");
 
 /** Specifiers that must never be reachable from /demo, the fixture provider or shared views (FR-DEMO-01, E2E-DEMO-27). */
 export const FORBIDDEN: RegExp[] = [
-  /live-provider/, /lib\/session/, /lib\/bff/, /app\/bff/, /\(console\)/, /^openapi-fetch$/, /^server-only$/,
+  /live-provider/, /console-runtime/, /^@\/server\//, /lib\/session/, /lib\/bff/, /app\/bff/, /\(console\)/, /^openapi-fetch$/, /^server-only$/,
 ];
 const SDK = /^@clusterx\/sdk-ts(\/|$)/;
 
@@ -71,8 +71,9 @@ describe("demo isolation: import graph (E2E-DEMO-27)", () => {
     expect(bad.filter((b) => FORBIDDEN.some((r) => r.test(b.spec))).map((b) => b.spec)).toEqual(["@/data/live-provider", "server-only"]);
     expect(bad.filter((b) => SDK.test(b.spec) && !b.typeOnly)).toHaveLength(1);
   });
-  it("the live provider is imported only by the console providers module", () => {
-    const users = listFiles(SRC).filter((f) => !f.includes("__tests__") && importsOf(readFileSync(f, "utf8")).some((i) => /live-provider/.test(i.spec)));
-    expect(users.map((u) => u.replace(SRC, ""))).toEqual(["/app/(console)/console-providers.tsx"]);
+  it("the live provider is imported only by the console runtime, which only the console providers module imports", () => {
+    const using = (re: RegExp) => listFiles(SRC).filter((f) => !f.includes("__tests__") && importsOf(readFileSync(f, "utf8")).some((i) => re.test(i.spec))).map((u) => u.replace(SRC, ""));
+    expect(using(/live-provider/)).toEqual(["/data/console-runtime.ts"]);
+    expect(using(/console-runtime/)).toEqual(["/app/(console)/console-providers.tsx"]);
   });
 });

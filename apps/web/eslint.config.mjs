@@ -10,7 +10,7 @@ import nextTs from "eslint-config-next/typescript";
  */
 const liveOnly = [
   { group: ["@/data/live", "@/data/live-*", "@/data/live/*"], message: "Live provider is console-only. /demo uses the fixture provider." },
-  { group: ["@/lib/session", "@/lib/bff", "@/lib/bff-*", "@/app/bff/*", "@/app/(console)/*"], message: "BFF and session modules are not reachable from demo or shared views." },
+  { group: ["@/lib/session", "@/lib/bff", "@/lib/bff-*", "@/app/bff/*", "@/app/(console)/*", "@/server/*", "@/data/console-runtime"], message: "BFF and session modules are not reachable from demo or shared views." },
   { group: ["@clusterx/sdk-ts", "@clusterx/sdk-ts/*"], allowTypeImports: true, message: "The SDK runtime (network client) must not be imported here. Import types only." },
   { group: ["openapi-fetch"], message: "No network client in demo or shared views." },
   { group: ["server-only"], message: "Server-only modules are not part of the demo graph." },
