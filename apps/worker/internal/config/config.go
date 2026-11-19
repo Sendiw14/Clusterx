@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +34,8 @@ const (
 	VarCapacity        = "CLUSTERX_WORKER_CAPACITY"
 	VarLogLevel        = "CLUSTERX_LOG_LEVEL"
 	VarShutdownTimeout = "CLUSTERX_SHUTDOWN_TIMEOUT"
+	VarWorkerID        = "CLUSTERX_WORKER_ID"      // optional fixed worker id (UUID) to re-register
+	VarWorkerIDFile    = "CLUSTERX_WORKER_ID_FILE" // optional path persisting the server-assigned worker id
 )
 
 // CredentialPrefix starts every worker credential (ADR-0005: cxw_<prefix>_<secret>).
@@ -52,6 +56,8 @@ type Config struct {
 	Capacity        int
 	LogLevel        slog.Level
 	ShutdownTimeout time.Duration
+	WorkerID        string // re-register this worker id (CR-M5-01 #4)
+	WorkerIDFile    string // read at start, written after registration; must be on a writable volume
 }
 
 // Load reads and validates the configuration; lookup is os.LookupEnv in production code.
@@ -147,6 +153,15 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 		c.ShutdownTimeout = d
 	}
 
+	c.WorkerID = strings.ToLower(get(VarWorkerID))
+	if c.WorkerID != "" && !uuidRe.MatchString(c.WorkerID) {
+		fail("%s must be a UUID", VarWorkerID)
+	}
+	c.WorkerIDFile = get(VarWorkerIDFile)
+	if c.WorkerIDFile != "" && c.WorkerID != "" {
+		fail("%s and %s are mutually exclusive", VarWorkerID, VarWorkerIDFile)
+	}
+
 	if err := errors.Join(errs...); err != nil {
 		return Config{}, fmt.Errorf("invalid configuration: %w", err)
 	}
@@ -164,4 +179,44 @@ func IsLoopback(addr string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
+}
+
+var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+// ReadWorkerID returns the worker id stored in path, "" if the file does not exist. A malformed file
+// is an error (fail closed rather than guessing).
+func ReadWorkerID(path string) (string, error) {
+	b, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", VarWorkerIDFile, err)
+	}
+	id := strings.ToLower(strings.TrimSpace(string(b)))
+	if !uuidRe.MatchString(id) {
+		return "", fmt.Errorf("%s does not contain a worker id (UUID)", VarWorkerIDFile)
+	}
+	return id, nil
+}
+
+// WriteWorkerID stores id in path atomically (temp file + rename in the same directory).
+func WriteWorkerID(path, id string) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".worker-id-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.WriteString(id + "\n"); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }

@@ -173,6 +173,12 @@ func TestAC18_ThousandJobsThreeWorkers(t *testing.T) {
 	if attempts != total+total/4 || retries != total/4 || active != "0" {
 		t.Fatalf("attempts=%d retries=%d active=%s", attempts, retries, active)
 	}
+	// CR-M5-01 #5: handler logs reach log_tail through the SDK (fail_n_times logs every attempt).
+	logged := c.q(t, `SELECT count(*)::text FROM job_attempts a JOIN jobs j ON j.id = a.job_id
+		WHERE j.handler_name = 'fail_n_times' AND a.log_tail LIKE '%fail_n_times attempt%' AND NOT a.log_truncated`)
+	if logged != fmt.Sprint(total/2+total/4) {
+		t.Fatalf("attempts with captured log_tail = %s, want %d", logged, total/2+total/4)
+	}
 }
 
 // AC-04 preview: a worker that loses the coordinator mid-handler is fenced; the attempt expires and

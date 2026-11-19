@@ -22,12 +22,13 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Sendiw14/Clusterx/apps/control-plane/internal/auth"
 	"github.com/Sendiw14/Clusterx/apps/control-plane/internal/catalog"
 	"github.com/Sendiw14/Clusterx/apps/control-plane/internal/store"
 )
 
 // Contract version this server implements (OpenAPI info.version).
-const APIVersion = "1.0.0-draft.5"
+const APIVersion = "1.0.0-draft.6"
 
 // Bounds (ADR-0004, OpenAPI Config.limits).
 const (
@@ -36,8 +37,8 @@ const (
 	MaxJSONDepth    = 32
 )
 
-// V1 wires the /api/v1 operations of M4: job submit/read, worker read, handler catalogue, config.
-// Cancel, retry, drain, tokens, sessions, metrics, audit and stream are not routed (M5+).
+// V1 wires every /api/v1 operation of OpenAPI 1.0.0-draft.6. Authentication: direct API tokens and BFF
+// service assertions (ADR-0005/0006); authorization per docs/security/permissions.md, enforced in Go.
 type V1 struct {
 	Store       *store.Store
 	Catalog     *catalog.Catalog
@@ -46,6 +47,17 @@ type V1 struct {
 	Commit      string
 	Timing      ConfigTiming
 	Log         *slog.Logger
+	// Verifier checks BFF assertions; nil or keyless rejects every assertion (tokens still work).
+	Verifier *auth.Verifier
+	Sessions store.SessionTiming
+	// Rate limits (in-memory, single coordinator). Nil disables the limit.
+	Mutations    *Limiter // per principal, every mutating request
+	AuthFailures *Limiter // per TCP peer, consumed by failed authentication
+	Logins       *Limiter // per GitHub id, POST /sessions
+	// Hub fans stream hints out to WebSocket clients; nil disables /api/v1/stream (503).
+	Hub *Hub
+	// StreamOrigins is the WebSocket Origin allowlist; a request without Origin (server-to-server BFF) is allowed.
+	StreamOrigins []string
 }
 
 // ConfigTiming is reported by GET /config.
@@ -73,57 +85,45 @@ func route(mux *http.ServeMux, path string, methods map[string]http.HandlerFunc)
 }
 
 func (v *V1) register(mux *http.ServeMux) {
+	read := func(scope string) access { return access{scope: scope} }
+	write := func(scope string) access { return access{scope: scope} }
+	sess := access{sessionOnly: true}
+	opSess := access{sessionOnly: true, operator: true}
 	route(mux, "/api/v1/jobs", map[string]http.HandlerFunc{
-		http.MethodPost: v.auth("jobs:write", v.createJob),
-		http.MethodGet:  v.auth("jobs:read", v.listJobs),
+		http.MethodPost: v.guard(write("jobs:write"), v.createJob),
+		http.MethodGet:  v.guard(read("jobs:read"), v.listJobs),
 	})
-	route(mux, "/api/v1/jobs/{id}", map[string]http.HandlerFunc{http.MethodGet: v.auth("jobs:read", v.getJob)})
-	route(mux, "/api/v1/jobs/{id}/attempts", map[string]http.HandlerFunc{http.MethodGet: v.auth("jobs:read", v.listAttempts)})
-	route(mux, "/api/v1/jobs/{id}/events", map[string]http.HandlerFunc{http.MethodGet: v.auth("jobs:read", v.listEvents)})
-	route(mux, "/api/v1/workers", map[string]http.HandlerFunc{http.MethodGet: v.auth("workers:read", v.listWorkers)})
-	route(mux, "/api/v1/workers/{id}", map[string]http.HandlerFunc{http.MethodGet: v.auth("workers:read", v.getWorker)})
-	route(mux, "/api/v1/handlers", map[string]http.HandlerFunc{http.MethodGet: v.auth("jobs:read", v.listHandlers)})
-	route(mux, "/api/v1/config", map[string]http.HandlerFunc{http.MethodGet: v.auth("*:read", v.getConfig)})
+	route(mux, "/api/v1/jobs/{id}", map[string]http.HandlerFunc{http.MethodGet: v.guard(read("jobs:read"), v.getJob)})
+	route(mux, "/api/v1/jobs/{id}/attempts", map[string]http.HandlerFunc{http.MethodGet: v.guard(read("jobs:read"), v.listAttempts)})
+	route(mux, "/api/v1/jobs/{id}/events", map[string]http.HandlerFunc{http.MethodGet: v.guard(read("jobs:read"), v.listEvents)})
+	route(mux, "/api/v1/jobs/{id}/cancel", map[string]http.HandlerFunc{http.MethodPost: v.guard(write("jobs:write"), v.cancelJob)})
+	route(mux, "/api/v1/jobs/{id}/retry", map[string]http.HandlerFunc{http.MethodPost: v.guard(write("jobs:write"), v.retryJob)})
+	route(mux, "/api/v1/workers", map[string]http.HandlerFunc{http.MethodGet: v.guard(read("workers:read"), v.listWorkers)})
+	route(mux, "/api/v1/workers/{id}", map[string]http.HandlerFunc{http.MethodGet: v.guard(read("workers:read"), v.getWorker)})
+	route(mux, "/api/v1/workers/{id}/drain", map[string]http.HandlerFunc{http.MethodPost: v.guard(write("workers:write"), v.drainWorker)})
+	route(mux, "/api/v1/handlers", map[string]http.HandlerFunc{http.MethodGet: v.guard(read("jobs:read"), v.listHandlers)})
+	route(mux, "/api/v1/config", map[string]http.HandlerFunc{http.MethodGet: v.guard(read("*:read"), v.getConfig)})
+	route(mux, "/api/v1/metrics/overview", map[string]http.HandlerFunc{http.MethodGet: v.guard(read("metrics:read"), v.metricsOverview)})
+	route(mux, "/api/v1/metrics/timeseries", map[string]http.HandlerFunc{http.MethodGet: v.guard(read("metrics:read"), v.metricsTimeseries)})
+	route(mux, "/api/v1/audit", map[string]http.HandlerFunc{http.MethodGet: v.guard(read("audit:read"), v.listAudit)})
+	route(mux, "/api/v1/sessions", map[string]http.HandlerFunc{http.MethodPost: v.createSession})
+	route(mux, "/api/v1/sessions/current", map[string]http.HandlerFunc{http.MethodDelete: v.guard(sess, v.deleteSession)})
+	route(mux, "/api/v1/me", map[string]http.HandlerFunc{http.MethodGet: v.guard(sess, v.getMe)})
+	route(mux, "/api/v1/tokens", map[string]http.HandlerFunc{
+		http.MethodGet:  v.guard(opSess, v.listTokens),
+		http.MethodPost: v.guard(opSess, v.createToken),
+	})
+	route(mux, "/api/v1/tokens/{id}/revoke", map[string]http.HandlerFunc{http.MethodPost: v.guard(opSess, v.revokeToken)})
+	route(mux, "/api/v1/worker-credentials", map[string]http.HandlerFunc{
+		http.MethodGet:  v.guard(opSess, v.listWorkerCredentials),
+		http.MethodPost: v.guard(opSess, v.createWorkerCredential),
+	})
+	route(mux, "/api/v1/worker-credentials/{id}/revoke", map[string]http.HandlerFunc{http.MethodPost: v.guard(opSess, v.revokeWorkerCredential)})
+	route(mux, "/api/v1/stream", map[string]http.HandlerFunc{http.MethodGet: v.guard(access{scope: "jobs:read", stream: true}, v.stream)})
 }
 
 func writeErrorDetails(w http.ResponseWriter, r *http.Request, status int, code, msg string, details map[string]any) {
 	writeJSON(w, status, Error{Code: code, Message: msg, Details: details, RequestID: RequestID(r.Context())})
-}
-
-func (v *V1) unauthenticated(w http.ResponseWriter, r *http.Request, reason string) {
-	w.Header().Set("WWW-Authenticate", `Bearer realm="clusterx"`)
-	writeErrorDetails(w, r, http.StatusUnauthorized, "unauthenticated", "Authentication required.", map[string]any{"reason": reason})
-}
-
-// auth authenticates the direct API token on every request (no cache) and checks the scope.
-// "*:read" accepts any read scope. Service assertions (BFF) arrive in M5 and are rejected here.
-func (v *V1) auth(scope string, next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		secret, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if !ok || secret == "" {
-			v.unauthenticated(w, r, "token_invalid")
-			return
-		}
-		p, err := v.Store.AuthenticateToken(r.Context(), secret)
-		if err != nil {
-			if d, ok := errors.AsType[*store.Denial](err); ok {
-				v.unauthenticated(w, r, d.Reason)
-				return
-			}
-			v.fail(w, r, err)
-			return
-		}
-		allowed := p.Has(scope)
-		if scope == "*:read" {
-			allowed = slices.ContainsFunc(p.Scopes, func(s string) bool { return strings.HasSuffix(s, ":read") })
-		}
-		if !allowed {
-			writeErrorDetails(w, r, http.StatusForbidden, "forbidden", "Your token does not allow this action.",
-				map[string]any{"required": scope, "role": p.Role})
-			return
-		}
-		next(w, r.WithContext(context.WithValue(r.Context(), principalKey{}, p)))
-	}
 }
 
 func principal(r *http.Request) store.Principal {
@@ -146,11 +146,32 @@ func (v *V1) fail(w http.ResponseWriter, r *http.Request, err error) {
 			writeErrorDetails(w, r, http.StatusGone, "expired", "This job's data has expired.",
 				map[string]any{"terminal_at": term, "expired_at": exp, "retention_days": 30})
 			return
+		case "token_not_found":
+			writeError(w, r, http.StatusNotFound, "token_not_found", "Token not found.")
+			return
+		case "worker_credential_not_found":
+			writeError(w, r, http.StatusNotFound, "worker_credential_not_found", "Worker credential not found.")
+			return
+		case "user_disabled", "session_revoked":
+			v.unauthenticatedReason(w, r, d.Reason)
+			return
+		case "validation_failed":
+			writeErrorDetails(w, r, http.StatusUnprocessableEntity, "validation_failed", "Request has invalid fields.",
+				map[string]any{"fields": []fieldErr{{Field: "/", Rule: "range", Message: d.Detail}}})
+			return
 		case "payload_too_large":
 			writeErrorDetails(w, r, http.StatusRequestEntityTooLarge, "payload_too_large", "Payload exceeds 65536 bytes.",
 				map[string]any{"limit_bytes": MaxPayloadBytes, "field": "payload"})
 			return
 		}
+	}
+	if c, ok := errors.AsType[*store.Conflict](err); ok {
+		d := map[string]any{"status": c.Status, "version": c.Version}
+		for k, x := range c.Extra {
+			d[k] = x
+		}
+		writeErrorDetails(w, r, http.StatusConflict, c.Reason, conflictMessage[c.Reason], d)
+		return
 	}
 	if errors.Is(err, store.ErrUnavailable) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		w.Header().Set("Retry-After", "2")

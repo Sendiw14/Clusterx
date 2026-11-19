@@ -2,6 +2,7 @@ package config
 
 import (
 	"maps"
+	"os"
 	"strings"
 	"testing"
 )
@@ -62,5 +63,25 @@ func TestLoad(t *testing.T) {
 				t.Fatalf("defaults: %+v", cfg)
 			}
 		})
+	}
+}
+
+func TestWorkerIDFile(t *testing.T) {
+	p := t.TempDir() + "/id"
+	if id, err := ReadWorkerID(p); err != nil || id != "" {
+		t.Fatalf("missing file: %q %v", id, err)
+	}
+	const id = "0193a0f2-7c1e-7a10-8000-0000000000a1"
+	if err := WriteWorkerID(p, id); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := ReadWorkerID(p); err != nil || got != id {
+		t.Fatalf("round trip: %q %v", got, err)
+	}
+	if err := os.WriteFile(p, []byte("../../etc"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadWorkerID(p); err == nil {
+		t.Fatal("malformed id accepted")
 	}
 }

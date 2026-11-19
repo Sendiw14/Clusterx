@@ -1,6 +1,9 @@
 package sdk
 
-import "context"
+import (
+	"context"
+	"log/slog"
+)
 
 // Job describes the attempt a handler is executing.
 type Job struct {
@@ -13,6 +16,10 @@ type Job struct {
 	MaxAttempts int
 	// Handler is the name and version the job was submitted for.
 	Handler HandlerKey
+	// Log is the attempt logger. Its output (text format, attributes with secret-like keys redacted)
+	// is also captured, bounded to the last 16 KiB, and reported as the attempt's log_tail; it also goes
+	// to the worker log. Never log secrets: the coordinator keeps log_tail for 7 days. Nil outside a Worker.
+	Log *slog.Logger
 }
 
 // Handler executes one job attempt with a typed payload P and returns a typed result R.

@@ -98,7 +98,7 @@ func TestAuthAndLimits(t *testing.T) {
 	// Another worker's identity with this credential.
 	other := register(t, env, addr, 1, "sleep_ms")
 	_, err = w.Heartbeat(bg, &workerv1.HeartbeatRequest{Identity: other.id})
-	wantErr(t, err, codes.Unauthenticated, "credential_revoked")
+	wantErr(t, err, codes.PermissionDenied, "credential_mismatch")
 }
 
 func TestClaimRenewReportFlow(t *testing.T) {

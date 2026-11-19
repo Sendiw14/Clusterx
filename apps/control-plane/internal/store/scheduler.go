@@ -68,7 +68,10 @@ func (s *Store) RecoverExpired(ctx context.Context, limit int) (int, error) {
 				backoff = s.Timing.Backoff.Delay(used)
 				data["backoff_ms"] = backoff.Milliseconds()
 			default:
-				to, errCode = "failed", "attempts_exhausted"
+				// Budget exhausted: the attempt outcome stays lease_expired / deadline_exceeded (attempt row and
+				// data.attempt_state); the job event is attempts_exhausted with the failure_class (CR-M5-01 #3).
+				to, errCode, event = "failed", "attempts_exhausted", "attempts_exhausted"
+				data["attempt_state"] = attemptState
 				failureClass = "lease_expired"
 				if deadline {
 					failureClass = "timeout"
@@ -118,56 +121,6 @@ type CancelResult struct {
 	HTTP    int
 	Status  string
 	Version int64
-}
-
-// RequestCancel implements E9 (REST route arrives in M5; used by tests now). The job row lock makes the
-// branch deterministic; each write is a CAS. Timestamps are clock_timestamp() after the lock (NF-02).
-func (s *Store) RequestCancel(ctx context.Context, jobID, actor string) (CancelResult, error) {
-	var res CancelResult
-	err := s.inTx(ctx, false, func(tx pgx.Tx) error {
-		var status string
-		var requested bool
-		var version int64
-		err := tx.QueryRow(ctx, `SELECT status, cancel_requested_at IS NOT NULL, version FROM jobs WHERE id = $1 FOR UPDATE`, jobID).
-			Scan(&status, &requested, &version)
-		if isNoRows(err) {
-			return deny("job_not_found")
-		} else if err != nil {
-			return err
-		}
-		switch {
-		case status == "scheduled" || status == "queued" || status == "retry_wait":
-			if err := tx.QueryRow(ctx, `UPDATE jobs SET status = 'canceled', terminal_at = clock_timestamp(),
-					cancel_requested_at = clock_timestamp(), failure_class = 'canceled_by_operator', cancel_requested_by = $2,
-					version = version + 1, updated_at = clock_timestamp()
-				WHERE id = $1 AND status IN ('scheduled', 'queued', 'retry_wait') RETURNING version`, jobID, actor).Scan(&version); err != nil {
-				return err
-			}
-			res = CancelResult{200, "canceled", version}
-			_, err = tx.Exec(ctx, `INSERT INTO job_events (job_id, version, event_type, from_status, to_status, actor, occurred_at, data)
-				VALUES ($1, $2, 'canceled', $3, 'canceled', $4, clock_timestamp(), '{"failure_class":"canceled_by_operator"}')`, jobID, version, status, actor)
-			return err
-		case status == "running" && !requested:
-			if err := tx.QueryRow(ctx, `UPDATE jobs SET cancel_requested_at = clock_timestamp(), cancel_requested_by = $2,
-					lease_expires_at = LEAST(lease_expires_at, clock_timestamp() + $3::interval), version = version + 1,
-					updated_at = clock_timestamp()
-				WHERE id = $1 AND status = 'running' AND cancel_requested_at IS NULL RETURNING version`, jobID, actor, s.Timing.CancelGrace).Scan(&version); err != nil {
-				return err
-			}
-			res = CancelResult{202, "running", version}
-			_, err = tx.Exec(ctx, `INSERT INTO job_events (job_id, version, event_type, from_status, to_status, actor, occurred_at)
-				VALUES ($1, $2, 'cancel_requested', 'running', 'running', $3, clock_timestamp())`, jobID, version, actor)
-			return err
-		case status == "running":
-			res = CancelResult{202, "running", version}
-		case status == "canceled":
-			res = CancelResult{200, "canceled", version}
-		default:
-			res = CancelResult{409, status, version}
-		}
-		return nil
-	})
-	return res, err
 }
 
 // CleanupIdempotency deletes up to limit expired idempotency rows (ADR-0004, 24 h retention).

@@ -6,6 +6,7 @@ require (
 	github.com/Sendiw14/Clusterx/examples/basic-jobs v0.0.0-00010101000000-000000000000
 	github.com/Sendiw14/Clusterx/packages/proto v0.0.0-00010101000000-000000000000
 	github.com/Sendiw14/Clusterx/packages/sdk-go v0.0.0-00010101000000-000000000000
+	github.com/coder/websocket v1.8.14
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/prometheus/client_golang v1.25.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260817212433-ac3dfec99bb1

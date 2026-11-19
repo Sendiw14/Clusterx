@@ -425,7 +425,7 @@ func (s *Store) classify(ctx context.Context, tx pgx.Tx, r AttemptRef, action st
 	var status, attemptState string
 	var cur *string
 	var gen int64
-	var leaseOK, deadlineOK, owner, incOK, deregistered, credOK, sameResult bool
+	var leaseOK, deadlineOK, owner, incOK, deregistered, credMatch, credValid, sameResult bool
 	var attemptClass *string
 	var hash []byte
 	if result != nil {
@@ -435,13 +435,19 @@ func (s *Store) classify(ctx context.Context, tx pgx.Tx, r AttemptRef, action st
 			coalesce(j.lease_expires_at > clock_timestamp(), false), coalesce(j.hard_deadline_at > clock_timestamp(), false),
 			a.state, (a.worker_id = $3 AND a.worker_incarnation_id = $4), (w.current_incarnation_id = $4),
 			w.status = 'deregistered',
-			(w.credential_id = $5 AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at > clock_timestamp())),
+			w.credential_id = $5, (c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at > clock_timestamp())),
 			coalesce(a.result_sha256 = $6, false), a.error_class
 		FROM jobs j JOIN job_attempts a ON a.id = $2 AND a.job_id = j.id
 		JOIN workers w ON w.id = $3 JOIN worker_credentials c ON c.id = w.credential_id
 		WHERE j.id = $1`, r.JobID, r.AttemptID, r.WorkerID, r.IncarnationID, r.CredentialID, hash).
-		Scan(&status, &cur, &gen, &leaseOK, &deadlineOK, &attemptState, &owner, &incOK, &deregistered, &credOK, &sameResult, &attemptClass)
+		Scan(&status, &cur, &gen, &leaseOK, &deadlineOK, &attemptState, &owner, &incOK, &deregistered, &credMatch, &credValid, &sameResult, &attemptClass)
 	terminal := status == "succeeded" || status == "failed" || status == "canceled"
+	credOK := credMatch && credValid
+	// credential_mismatch: a valid credential presented for a worker bound to another credential (CR-M5-01).
+	credReason := "credential_revoked"
+	if !credMatch {
+		credReason = "credential_mismatch"
+	}
 	reason := ""
 	switch {
 	case isNoRows(err):
@@ -451,7 +457,7 @@ func (s *Store) classify(ctx context.Context, tx pgx.Tx, r AttemptRef, action st
 	case terminal && !owner: // someone else's attempt (RV01-07)
 		reason = "stale_attempt"
 	case terminal && !credOK:
-		reason = "credential_revoked"
+		reason = credReason
 	case status == "succeeded" && attemptState == "succeeded" && result != nil && sameResult:
 		return Reply{Outcome: OutcomeSucceeded, AlreadyFinal: true}, nil, nil
 	case status == "succeeded" && attemptState == "succeeded" && result != nil:
@@ -473,7 +479,7 @@ func (s *Store) classify(ctx context.Context, tx pgx.Tx, r AttemptRef, action st
 	case deregistered:
 		reason = "worker_deregistered"
 	case !credOK:
-		reason = "credential_revoked"
+		reason = credReason
 	default:
 		reason = "stale_attempt"
 	}
@@ -485,7 +491,7 @@ func (s *Store) classify(ctx context.Context, tx pgx.Tx, r AttemptRef, action st
 
 func auditCategory(reason string) string {
 	switch reason {
-	case "credential_revoked", "incarnation_mismatch", "worker_deregistered", "result_mismatch":
+	case "credential_revoked", "credential_mismatch", "incarnation_mismatch", "worker_deregistered", "result_mismatch":
 		return "security"
 	}
 	return "diagnostic"

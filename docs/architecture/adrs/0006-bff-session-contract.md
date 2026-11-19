@@ -121,3 +121,26 @@ submit as the user. Do **not** use `localStorage`.
   user (via `POST /api/v1/sessions`). The `sid`↔`sub` binding only stops cross-user reuse of existing sessions.
 - Per-request DB session checks cost about one indexed lookup per API call. That is acceptable at 1.0 scale
   and should be re-measured in the AC-19 benchmark.
+
+## 7. Implementation notes (TASK-M5-BE-01, OpenAPI draft.6)
+
+- **Keys.** Go reads `CLUSTERX_BFF_JWKS_FILE`: a JWKS of Ed25519 OKP public keys (`{"keys":[{"kty":"OKP","crv":"Ed25519","kid":"…","x":"…"}]}`,
+  1..16 keys). A JWK with a private member `d` is refused at start-up. Without the variable every assertion is rejected
+  (`assertion_invalid`) and only API tokens work. Rotation = add the new `kid` to the JWKS, restart, switch signing, drop the old `kid`.
+- **Header/claims are strict.** `alg` must be `EdDSA`, `typ` `clusterx-assertion+jwt`, no `crit`. The claim set is closed:
+  `iss, aud, sub, sid, role, purpose, iat, nbf, exp, jti, rid` (unknown claims ⇒ `assertion_invalid`). `jti` is 16..128
+  base64url characters (128 random bits recommended). `exp - iat <= 60 s`; `iat`/`nbf` may lead the Go clock by at most 5 s;
+  `exp` may lag it by at most 5 s (`assertion_expired`).
+- **Single use.** Mutations (non-GET/HEAD) and every login assertion consume the `jti` in an in-memory cache (120 s,
+  at most 100 000 live entries; when full, new mutations fail closed with `assertion_invalid`). GET and WebSocket upgrades
+  do not consume it. The RV01-12 restart residual stands.
+- **Sessions.** `secret` = `cxs_` + 43 base64url characters (256 bits); only its SHA-256 is stored. Unknown `sid` ⇒
+  `session_revoked`; `sid` of another user ⇒ `assertion_invalid` + security audit `assertion.sid_mismatch`; role hint ≠ DB role ⇒
+  security audit `assertion.role_mismatch` (DB role used). Every request re-checks the session in PostgreSQL (no cache, stricter
+  than the ≤ 5 s read cache allowed above). Lifetimes: `CLUSTERX_SESSION_IDLE_TIMEOUT` (default 2 h), `CLUSTERX_SESSION_ABSOLUTE_TTL`
+  (default 12 h).
+- **Development.** `clusterx-control-plane dev-keygen --out-dir D` writes `bff-dev-private.jwk.json` (0600) and
+  `bff-dev.jwks.json`; `dev-assertion --key-file F (--login <github id> | --sub user:<uuid> --sid <uuid> --role r)` prints one
+  assertion. Both refuse `CLUSTERX_ENV=production`. They are local test helpers, not a login bypass: users must still be
+  allowlisted (`clusterx-control-plane user upsert --github-id N --login L --role operator|viewer`).
+- **CSRF** stays a BFF concern (§3); Go never sees browser cookies, so there is no CSRF surface in Go.

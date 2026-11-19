@@ -69,3 +69,12 @@ no TRUNCATE/DDL. `clusterx_retention`: the deletes above. Login users are grante
 ## Migrations
 Forward-only, numbered `NNNN_name.sql`, each applied in one transaction, expand → backfill → contract
 across releases; no destructive change in the same release that stops using a column.
+
+## Implementation notes (TASK-M5-BE-01)
+- `clusterx-control-plane retention run` (one bounded pass: ≤ 20 × 1000 rows per category) and the optional in-process loop
+  (`CLUSTERX_RETENTION_INTERVAL`, ≥ 1 m) connect with `CLUSTERX_RETENTION_DATABASE_URL`, a login role in `clusterx_retention`.
+  The runtime role cannot run it (42501). Tombstones are inserted in the same statement as the job DELETE.
+- Credential idempotency (`POST /tokens`, `POST /worker-credentials`): `submission_idempotency.job_id` references `jobs`, so the
+  key and request fingerprint are stored in the create audit row (`details.idempotency_key`, `details.fingerprint`, 24 h window),
+  serialized by `pg_advisory_xact_lock` on (actor, action, key). No schema change.
+- Migration 0003 is additive (indexes only) for metrics series and session retention.
