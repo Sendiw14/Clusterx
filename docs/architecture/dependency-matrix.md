@@ -29,6 +29,7 @@ Rule (§3): adopt as a tested set; pin exact versions; re-verify advisories mont
 | ESLint | 9.39.5 (+ eslint-config-next 16.4.6, typescript-eslint 8.73.0) | lint exit 0 | ESLint 10 rejected: bundled plugin peers stop at 9 |
 | Vitest / Vite | 5.1.1 / 8.3.8 (jsdom 31.0.1) | 50 tests | |
 | Playwright / axe | @playwright/test 1.65.1 (Chromium 159) / @axe-core/playwright 4.14.0 | e2e exit 0; axe 0 violations (59 scans) | Firefox/WebKit NOT RUN |
+| marked / yaml (docs build) | 18.2.1 / 2.9.1 | build-time API reference + docs search index | web importer only |
 | Motion | not installed | CSS + rAF meet motion matrix | add only if needed |
 | Fonts | IBM Plex Sans/Mono, Newsreader (OFL 1.1, self-hosted) | hashes in `apps/web/public/fonts/FONTS.md` | OD-17 |
 | GitHub Actions | checkout v7.0.1 `3d3c42e5…`, setup-go v7.1.0 `d8cbb804…`, setup-node v7.1.0 `949feb24…`, pnpm/action-setup v6.1.1 `73e46992…` | pinned by SHA | |
