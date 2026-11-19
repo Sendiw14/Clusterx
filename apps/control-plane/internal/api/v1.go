@@ -28,7 +28,7 @@ import (
 )
 
 // Contract version this server implements (OpenAPI info.version).
-const APIVersion = "1.0.0-draft.6"
+const APIVersion = "1.0.0-draft.7"
 
 // Bounds (ADR-0004, OpenAPI Config.limits).
 const (
@@ -37,7 +37,7 @@ const (
 	MaxJSONDepth    = 32
 )
 
-// V1 wires every /api/v1 operation of OpenAPI 1.0.0-draft.6. Authentication: direct API tokens and BFF
+// V1 wires every /api/v1 operation of OpenAPI 1.0.0-draft.7. Authentication: direct API tokens and BFF
 // service assertions (ADR-0005/0006); authorization per docs/security/permissions.md, enforced in Go.
 type V1 struct {
 	Store       *store.Store

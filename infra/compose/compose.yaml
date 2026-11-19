@@ -1,5 +1,7 @@
 # CLUSTERX local starter (development only — NOT a production example; see docs/operations/deployment.md, M8).
 # Usage: cp ../../.env.example ../../.env && ./bootstrap.sh
+# Secrets are compose `secrets:` files under ./.secrets/ (gitignored, written by bootstrap.sh), mounted at
+# /run/secrets/<name> and read through *_FILE variables, so they never appear in `docker inspect` (RV5-09).
 name: clusterx
 x-cp-env: &cp-env
   CLUSTERX_ENV: development
@@ -7,8 +9,9 @@ x-cp-env: &cp-env
   CLUSTERX_HTTP_ADDR: 0.0.0.0:8080
   CLUSTERX_GRPC_ADDR: 0.0.0.0:9090
   CLUSTERX_METRICS_ADDR: 0.0.0.0:9091
-  CLUSTERX_METRICS_TOKEN: ${CLUSTERX_METRICS_TOKEN:?set in .env}
-  CLUSTERX_DATABASE_URL: postgres://clusterx_app:${CLUSTERX_APP_DB_PASSWORD:?set in .env}@postgres:5432/clusterx?sslmode=disable
+  CLUSTERX_METRICS_TOKEN_FILE: /run/secrets/metrics_token
+  CLUSTERX_DATABASE_URL_FILE: /run/secrets/database_url
+  CLUSTERX_BFF_JWKS_FILE: /run/secrets/bff_jwks # local dev key pair from `dev-keygen` (bootstrap.sh)
   CLUSTERX_MIGRATE_ON_START: "false"
 
 services:
@@ -17,8 +20,8 @@ services:
     environment:
       POSTGRES_DB: clusterx
       POSTGRES_USER: clusterx_admin
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
-      CLUSTERX_APP_DB_PASSWORD: ${CLUSTERX_APP_DB_PASSWORD:?set in .env}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password, app_db_password, retention_db_password]
     volumes:
       - pgdata:/var/lib/postgresql
       - ./initdb:/docker-entrypoint-initdb.d:ro
@@ -31,31 +34,50 @@ services:
 
   migrate:
     build: { context: ../.., dockerfile: apps/control-plane/Dockerfile }
-    image: clusterx/control-plane:local
+    image: ${CLUSTERX_IMAGE_PREFIX:-clusterx}/control-plane:local
     command: ["migrate"]
     environment:
       CLUSTERX_ENV: development
-      CLUSTERX_MIGRATE_DATABASE_URL: postgres://clusterx_admin:${POSTGRES_PASSWORD}@postgres:5432/clusterx?sslmode=disable
-      CLUSTERX_DATABASE_URL: postgres://clusterx_app:${CLUSTERX_APP_DB_PASSWORD}@postgres:5432/clusterx?sslmode=disable
+      CLUSTERX_MIGRATE_DATABASE_URL_FILE: /run/secrets/migrate_database_url
+      CLUSTERX_DATABASE_URL_FILE: /run/secrets/database_url
+    secrets: [migrate_database_url, database_url]
     depends_on: { postgres: { condition: service_healthy } }
     restart: "no"
 
   control-plane:
-    image: clusterx/control-plane:local
+    image: ${CLUSTERX_IMAGE_PREFIX:-clusterx}/control-plane:local
     command: ["serve"]
     environment: *cp-env
+    secrets: [metrics_token, database_url, bff_jwks]
     depends_on:
       migrate: { condition: service_completed_successfully }
     ports:
-      - "127.0.0.1:8080:8080"
-      - "127.0.0.1:9091:9091"
+      - "127.0.0.1:${CLUSTERX_HTTP_PORT:-8080}:8080"
+      - "127.0.0.1:${CLUSTERX_METRICS_PORT:-9091}:9091"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  # Optional: one bounded retention pass as the clusterx_retention_job login (ADR-0004), e.g. from cron:
+  #   docker compose --env-file ../../.env --profile retention run --rm retention
+  retention:
+    image: ${CLUSTERX_IMAGE_PREFIX:-clusterx}/control-plane:local
+    profiles: [retention]
+    command: ["retention", "run"]
+    environment:
+      CLUSTERX_ENV: development
+      CLUSTERX_DATABASE_URL_FILE: /run/secrets/database_url
+      CLUSTERX_RETENTION_DATABASE_URL_FILE: /run/secrets/retention_database_url
+    secrets: [database_url, retention_database_url]
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: "no"
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
 
   worker: &worker
     build: { context: ../.., dockerfile: apps/worker/Dockerfile }
-    image: clusterx/worker:local
+    image: ${CLUSTERX_IMAGE_PREFIX:-clusterx}/worker:local
     profiles: [workers]
     environment: &worker-env
       CLUSTERX_ENV: development
@@ -63,7 +85,8 @@ services:
       CLUSTERX_WORKER_INSECURE: "true" # plaintext only inside the private compose network
       CLUSTERX_WORKER_CAPACITY: "4"
       CLUSTERX_WORKER_NAME: worker-1
-      CLUSTERX_WORKER_CREDENTIAL: ${CLUSTERX_WORKER_CREDENTIAL_1:-}
+      CLUSTERX_WORKER_CREDENTIAL_FILE: /run/secrets/worker_credential_1
+    secrets: [worker_credential_1]
     depends_on: [control-plane]
     read_only: true
     cap_drop: [ALL]
@@ -76,14 +99,29 @@ services:
     environment:
       <<: *worker-env
       CLUSTERX_WORKER_NAME: worker-2
-      CLUSTERX_WORKER_CREDENTIAL: ${CLUSTERX_WORKER_CREDENTIAL_2:-}
+      CLUSTERX_WORKER_CREDENTIAL_FILE: /run/secrets/worker_credential_2
+    secrets: [worker_credential_2]
   worker-3:
     <<: *worker
     build: !reset null # only `worker` builds the shared image (avoids parallel same-tag builds)
     environment:
       <<: *worker-env
       CLUSTERX_WORKER_NAME: worker-3
-      CLUSTERX_WORKER_CREDENTIAL: ${CLUSTERX_WORKER_CREDENTIAL_3:-}
+      CLUSTERX_WORKER_CREDENTIAL_FILE: /run/secrets/worker_credential_3
+    secrets: [worker_credential_3]
+
+secrets:
+  postgres_password: { file: ./.secrets/postgres_password }
+  app_db_password: { file: ./.secrets/app_db_password }
+  retention_db_password: { file: ./.secrets/retention_db_password }
+  database_url: { file: ./.secrets/database_url }
+  migrate_database_url: { file: ./.secrets/migrate_database_url }
+  retention_database_url: { file: ./.secrets/retention_database_url }
+  metrics_token: { file: ./.secrets/metrics_token }
+  bff_jwks: { file: ./.secrets/bff-dev.jwks.json }
+  worker_credential_1: { file: ./.secrets/worker_credential_1 }
+  worker_credential_2: { file: ./.secrets/worker_credential_2 }
+  worker_credential_3: { file: ./.secrets/worker_credential_3 }
 
 volumes:
   pgdata:
