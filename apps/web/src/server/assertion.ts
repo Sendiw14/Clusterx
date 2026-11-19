@@ -19,15 +19,17 @@ async function signingKey(path: string) {
 
 /** One fresh assertion per upstream request (fresh 128-bit jti, 60 s lifetime). Never logged, never sent to the browser. */
 export async function mintAssertion(keyFile: string, spec: AssertionSpec): Promise<string> {
+  // One clock read for iat, nbf and exp: separate reads can straddle a second and give exp - iat = 61, which Go rejects (RV6-04).
+  const now = Math.floor(Date.now() / 1000);
   const { kid, key } = await signingKey(keyFile);
   const base = spec.login ? { sub: `github:${spec.githubId}`, purpose: "login" } : { sub: `user:${spec.userId}`, sid: spec.sid, role: spec.role };
   return new SignJWT({ ...base, rid: spec.rid })
     .setProtectedHeader({ alg: "EdDSA", typ: "clusterx-assertion+jwt", kid })
     .setIssuer("clusterx-bff")
     .setAudience("clusterx-control-plane")
-    .setIssuedAt()
-    .setNotBefore("0s")
-    .setExpirationTime("60s")
+    .setIssuedAt(now)
+    .setNotBefore(now)
+    .setExpirationTime(now + 60)
     .setJti(randomId(16))
     .sign(key);
 }

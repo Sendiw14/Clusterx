@@ -9,6 +9,7 @@
  *   CLUSTERX_API_URL                Go control plane base URL
  *   CLUSTERX_BFF_KEY_FILE           path to the Ed25519 private JWK (never in the bundle)
  *   CLUSTERX_WEB_SESSION_KEY        base64, >= 32 bytes: seals cookies and derives the CSRF key
+ *   CLUSTERX_WEB_SESSION_KEY_PREVIOUS  optional, same format: still accepted for opening cookies and CSRF tokens during a key rotation window (RV6-07); never used to seal
  *   CLUSTERX_GITHUB_CLIENT_ID / _SECRET
  *   CLUSTERX_GITHUB_AUTHORIZE_URL / _TOKEN_URL / _USER_URL   non-production only (mock OAuth server in tests)
  */
@@ -18,6 +19,8 @@ export interface WebConfig {
   apiUrl: string;
   secureCookies: boolean;
   sessionKey: Buffer;
+  /** Old key kept during a rotation window: accepted, never used to seal. */
+  previousSessionKey?: Buffer;
   keyFile: string;
   github: { clientId: string; clientSecret: string; authorizeUrl: string; tokenUrl: string; userUrl: string };
 }
@@ -47,6 +50,8 @@ export function loadConfig(e: Record<string, string | undefined> = process.env):
   try {
     const u = new URL(e.CLUSTERX_API_URL ?? "http://localhost:8080");
     if (u.protocol !== "https:" && u.protocol !== "http:") throw new Error("scheme");
+    // Assertions travel BFF to Go: TLS is required in production unless the control plane is on loopback (RV6-05, MASTER section 4).
+    if (prod && u.protocol !== "https:" && !isLocalHost(u.hostname)) problems.push("CLUSTERX_API_URL must be https in production (http only for loopback)");
     apiUrl = u.origin;
   } catch {
     problems.push("CLUSTERX_API_URL must be a valid http(s) URL");
@@ -54,6 +59,11 @@ export function loadConfig(e: Record<string, string | undefined> = process.env):
 
   const sessionKey = Buffer.from(e.CLUSTERX_WEB_SESSION_KEY ?? "", "base64");
   if (sessionKey.length < 32) problems.push("CLUSTERX_WEB_SESSION_KEY must be base64 of at least 32 bytes");
+  let previousSessionKey: Buffer | undefined;
+  if (e.CLUSTERX_WEB_SESSION_KEY_PREVIOUS) {
+    previousSessionKey = Buffer.from(e.CLUSTERX_WEB_SESSION_KEY_PREVIOUS, "base64");
+    if (previousSessionKey.length < 32) problems.push("CLUSTERX_WEB_SESSION_KEY_PREVIOUS must be base64 of at least 32 bytes");
+  }
   const keyFile = e.CLUSTERX_BFF_KEY_FILE ?? "";
   if (!keyFile) problems.push("CLUSTERX_BFF_KEY_FILE is required");
 
@@ -72,7 +82,7 @@ export function loadConfig(e: Record<string, string | undefined> = process.env):
   };
 
   if (problems.length) return { ok: false, problems };
-  return { ok: true, config: { env, appOrigin, apiUrl, secureCookies: appOrigin.startsWith("https:"), sessionKey, keyFile, github } };
+  return { ok: true, config: { env, appOrigin, apiUrl, secureCookies: appOrigin.startsWith("https:"), sessionKey, previousSessionKey, keyFile, github } };
 }
 
 let cached: ConfigResult | undefined;
@@ -83,3 +93,6 @@ export function config(): ConfigResult {
 export function resetConfigForTests(): void {
   cached = undefined;
 }
+
+/** Keys that may open a sealed value or verify a CSRF token, current first. Only the first is ever used to seal or issue. */
+export const keyring = (c: WebConfig): Buffer[] => (c.previousSessionKey ? [c.sessionKey, c.previousSessionKey] : [c.sessionKey]);

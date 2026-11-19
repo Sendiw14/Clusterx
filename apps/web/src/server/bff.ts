@@ -1,6 +1,6 @@
 import { csrfToken, requestId, safeEqual } from "./crypto.ts";
 import { clearCookie, readSession, sessionCookieName, type SessionCookie } from "./cookies.ts";
-import { config, type WebConfig } from "./config.ts";
+import { config, keyring, type WebConfig } from "./config.ts";
 import { PASS_HEADERS, callGo, sessionEnded, type GoResult } from "./upstream.ts";
 
 /** BFF-owned envelope, identical shape to Go errors (BFF-02). */
@@ -29,7 +29,9 @@ export function passThrough(r: GoResult, setCookie: string[] = []): Response {
 /** Origin must equal the app origin exactly (a missing Origin is rejected), and X-CSRF-Token must match the session. */
 export function csrfOk(c: WebConfig, req: Request, sid: string): boolean {
   if (req.headers.get("origin") !== c.appOrigin) return false;
-  return safeEqual(req.headers.get("x-csrf-token") ?? "", csrfToken(c.sessionKey, sid));
+  const given = req.headers.get("x-csrf-token") ?? "";
+  // Any key of the rotation window verifies; /bff/session and the rendered pages always issue the current key's token.
+  return keyring(c).reduce((ok, k) => safeEqual(given, csrfToken(k, sid)) || ok, false);
 }
 
 export type Ctx = { c: WebConfig; rid: string; session: SessionCookie };

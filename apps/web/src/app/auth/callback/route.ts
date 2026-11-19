@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { misconfigured } from "@/server/bff";
-import { clearCookie, oauthCookieName, readOAuth, sealSession } from "@/server/cookies";
+import { clearCookie, oauthCookieName, readOAuth, readSession, sealSession } from "@/server/cookies";
 import { config } from "@/server/config";
 import { requestId, safeEqual } from "@/server/crypto";
 import { completeAuthorization } from "@/server/oauth";
-import { callGo } from "@/server/upstream";
+import { callGo, revokeSession } from "@/server/upstream";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +50,10 @@ export async function GET(req: Request) {
     console.error(`[bff] ${rid} session create failed: status=${go.status} reason=${go.reason ?? go.code ?? "-"}`);
     return done("/login?error=upstream_auth", [clear]);
   }
-  const s = JSON.parse(new TextDecoder().decode(go.body)) as { session_id: string; secret: string; user: { id: string; github_login: string }; role: "operator" | "viewer"; expires_at: string };
-  const cookie = sealSession(c, { sid: s.session_id, uid: s.user.id, login: s.user.github_login, role: s.role, sec: s.secret, exp: Math.floor(Date.parse(s.expires_at) / 1000) });
+  const s = JSON.parse(new TextDecoder().decode(go.body)) as { session_id: string; user: { id: string; github_login: string }; role: "operator" | "viewer"; expires_at: string };
+  const cookie = sealSession(c, { sid: s.session_id, uid: s.user.id, login: s.user.github_login, role: s.role, exp: Math.floor(Date.parse(s.expires_at) / 1000) });
+  // A still-valid session of this browser is revoked in Go, not just overwritten (RV6-06). Best effort: sign-in succeeded.
+  const previous = readSession(c, req.headers.get("cookie"));
+  if (previous && previous.sid !== s.session_id) await revokeSession(c, previous, rid);
   return done(oauth.next, [clear, cookie]);
 }
