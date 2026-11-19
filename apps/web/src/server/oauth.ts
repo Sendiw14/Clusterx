@@ -39,6 +39,11 @@ export async function completeAuthorization(c: WebConfig, callbackUrl: URL, expe
     const t = await client.authorizationCodeGrant(cfg, current, { pkceCodeVerifier: expect.verifier, expectedState: expect.state }, { redirect_uri: `${c.appOrigin}/auth/callback` });
     token = t.access_token;
   } catch (e) {
+    const x = e as { name?: string; code?: string };
+    console.error(`[bff] oauth exchange failed: ${x.name ?? "error"} code=${x.code ?? "-"}`);
+    // A 5xx from the token endpoint is GitHub being down, not a bad code.
+    const status = e instanceof client.ResponseBodyError ? e.status : (e as { cause?: unknown }).cause instanceof Response ? ((e as { cause: Response }).cause.status) : 0;
+    if (status >= 500) return { ok: false, reason: "provider_unavailable" };
     const rejected = e instanceof client.ResponseBodyError || e instanceof client.AuthorizationResponseError || e instanceof client.ClientError;
     return { ok: false, reason: rejected ? "auth_error" : "provider_unavailable" };
   }

@@ -1,11 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { ALL_ROUTES, GATED_ROUTES, gotoReady, noHorizontalOverflow, runAxe, watchConsole } from "./helpers";
+import { PUBLIC_ROUTES, GATED_ROUTES, gotoReady, noHorizontalOverflow, runAxe, watchConsole } from "./helpers";
 
 const WIDTHS = [320, 1440];
+// Console routes with live data (job and worker detail pages included) are scanned in console-a11y.spec.ts.
 
 test.describe("route shells", () => {
   for (const width of WIDTHS) {
-    for (const route of ALL_ROUTES) {
+    for (const route of PUBLIC_ROUTES) {
       test(`${route} @ ${width}`, async ({ page }) => {
         await page.setViewportSize({ width, height: 900 });
         const errors = watchConsole(page);

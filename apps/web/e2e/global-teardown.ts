@@ -1,2 +1,7 @@
 import { writeAxeEvidence } from "./axe-report";
-export default function globalTeardown() { writeAxeEvidence(); }
+import { stopStack } from "./stack/stack";
+
+export default async function globalTeardown() {
+  writeAxeEvidence();
+  await stopStack();
+}

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ButtonLink, CodeBlock, Notice, Reveal, StatusBadge } from "@clusterx/ui";
+import { ButtonLink, CodeBlock, Notice, Reveal } from "@clusterx/ui";
 import { Atlas } from "@/features/atlas";
 import { HOME_QUICKSTART, VERIFICATION } from "@/content/commands";
+import { CONSOLE_CAPTURE } from "@/content/console-capture";
 import "@/features/home.css";
 
 export const metadata: Metadata = {
@@ -96,22 +97,12 @@ export default function HomePage() {
         <div className="wrap">
           <Reveal className="sec-h"><p className="eyebrow">Console</p><h2 id="prev-h" className="h2">Open a job and see every attempt.</h2></Reveal>
           <Reveal as="figure" className="preview" style={{ margin: 0 }}>
-            <div className="preview-bar"><span>/app/jobs</span><span>preview sample, not a capture of shipped software</span></div>
+            <div className="preview-bar"><span>{CONSOLE_CAPTURE.route}</span><span>real capture, {CONSOLE_CAPTURE.date}, commit {CONSOLE_CAPTURE.commit}</span></div>
             <div className="preview-in">
-              <div className="card tbl-wrap" role="region" tabIndex={0} aria-label="Sample jobs table">
-                <table className="tbl">
-                  <caption>Jobs, 4 shown (sample)</caption>
-                  <thead><tr><th scope="col">Job</th><th scope="col">Handler</th><th scope="col">Status</th><th scope="col">Attempts</th></tr></thead>
-                  <tbody>
-                    <tr><td data-label="Job"><span className="mono">3f9a21c4</span></td><td data-label="Handler">thumbnail@2</td><td data-label="Status"><StatusBadge state="running" /></td><td data-label="Attempts">1 of 3</td></tr>
-                    <tr><td data-label="Job"><span className="mono">9c1e4f02</span></td><td data-label="Handler">ocr@1</td><td data-label="Status"><StatusBadge state="succeeded" /></td><td data-label="Attempts">2 of 3</td></tr>
-                    <tr><td data-label="Job"><span className="mono">b07d5e19</span></td><td data-label="Handler">export@3</td><td data-label="Status"><StatusBadge state="failed" /></td><td data-label="Attempts">3 of 3</td></tr>
-                    <tr><td data-label="Job"><span className="mono">e2a6c880</span></td><td data-label="Handler">digest@1</td><td data-label="Status"><StatusBadge state="retry_wait" /></td><td data-label="Attempts">1 of 3</td></tr>
-                  </tbody>
-                </table>
-              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element -- a fixed static capture; no optimizer needed */}
+              <img src={CONSOLE_CAPTURE.file} width={CONSOLE_CAPTURE.width} height={CONSOLE_CAPTURE.height} alt="Screenshot of the console jobs list on live data: succeeded, failed, running and retry-wait jobs from the three example handlers, each with its status, handler, priority, creation time and attempts." loading="lazy" decoding="async" style={{ width: "100%", height: "auto", display: "block" }} />
             </div>
-            <figcaption className="plate-f" style={{ background: "var(--color-white)" }}>This is a hand-built sample. A capture of the real console replaces it once the console is connected to live data, and it will name the version it was taken from.</figcaption>
+            <figcaption className="plate-f" style={{ background: "var(--color-white)" }}>A screenshot of the real console, not a mock-up: taken on {CONSOLE_CAPTURE.date} from commit <span className="mono">{CONSOLE_CAPTURE.commit}</span> against a local stack (PostgreSQL 18, the control plane and one worker running the three example handlers). Job IDs and times are from that run. The <Link href="/demo">demo</Link> shows the same views on labelled fixture data.</figcaption>
           </Reveal>
         </div>
       </section>

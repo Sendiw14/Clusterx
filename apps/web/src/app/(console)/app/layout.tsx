@@ -16,6 +16,7 @@ export default async function ConsoleLayout({ children }: { children: ReactNode 
     const path = (await headers()).get("x-pathname") ?? "/app";
     const q = new URLSearchParams(session.ended === "user_disabled" ? { error: "user_disabled" } : { reason: "session_expired" });
     if (path !== "/app") q.set("next", path);
+    if (!session.ended) redirect(path === "/app" ? "/login" : `/login?next=${encodeURIComponent(path)}`);
     redirect(`/auth/end?${q}`);
   }
   return (

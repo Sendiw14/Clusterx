@@ -35,6 +35,7 @@ export class ConsoleRuntime {
   private ended = false;
   private snap: RuntimeSnapshot = { live: "reconnecting", expiring: null };
   private listeners = new Set<() => void>();
+  private eventSubs = new Set<(e: RealtimeEvent) => void>();
   private timer: ReturnType<typeof setInterval> | undefined;
   private cleanup: (() => void)[] = [];
 
@@ -68,7 +69,11 @@ export class ConsoleRuntime {
   };
   getSnapshot = (): RuntimeSnapshot => this.snap;
   getServerSnapshot = (): RuntimeSnapshot => this.snap;
-  realtimeSubscribe = (fn: (e: RealtimeEvent) => void) => this.client?.subscribe(fn) ?? (() => {});
+  /** Own subscriber set, independent of the stream: views subscribe while mounting, before the stream exists (child effects run first). */
+  realtimeSubscribe = (fn: (e: RealtimeEvent) => void) => {
+    this.eventSubs.add(fn);
+    return () => { this.eventSubs.delete(fn); };
+  };
   get status(): StreamStatus { return this.client?.status ?? "connecting"; }
 
   private recompute() {
@@ -101,6 +106,7 @@ export class ConsoleRuntime {
       () => void this.provider.getConfig(),
     );
     this.client = c;
+    this.cleanup.push(c.subscribe((e) => { for (const f of this.eventSubs) f(e); }));
     this.cleanup.push(c.onChange(() => this.recompute()));
     const on = () => c.online();
     const off = () => c.offline();

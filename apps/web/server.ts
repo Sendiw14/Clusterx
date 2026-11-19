@@ -12,6 +12,11 @@ const hostname = process.env.HOSTNAME ?? "0.0.0.0";
 
 const app = next({ dev, hostname, port, dir: import.meta.dirname });
 await app.prepare();
+// Next registers its own `upgrade` listener on the first request and answers unknown upgrades with `socket.end()`, which
+// would kill the relay's sockets. The relay below owns every upgrade; Next's dev HMR upgrades are handed back to it.
+// `didWebSocketSetup` is Next's internal one-shot flag: if a Next upgrade changes it, the e2e stream specs fail loudly.
+if (!("didWebSocketSetup" in app)) throw new Error("Unsupported Next.js version: cannot take over WebSocket upgrades");
+(app as unknown as { didWebSocketSetup: boolean }).didWebSocketSetup = true;
 const handle = app.getRequestHandler();
 const server = createServer((req, res) => void handle(req, res));
 attachStreamRelay(server, (req, socket, head) => void app.getUpgradeHandler()(req, socket, head));

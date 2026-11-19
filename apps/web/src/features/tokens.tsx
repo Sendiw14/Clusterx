@@ -29,8 +29,8 @@ function RevealDialog({ r, onDone }: { r: Revealed | null; onDone: (r: Revealed)
     >
       <p><strong>{r?.name}</strong> is shown <strong>once</strong>. CLUSTERX keeps only a hash, so it cannot be shown again. If you lose it, revoke it and create a new one.</p>
       <pre className="jsonblock" tabIndex={0} aria-label={`New ${r?.what}`} data-testid="secret-value" style={{ wordBreak: "break-all", whiteSpace: "pre-wrap" }}>{r?.secret}</pre>
-      <p><CopyButton text={r?.secret ?? ""} label="Copy secret" ariaLabel={`Copy the new ${r?.what}`} /></p>
-      <label style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+      <p><CopyButton text={r?.secret ?? ""} label="Copy secret" ariaLabel={`Copy secret: the new ${r?.what}`} /></p>
+      <label className="check">
         <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} /> I have copied it somewhere safe
       </label>
     </Dialog>
@@ -81,7 +81,7 @@ function CreateDialog({ kind, open, onClose, onCreated }: { kind: "token" | "wor
               {SCOPES.map((s) => {
                 const blocked = role === "viewer" && !s.endsWith(":read");
                 return (
-                  <label key={s} style={{ display: "flex", gap: "var(--space-2)", alignItems: "center", opacity: blocked ? 0.55 : 1 }}>
+                  <label key={s} className="check" style={{ opacity: blocked ? 0.55 : 1 }}>
                     <input type="checkbox" disabled={blocked} checked={scopes.includes(s)} onChange={(e) => { setScopes(e.target.checked ? [...scopes, s] : scopes.filter((x) => x !== s)); setKey(newKey()); }} />
                     <span className="mono">{s}</span>{blocked ? <span className="meta">needs the operator role</span> : null}
                   </label>
@@ -167,7 +167,7 @@ function Panel({ kind }: { kind: "token" | "worker" }) {
   return (
     <>
       <div className="toolbar" style={{ padding: "var(--space-3) var(--space-4)", justifyContent: "space-between" }}>
-        <label style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}><input type="checkbox" checked={showRevoked} onChange={(e) => { setShowRevoked(e.target.checked); setStack([]); }} /> Show revoked</label>
+        <label className="check"><input type="checkbox" checked={showRevoked} onChange={(e) => { setShowRevoked(e.target.checked); setStack([]); }} /> Show revoked</label>
         <Button variant="primary" unavailable={!online} onClick={() => setCreating(true)}>{kind === "token" ? "Create API token" : "Create worker credential"}</Button>
       </div>
       {notice ? <div style={{ padding: "0 var(--space-4) var(--space-3)" }}><Notice variant="info" lead="Note." actions={<Button size="sm" onClick={() => setNotice(null)}>Dismiss</Button>}>{notice}</Notice></div> : null}

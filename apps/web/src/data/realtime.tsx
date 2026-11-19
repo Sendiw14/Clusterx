@@ -1,9 +1,8 @@
 "use client";
 import { createContext, useContext } from "react";
-import type { RealtimeEvent, StreamStatus } from "./stream-client";
+import type { RealtimeEvent } from "./stream-client";
 
 export interface RealtimeApi {
-  status: StreamStatus;
   subscribe: (fn: (e: RealtimeEvent) => void) => () => void;
 }
 /** `null` outside the live console (the demo has no channel and never refreshes by itself). */

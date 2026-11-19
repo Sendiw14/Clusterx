@@ -12,8 +12,7 @@ const PING_MS = 25_000;
 const live = new Map<string, number>();
 
 function refuse(socket: Duplex, status: number, text: string) {
-  socket.write(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\nCache-Control: no-store\r\n\r\n`);
-  socket.destroy();
+  socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\nCache-Control: no-store\r\n\r\n`);
 }
 
 /** Valid on the wire (RFC 6455): 1005/1006/1015 must never be sent. */
@@ -47,7 +46,6 @@ export function attachStreamRelay(server: Server, passthrough: (req: IncomingMes
     const s = readSession(c, req.headers.cookie);
     if (!s) return refuse(socket, 401, "Unauthorized");
     if ((live.get(s.sid) ?? 0) >= MAX_SOCKETS_PER_SESSION) return refuse(socket, 429, "Too Many Requests");
-
     const token = await mintAssertion(c.keyFile, { userId: s.uid, sid: s.sid, role: s.role, rid });
     const up = new WebSocket(`${c.apiUrl.replace(/^http/, "ws")}/api/v1/stream`, { headers: { Authorization: `Bearer ${token}`, "X-Request-Id": rid }, handshakeTimeout: 10_000, maxPayload: 64 * 1024 });
     up.once("unexpected-response", (_r, res) => {

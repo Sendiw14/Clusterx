@@ -1,5 +1,4 @@
 "use client";
-import Ajv2020 from "ajv/dist/2020";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
@@ -7,6 +6,7 @@ import { Button, Card, Notice, Select, TextInput, Textarea, useOnline, useToast 
 import { useConsoleProvider } from "@/data/context";
 import type { Handler } from "@/data/console-provider";
 import type { ApiFailure, Config, Job } from "@/data/provider";
+import { checkSchema } from "@/lib/json-schema";
 import { Load } from "./common";
 import { describeFailure, fieldIssues, newKey } from "./failure";
 import { useResource } from "./use-resource";
@@ -31,8 +31,6 @@ function writeDraft(d: Draft | null) {
   }
 }
 
-const ajv = new Ajv2020({ allErrors: true, strict: false });
-
 interface Issue { field: string; message: string }
 
 function validate(d: Draft, h: Handler | undefined, cfg: Config): { body?: Record<string, unknown>; issues: Issue[] } {
@@ -44,11 +42,10 @@ function validate(d: Draft, h: Handler | undefined, cfg: Config): { body?: Recor
     payload = JSON.parse(d.payload);
     if (new TextEncoder().encode(d.payload).length > cfg.limits.payload_max_bytes) issues.push({ field: "/payload", message: `The payload is larger than ${cfg.limits.payload_max_bytes / 1024} KiB.` });
     else if (v) {
-      const check = ajv.compile(v.payload_schema as object);
-      if (!check(payload)) for (const e of check.errors ?? []) issues.push({ field: `/payload${e.instancePath}`, message: `${e.instancePath || "payload"} ${e.message ?? "is invalid"}` });
+      for (const e of checkSchema(v.payload_schema, payload).issues) issues.push({ field: `/payload${e.path}`, message: `${e.path || "payload"} ${e.message}` });
     }
   } catch (e) {
-    issues.push({ field: "/payload", message: e instanceof SyntaxError ? `The payload is not valid JSON (${e.message}).` : "The handler's schema could not be checked here; the server will validate." });
+    issues.push({ field: "/payload", message: `The payload is not valid JSON (${(e as Error).message}).` });
   }
   const int = (s: string, lo: number, hi: number, field: string, name: string) => {
     const n = Number(s);

@@ -30,7 +30,8 @@ export const getSession = cache(async (): Promise<Session> => {
   const jar = await cookies();
   const raw = jar.get(sessionCookieName(c))?.value;
   const s = readSession(c, raw ? `${sessionCookieName(c)}=${raw}` : null);
-  if (!s) return { kind: "none" };
+  // A cookie that no longer opens (expired or tampered) is "ended"; no cookie at all is a plain visitor.
+  if (!s) return raw ? { kind: "none", ended: "session_expired" } : { kind: "none" };
   const rid = requestId();
   try {
     const r = await callGo(c, { method: "GET", path: "/api/v1/me", as: { userId: s.uid, sid: s.sid, role: s.role, rid } });

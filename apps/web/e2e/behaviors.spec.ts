@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openConsole } from "./console";
 import { runAxe, watchConsole } from "./helpers";
 
 test.describe("navigation and overlays", () => {
@@ -24,27 +25,31 @@ test.describe("navigation and overlays", () => {
 
   test("console drawer holds everything the sidebar holds; viewer-only items follow the role", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 });
-    await page.goto("/app", { waitUntil: "networkidle" });
+    await openConsole(page, "viewer");
     await page.getByRole("button", { name: "Menu" }).click();
     const nav = page.getByRole("dialog", { name: "Console menu" }).getByRole("navigation", { name: "Console" });
-    // Unknown role (no session in this build): operator-only Tokens is absent, everything else is present.
+    // Viewer: operator-only Tokens is absent, everything else is present.
     expect(await nav.getByRole("link").allTextContents()).toEqual(["Overview", "Jobs", "Workers", "Observability", "Activity", "Configuration", "Preferences"]);
     await page.keyboard.press("Escape");
     await expect(page.getByRole("button", { name: "Menu" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await openConsole(page, "operator");
+    await page.getByRole("button", { name: "Menu" }).click();
+    expect(await page.getByRole("dialog", { name: "Console menu" }).getByRole("navigation", { name: "Console" }).getByRole("link").allTextContents()).toContain("Tokens and credentials");
   });
 
-  test("Ctrl+K opens the command dialog; Esc closes and restores focus; exact-ID lookup says the backend is not connected", async ({ page }) => {
+  test("Ctrl+K opens the command dialog; Esc closes and restores focus; exact-ID lookup is live", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/app", { waitUntil: "networkidle" });
+    await openConsole(page, "operator");
     await page.keyboard.press("Control+k");
     const dlg = page.getByRole("dialog", { name: "Jump to" });
     await expect(dlg).toBeVisible();
     await expect(dlg.getByLabel("Jump to a page, or enter an exact job or worker ID")).toBeFocused();
     await dlg.getByRole("textbox").fill("job");
     await expect(dlg.getByRole("link")).toHaveText(["Jobs"]);
-    await dlg.getByRole("textbox").fill("3f9a21c4");
+    await dlg.getByRole("textbox").fill("0193a0f2-7c1e-7a10-8000-00000000f00d");
     await dlg.getByRole("button", { name: /Look up job or worker/ }).click();
-    await expect(dlg.getByText(/not available|unavailable/i).first()).toBeVisible();
+    await expect(dlg.getByText("No job or worker with that ID.")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(dlg).toBeHidden();
   });
@@ -123,6 +128,7 @@ test.describe("reduced motion", () => {
   test("with prefers-reduced-motion no animation is running after load on home or the console", async ({ browser }) => {
     const ctx = await browser.newContext({ reducedMotion: "reduce", viewport: { width: 390, height: 800 } });
     const p = await ctx.newPage();
+    await openConsole(p, "operator");
     for (const r of ["/", "/app/jobs", "/demo"]) {
       await p.goto(r, { waitUntil: "networkidle" });
       await p.waitForTimeout(300);
@@ -133,7 +139,7 @@ test.describe("reduced motion", () => {
   });
 
   test("preference 'Always reduce motion' sets data-rm and persists across reload; storage failure degrades quietly", async ({ page }) => {
-    await page.goto("/app/settings/preferences", { waitUntil: "networkidle" });
+    await openConsole(page, "operator", "/app/settings/preferences");
     await page.getByLabel("Reduce motion").selectOption("always");
     await expect(page.locator("html")).toHaveAttribute("data-rm", "1");
     await page.reload({ waitUntil: "networkidle" });
@@ -144,7 +150,7 @@ test.describe("reduced motion", () => {
   });
 
   test("demo fixture times are always UTC, even with a zone preference; the title carries UTC (zone preference itself: Vitest, timestamp-zone.test.tsx)", async ({ page }) => {
-    await page.goto("/app/settings/preferences", { waitUntil: "networkidle" });
+    await openConsole(page, "operator", "/app/settings/preferences");
     await page.getByLabel("Time zone").selectOption("Asia/Tokyo");
     await page.goto("/demo", { waitUntil: "networkidle" });
     await page.getByRole("group", { name: "Demo screen" }).getByRole("button", { name: "Jobs" }).click();
@@ -155,16 +161,13 @@ test.describe("reduced motion", () => {
 });
 
 test.describe("console states and filters", () => {
-  test("jobs: URL is filter state, chips remove, clear all, error state shows a copyable request id and retry", async ({ page }) => {
+  test("jobs: URL is filter state, chips remove, clear all (live data)", async ({ page }) => {
+    await openConsole(page, "operator");
     const errors = watchConsole(page);
     await page.goto("/app/jobs?status=failed&priority_min=5&handler_name=export", { waitUntil: "networkidle" });
     await expect(page.getByRole("button", { name: "Remove Status: Failed filter" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Failed (dead-letter)" })).toHaveAttribute("aria-pressed", "true");
-    const err = page.getByTestId("error-state");
-    await expect(err).toBeVisible();
-    await expect(err).toHaveAttribute("data-error-code", "not_implemented");
-    await expect(page.getByTestId("request-id")).toHaveText(/^req_[0-9a-f]{12}$/);
-    await expect(err.getByRole("button", { name: "Retry" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "No jobs match these filters" })).toBeVisible();
     await page.getByRole("button", { name: "Remove Priority 5 or higher filter" }).click();
     await expect(page).toHaveURL(/status=failed&handler_name=export$/);
     await page.getByRole("button", { name: "Clear all filters" }).click();
@@ -173,19 +176,19 @@ test.describe("console states and filters", () => {
   });
 
   test("jobs: invalid filter values in the URL are ignored", async ({ page }) => {
-    await page.goto("/app/jobs?status=bogus&priority_min=12", { waitUntil: "networkidle" });
+    await openConsole(page, "operator", "/app/jobs?status=bogus&priority_min=12");
     await expect(page.getByLabel("Status")).toHaveValue("");
     await expect(page.getByLabel("Priority at least")).toHaveValue("");
   });
 
-  test("viewer-gated routes and unknown role: Submit job absent, Tokens absent from nav", async ({ page }) => {
-    await page.goto("/app/jobs", { waitUntil: "networkidle" });
+  test("viewer-gated routes: Submit job absent, Tokens absent from nav", async ({ page }) => {
+    await openConsole(page, "viewer", "/app/jobs");
     await expect(page.getByRole("link", { name: "Submit job" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Tokens and credentials" })).toHaveCount(0);
   });
 
   test("offline: banner appears, then recovers when the connection returns", async ({ page, context }) => {
-    await page.goto("/app/jobs", { waitUntil: "networkidle" });
+    await openConsole(page, "operator", "/app/jobs");
     await context.setOffline(true);
     await expect(page.getByText("You are offline.")).toBeVisible();
     await context.setOffline(false);
@@ -194,7 +197,8 @@ test.describe("console states and filters", () => {
 
   test("viewport 320 and 400 percent zoom equivalent: console jobs has no horizontal scroll and every filter is reachable", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
-    await page.goto("/app/jobs", { waitUntil: "networkidle" });
+    await openConsole(page, "operator", "/app/jobs");
+    await page.waitForLoadState("networkidle");
     for (const l of ["Status", "Handler", "Priority at least"]) await expect(page.getByLabel(l)).toBeVisible();
     await expect(page.getByRole("button", { name: "Failed (dead-letter)" })).toBeVisible();
     const o = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
@@ -202,19 +206,18 @@ test.describe("console states and filters", () => {
   });
 });
 
-test.describe("login and BFF skeleton", () => {
-  test("no password input, sign-in disabled with a visible reason, no default credentials", async ({ page }) => {
+test.describe("login and BFF", () => {
+  test("no password input, sign-in is a plain GitHub link, no default credentials", async ({ page }) => {
     await page.goto("/login", { waitUntil: "networkidle" });
     await expect(page.locator("input[type=password]")).toHaveCount(0);
-    const b = page.getByRole("button", { name: "Sign in with GitHub" });
-    await expect(b).toHaveAttribute("aria-disabled", "true");
-    await expect(page.getByText("Sign-in is not enabled in this build")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Sign in with GitHub" })).toHaveAttribute("href", "/auth/github");
+    await expect(page.getByText("Sign-in is not enabled in this build")).toHaveCount(0);
   });
 
   test("closed outcome set: known values render copy, arbitrary values render nothing", async ({ page }) => {
     await page.goto("/login?error=no_entitlement", { waitUntil: "networkidle" });
     await expect(page.locator(".notice[role=alert]")).toContainText("isn't approved");
-    await expect(page.getByRole("button", { name: "Sign in with GitHub" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Sign in with GitHub" })).toHaveCount(0);
     await page.goto("/login?error=user_disabled", { waitUntil: "networkidle" });
     await expect(page.locator(".notice[role=alert]")).toContainText("disabled");
     await page.goto("/login?reason=signed_out", { waitUntil: "networkidle" });
@@ -229,15 +232,16 @@ test.describe("login and BFF skeleton", () => {
     expect(page.url()).toContain("/login"); // never a login redirect for assertion faults
   });
 
-  test("BFF routes answer the typed 501 not_implemented envelope with security headers", async ({ request }) => {
-    for (const [method, path] of [["GET", "/bff/session"], ["POST", "/bff/logout"], ["GET", "/bff/api/v1/jobs"], ["POST", "/bff/api/v1/jobs"], ["GET", "/bff/stream"]] as const) {
+  test("BFF routes without a session answer the BFF envelope (401, 403 csrf, 426) with no-store", async ({ request }) => {
+    const cases: [string, string, number, string][] = [["GET", "/bff/session", 401, "session_expired"], ["POST", "/bff/logout", 403, "csrf_failed"], ["GET", "/bff/api/v1/jobs", 401, "session_expired"], ["POST", "/bff/api/v1/jobs", 403, "csrf_failed"], ["GET", "/bff/stream", 426, "upstream_unavailable"]];
+    for (const [method, path, status, code] of cases) {
       const r = await request.fetch(path, { method });
-      expect(r.status(), `${method} ${path}`).toBe(501);
+      expect(r.status(), `${method} ${path}`).toBe(status);
       const j = await r.json();
       expect(Object.keys(j).sort()).toEqual(["code", "message", "request_id"]);
-      expect(j.code).toBe("not_implemented");
+      expect(j.code).toBe(code);
       expect(r.headers()["x-request-id"]).toBe(j.request_id);
-      expect(r.headers()["cache-control"]).toBe("no-store");
+      expect(r.headers()["cache-control"]).toContain("no-store");
       expect(r.headers()["content-type"]).toContain("application/json");
     }
   });
@@ -262,11 +266,11 @@ test.describe("login and BFF skeleton", () => {
     expect((await request.get("/")).headers()["x-robots-tag"]).toBeUndefined();
   });
 
-  test("console shell exposes no data without a session: every data call is a 501", async ({ page }) => {
-    const statuses: number[] = [];
-    page.on("response", (r) => { if (new URL(r.url()).pathname.startsWith("/bff/api/")) statuses.push(r.status()); });
+  test("the console exposes no data without a session: it redirects to /login and no data call is made", async ({ page }) => {
+    const data: number[] = [];
+    page.on("response", (r) => { if (new URL(r.url()).pathname.startsWith("/bff/api/")) data.push(r.status()); });
     await page.goto("/app", { waitUntil: "networkidle" });
-    expect(statuses.length).toBeGreaterThan(0);
-    expect(new Set(statuses)).toEqual(new Set([501]));
+    await expect(page).toHaveURL(/\/login$/);
+    expect(data).toEqual([]);
   });
 });

@@ -462,3 +462,7 @@ dialog.drawer .dsearch{margin-bottom:var(--space-4)}
 .schema{margin-top:var(--space-5);display:grid;gap:var(--space-2)}
 .schema-h{font-size:var(--text-step-0)}
 .code-list{display:flex;flex-wrap:wrap;gap:var(--space-2)}
+
+/* checkbox row with a 24 px minimum target (WCAG 2.2 target size) */
+.check{display:flex;gap:var(--space-2);align-items:center;min-height:var(--control-height-sm)}
+.check input[type="checkbox"]{width:1.5rem;height:1.5rem;margin:0;flex:none}

@@ -22,7 +22,8 @@ export function ConsoleProviders({ role, login, csrf, unavailable, children }: {
     return () => rt.stop();
   }, [rt, unavailable]);
 
-  const realtime = useMemo(() => ({ status: snap.live === "live" ? ("live" as const) : ("reconnecting" as const), subscribe: rt.realtimeSubscribe }), [rt, snap.live]);
+  // Stable for the life of the console: a changing value would re-subscribe every view and cancel its pending refetch.
+  const realtime = useMemo(() => ({ subscribe: rt.realtimeSubscribe }), [rt]);
 
   const lookup = useMemo(
     () => async (id: string): Promise<LookupResult> => {
