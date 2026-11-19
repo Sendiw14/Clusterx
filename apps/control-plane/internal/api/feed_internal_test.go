@@ -39,6 +39,12 @@ func TestFeedLateCommitIsHinted(t *testing.T) {
 		VALUES ($1, $2, 'canceled', 'queued', 'canceled', 'user:x', clock_timestamp() - interval '1 hour')`, j.ID, v); err != nil {
 		t.Fatal(err)
 	}
+	// Another transaction commits meanwhile, so the polls' snapshots list ours as in progress (xip)
+	// with xmax beyond it: a cursor of "txid >= previous xmax" would skip it after its commit.
+	if _, _, err := env.Store.Admit(ctx, store.AdmitParams{Principal: "token:t", Namespace: "default", HandlerName: "sleep_ms",
+		HandlerVersion: 1, MaxAttempts: 3, TimeoutSeconds: 60, Payload: json.RawMessage(`{"ms":1}`)}); err != nil {
+		t.Fatal(err)
+	}
 	time.Sleep(500 * time.Millisecond) // many polls while the transaction is open
 	_ = sub.take()
 	if err := tx.Commit(ctx); err != nil {
