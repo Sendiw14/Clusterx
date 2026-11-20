@@ -6,7 +6,7 @@ Unrun tests are **NOT RUN**. Nothing is **released**.
 - Master: R2 (OD-01). Contract: OpenAPI `1.0.0-draft.7` (unchanged since `contract-m6-draft.7`), migrations 0001–0004.
 - AC/MW table below = independent re-audit **AUDIT-M9-RV-03** on `27b0094` (verbatim). Later integrator changes
   are listed in the next section and are **not independently re-audited**.
-- All evidence is from the dev laptop / Colima VM. **GitHub CI has never run** (OD-11/OD-20).
+- All evidence is from the dev laptop / Colima VM. GitHub CI ran on `ad645cd` (all jobs green) after one unexplained earlier `web` failure; see `docs/testing/release-gates.md`.
 
 ## Changes after AUDIT-M9-RV-03 (integrator + web lane; not re-audited)
 

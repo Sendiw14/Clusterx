@@ -12,7 +12,7 @@
 | OD-08 | Local repo init + initial commit (no push) | git init in ~/Documents/Clusterx | M0 | **APPROVED 2026-11-17** |
 | OD-09 | Local toolchain install | brew Go 1.27 + PostgreSQL 18 | M1 | **APPROVED 2026-11-17**; Docker: owner installs |
 | OD-10 | Lane mode | Subagents per worktree under integrator session | M1 | **APPROVED 2026-11-17** |
-| OD-11 | Push to GitHub `Sendiw14/Clusterx` | Not authorized | Any push | NOT AUTHORIZED |
+| OD-11 | Push to GitHub `Sendiw14/Clusterx` | Not authorized | Any push | **APPROVED 2026-11-21** (owner: "Push and run CI"); main + 3 contract tags pushed; history rewritten to strip co-author trailers and use the GitHub no-reply address (owner-approved force-push) |
 | OD-12 | Accept M1 exit + freeze contract draft.4 (`c48b62f`) | Accept; reviewer PASS, 0 P0/P1 open | M2/M4 start | **APPROVED 2026-11-18** (owner, chat); tag `contract-m1-draft.4` |
 | OD-13 | Viewer read access to `/audit` (OQ-03) | Yes, actor/detail masked | M5 | **APPROVED default 2026-11-18** |
 | OD-14 | Session lifetimes | idle 2 h, absolute 12 h | M5 | **APPROVED default 2026-11-18** |
@@ -21,4 +21,5 @@
 | OD-17 | Fonts (OQ-13) | IBM Plex Sans, IBM Plex Mono, Newsreader (all OFL 1.1, self-hosted); serif display on public titles only | M3-FE | **APPROVED default 2026-11-18** (integrator under OD-16; owner may override) — re-verify licence files on first download |
 | OD-18 | M2 design defaults | `/login` noindex; topology default = List, graph on request; cluster threshold 12 workers (revisit after M6 budget); `/demo` tour scope set at M7 | M6/M7 | **APPROVED default 2026-11-18** (integrator under OD-16) |
 | OD-19 | Vulnerability reporting channel (SECURITY.md) | GitHub private vulnerability reporting on Sendiw14/Clusterx | M9 | **APPROVED 2026-11-20** (owner) — owner enables it in repo settings at publication |
-| OD-20 | GitHub publication at M9 | Stay local; owner pushes later or instructs | M9 | **APPROVED 2026-11-20** (owner): stay local — OD-11 still NOT AUTHORIZED |
+| OD-20 | GitHub publication at M9 | Stay local; owner pushes later or instructs | M9 | **APPROVED 2026-11-20** (owner): stay local — superseded by OD-11 (owner later approved the push) |
+| OD-21 | Commit attribution | Commits authored only as the owner (GitHub no-reply); never add Co-Authored-By or other contributors | always | **APPROVED 2026-11-21** (owner) |

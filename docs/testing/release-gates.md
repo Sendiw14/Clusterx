@@ -14,7 +14,7 @@ AUDIT-M9-RV-03 fixes. Details per AC: `docs/product/traceability.md`.
 | Public performance (lab Lighthouse, static pages) | PASS (lab) | `lighthouse-m9.md`; field data unavailable |
 | Console budgets + bundle size | MEASURED, not frozen | `docs/testing/evidence/web/*`; **OD-06** |
 | Supply chain (govulncheck, pnpm audit, OSV, gitleaks, SBOM) | PASS (local) | `docs/testing/evidence/m9/supply-chain.md` |
-| **GitHub CI on the exact commit** | **NOT RUN** | **OD-11/OD-20** (stay local) |
+| GitHub CI on the exact commit | PASS on `ad645cd` (2026-11-20): `ci` contract+go+web and `security` all green; **one earlier `web` e2e failure on `18745f6` (history since rewritten) was not reproduced and its cause is unknown** — treat as a possible flake | Actions runs on Sendiw14/Clusterx; `web` job takes ~16 min on GitHub runners |
 | Clean-checkout reproduction | PASS on Linux arm64 VM (audit); macOS run from a checkout under `$HOME` only | AC-26; amd64 NOT RUN |
 | Backup/restore, upgrade, alert drills | PASS (local) | M8 evidence; AUDIT-M9-RV-03 R4 |
 | Production example (TLS, isolation, retention, fail-closed) | PASS (local VM) | `infra/production/verify-local-proof.sh` |
