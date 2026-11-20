@@ -20,3 +20,5 @@
 | OD-16 | Build whole project M2–M9 locally | Milestone gates, no push/deploy/spend | — | **APPROVED 2026-11-18** (owner: "do the whole project") |
 | OD-17 | Fonts (OQ-13) | IBM Plex Sans, IBM Plex Mono, Newsreader (all OFL 1.1, self-hosted); serif display on public titles only | M3-FE | **APPROVED default 2026-11-18** (integrator under OD-16; owner may override) — re-verify licence files on first download |
 | OD-18 | M2 design defaults | `/login` noindex; topology default = List, graph on request; cluster threshold 12 workers (revisit after M6 budget); `/demo` tour scope set at M7 | M6/M7 | **APPROVED default 2026-11-18** (integrator under OD-16) |
+| OD-19 | Vulnerability reporting channel (SECURITY.md) | GitHub private vulnerability reporting on Sendiw14/Clusterx | M9 | **APPROVED 2026-11-20** (owner) — owner enables it in repo settings at publication |
+| OD-20 | GitHub publication at M9 | Stay local; owner pushes later or instructs | M9 | **APPROVED 2026-11-20** (owner): stay local — OD-11 still NOT AUTHORIZED |
