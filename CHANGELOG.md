@@ -4,6 +4,11 @@ No version has been released. Entries list merged milestones on `main`.
 
 ## Unreleased (pre-1.0)
 
+- **M9 audit fixes** — public pages statically prerendered again, E2E in Chromium, Firefox and WebKit, console budget
+  and Lighthouse re-measurements, production example runs hourly retention, Caddy refuses unusual methods and runs
+  non-root, gRPC/metrics listeners scoped to private networks, bounded metrics scrapes, production refuses a disabled
+  mutation rate limit, node-exporter-down alert, Docker build context excludes nested env files and test keys,
+  CI installs PostgreSQL 18 and fails instead of skipping the DB-outage test. All verified locally; CI not yet run.
 - **M8 operations** — Prometheus alert rules with runbooks, 1/3/5-worker benchmarks (Colima VM), backup/restore
   and 0002→0004 upgrade drills, local-verified production example (Caddy TLS, gRPC TLS, secrets as files),
   threat model, ASVS 5.0 mapping, supply-chain scan scripts and CI workflows defined (CI not yet run).

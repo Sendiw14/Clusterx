@@ -6,6 +6,13 @@ independent pull-based Go workers, an operator console and a public documentatio
 **Status: pre-1.0, not released.** Built milestone by milestone against `docs/product/MASTER_PROMPT.md` (R2).
 See [`docs/product/traceability.md`](docs/product/traceability.md) for what is implemented, tested and still open.
 
+<p>
+  <img src="docs/design/screenshots/m6/overview-1440.png" alt="CLUSTERX console overview on live data: queue and worker counts and the last-hour throughput chart" width="49%">
+  <img src="docs/design/screenshots/m6/job-failed-1440.png" alt="Job detail for a failed job showing attempts, events timeline and retry lineage" width="49%">
+</p>
+
+Screenshots: console on a local stack with mock OAuth (`docs/design/screenshots/m6/`, captured 2026-11-19).
+
 ## What it guarantees — and what it does not
 
 - **At-least-once execution.** A job may run more than once (worker crash, lease expiry). Handlers must be
@@ -37,7 +44,8 @@ docs/                product, architecture/ADRs, design, security, testing, oper
 
 ## Local quickstart (engine)
 
-Verified from a clean clone on macOS arm64 with Colima (Docker 29) and on Linux arm64 (Ubuntu VM). amd64 is **not yet verified**.
+Verified from a clean clone on Linux arm64 (Ubuntu VM, independent audit). On macOS arm64 with Colima (Docker 29) it was run from a
+checkout under `$HOME`, not from an independently audited clean clone. amd64 is **not yet verified**.
 With Colima, keep the checkout under `$HOME` — Colima mounts only `$HOME` into its VM.
 
 ```bash
