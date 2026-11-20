@@ -65,6 +65,12 @@ recovery finalizes on the next tick, covered by `TestAC03_StaleReportVsRecoveryC
 (`FOR UPDATE SKIP LOCKED`), marks the attempt `lease_expired`/`deadline_exceeded`, then
 `canceled` (if cancel requested) / `retry_wait` (budget left) / `failed` (`attempts_exhausted`).
 No job remains `running` longer than `min(lease_ttl after last renewal, hard deadline) + one scheduler tick`.
+Classification precedence: if the hard deadline has passed, the attempt is `deadline_exceeded` (job `failure_class`
+`timeout` on exhaustion), even when the lease has also expired; the report fence checks in the same order. Because the
+lease is capped at `hard_deadline_at`, a job with `timeout_seconds <= lease_ttl` (e.g. `hash_sha256`, 30 s = default
+TTL) has `lease_expires_at = hard_deadline_at`, so a worker crash is **always** classified `deadline_exceeded`, never
+`lease_expired`. Accepted (AUDIT-M9 F-12): both outcomes take the same transition. Alerting therefore counts both as
+crash-type outcomes (`ClusterxLeaseExpiriesRepeated`, `infra/monitoring/alerts.yml`).
 
 ### Drain / deregister / re-register
 Drain: `status='draining'`, `drain_deadline_at = now()+drain_grace`; no new claims; renewals allowed
