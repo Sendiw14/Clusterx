@@ -1,16 +1,18 @@
 import { expect, test } from "@playwright/test";
 import { openConsole } from "./console";
-import { runAxe, watchConsole } from "./helpers";
+import { activate, animationsDone, clipboardContext, readClipboard, runAxe, watchConsole } from "./helpers";
 
 test.describe("navigation and overlays", () => {
   test("public mobile menu: opens, traps focus, Esc closes, focus returns to the button", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     await page.goto("/", { waitUntil: "networkidle" });
     const btn = page.getByRole("button", { name: "Menu" });
-    await btn.click();
+    await activate(page, btn);
     const dlg = page.getByRole("dialog", { name: "Site menu" });
     await expect(dlg).toBeVisible();
-    expect(await dlg.getByRole("link").allTextContents()).toEqual(["Architecture", "Docs", "Changelog", "Demo", "Sign in"]);
+    // A page-level CSS locator, not one chained from the dialog locator: reading text through a locator derived from a role-resolved modal <dialog> crashes the Firefox content process of the Playwright Firefox build (reproduces on a bare page with one <dialog>, not an app bug).
+    expect(await page.locator("dialog[open] a").allTextContents()).toEqual(["Architecture", "Docs", "Changelog", "Demo", "Sign in"]);
+    await animationsDone(dlg);
     const r = await runAxe(page, "/ [menu open]", 320);
     expect(r.serious + r.critical, JSON.stringify(r.violations)).toBe(0);
     await page.keyboard.press("Escape");
@@ -26,7 +28,7 @@ test.describe("navigation and overlays", () => {
   test("console drawer holds everything the sidebar holds; viewer-only items follow the role", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 });
     await openConsole(page, "viewer");
-    await page.getByRole("button", { name: "Menu" }).click();
+    await activate(page, page.getByRole("button", { name: "Menu" }));
     const nav = page.getByRole("dialog", { name: "Console menu" }).getByRole("navigation", { name: "Console" });
     // Viewer: operator-only Tokens is absent, everything else is present.
     expect(await nav.getByRole("link").allTextContents()).toEqual(["Overview", "Jobs", "Workers", "Observability", "Activity", "Configuration", "Preferences"]);
@@ -56,7 +58,8 @@ test.describe("navigation and overlays", () => {
 
   test("skip link is first in tab order and moves focus to main", async ({ page }) => {
     await page.goto("/architecture", { waitUntil: "networkidle" });
-    await page.keyboard.press("Tab");
+    // Safari (WebKit) leaves links out of the Tab order unless Option is held; that is the platform default, not a defect.
+    await page.keyboard.press(test.info().project.name === "webkit" ? "Alt+Tab" : "Tab");
     const skip = page.getByRole("link", { name: "Skip to content" });
     await expect(skip).toBeFocused();
     await page.keyboard.press("Enter");
@@ -106,12 +109,12 @@ test.describe("home", () => {
   });
 
   test("quickstart Copy puts the exact text on the clipboard and announces it", async ({ browser }) => {
-    const ctx = await browser.newContext({ permissions: ["clipboard-read", "clipboard-write"], viewport: { width: 1440, height: 900 } });
+    const ctx = await clipboardContext(browser);
     const p = await ctx.newPage();
     await p.goto("/", { waitUntil: "networkidle" });
     const code = await p.locator("pre[aria-label='Quickstart commands']").innerText();
     await p.getByRole("button", { name: "Copy: Quickstart commands" }).click();
-    expect(await p.evaluate(() => navigator.clipboard.readText())).toBe(code);
+    expect(await readClipboard(p)).toBe(code);
     await expect(p.getByRole("button", { name: /Copy: Quickstart/ })).toContainText("Copied");
     await ctx.close();
   });

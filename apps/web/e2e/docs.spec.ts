@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { runAxe } from "./helpers";
+import { activate, clipboardContext, readClipboard, runAxe } from "./helpers";
 
 const DOCS = ["quickstart", "concepts", "workers", "api", "reliability", "deployment", "security"];
 const SPEC_VERSION = /version: (1\.0\.0-draft\.\d+)/.exec(readFileSync(path.join(process.cwd(), "..", "..", "api", "openapi.yaml"), "utf8"))![1]!;
@@ -71,14 +71,14 @@ test.describe("docs framework", () => {
   });
 
   test("code blocks have a copy button that copies the exact text and announces it", async ({ browser }) => {
-    const ctx = await browser.newContext({ permissions: ["clipboard-read", "clipboard-write"], viewport: { width: 1440, height: 900 } });
+    const ctx = await clipboardContext(browser);
     const p = await ctx.newPage();
     await p.goto("/docs/quickstart", { waitUntil: "networkidle" });
     const pre = p.locator("pre[aria-label^='Code: 2. Bootstrap the stack']");
     const code = await pre.innerText();
     expect(code).toContain("./infra/compose/bootstrap.sh");
     await p.getByRole("button", { name: /^Copy: Code: 2\. Bootstrap the stack/ }).click();
-    expect(await p.evaluate(() => navigator.clipboard.readText())).toBe(code);
+    expect(await readClipboard(p)).toBe(code);
     await expect(p.getByRole("button", { name: /^Copy: Code: 2\. Bootstrap/ })).toContainText("Copied");
     await ctx.close();
   });
@@ -87,7 +87,7 @@ test.describe("docs framework", () => {
     await page.setViewportSize({ width: 390, height: 800 });
     await page.goto("/docs/reliability", { waitUntil: "networkidle" });
     const btn = page.getByRole("button", { name: "Docs menu" });
-    await btn.click();
+    await activate(page, btn);
     const dlg = page.getByRole("dialog", { name: "Docs menu" });
     await expect(dlg).toBeVisible();
     await expect(dlg.getByRole("combobox")).toBeVisible();
