@@ -84,6 +84,6 @@ None. There is no released version to migrate from, so there are no upgrade step
 - Real GitHub sign-in has not been run; the web console has only been tested against a mock OAuth server. The same is true of production-mode cookies in a browser.
 - The production example has not been run on a real host, with a public domain or on amd64.
 - The GitHub Actions workflows (continuous integration and supply-chain scans) have never run. OSV scanning and an SBOM have not been run locally either.
-- An independent review (REVIEW-M9-RV-02) covered the M9 web hardening and the M8 production example: no critical or high issue; its medium findings are fixed but not yet re-reviewed. No manual screen-reader or keyboard-only walkthrough has been done.
+- An independent review (REVIEW-M9-RV-02) covered the M9 web hardening and the M8 production example: no critical or high issue; its findings are fixed, and a final audit (AUDIT-M9-RV-03) re-checked those fixes locally and closed them. No manual screen-reader or keyboard-only walkthrough has been done.
 - Service objectives, recovery point and time objectives and console performance budgets are not frozen.
 - Workflow definitions are not part of 1.0.
