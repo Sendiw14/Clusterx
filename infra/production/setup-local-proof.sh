@@ -18,6 +18,7 @@ keep postgres_password "$(rand)"; keep app_db_password "$(rand)"; keep retention
 keep metrics_token "$(rand)"; keep web_session_key "$(openssl rand -base64 32)"
 keep github_client_id "local-proof-placeholder"; keep github_client_secret "local-proof-placeholder"
 keep database_url "postgres://clusterx_app:$(cat $S/app_db_password)@postgres:5432/clusterx?sslmode=disable"
+keep retention_database_url "postgres://clusterx_retention_job:$(cat $S/retention_db_password)@postgres:5432/clusterx?sslmode=disable"
 keep migrate_database_url "postgres://clusterx_admin:$(cat $S/postgres_password)@postgres:5432/clusterx?sslmode=disable"
 for i in 1 2 3; do [ -e "$S/worker_credential_$i" ] || : > "$S/worker_credential_$i"; done
 
@@ -36,7 +37,7 @@ if [ ! -s "$S/internal-ca.crt" ]; then
   leaf site "DNS:$CLUSTERX_WEB_HOST,DNS:$CLUSTERX_API_HOST"
   leaf control-plane "DNS:control-plane"
 fi
-# Containers run as non-root UIDs (65532, postgres 999, caddy root): files readable inside the 0700 directory.
+# Containers run as non-root UIDs (65532 incl. caddy, postgres 999): files readable inside the 0700 directory.
 chmod 644 "$S"/*; chmod 600 "$S/internal-ca.key"; chmod 700 "$S"
 
 [ -n "${CLUSTERX_SKIP_BUILD:-}" ] || dc build migrate web worker # images already built: CLUSTERX_SKIP_BUILD=1

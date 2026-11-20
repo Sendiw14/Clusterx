@@ -107,6 +107,15 @@ for 2 m.
   (`docker compose --profile retention run --rm retention`).
 - Fix: run retention, remove old backups/images, grow the volume. Never delete files inside the PostgreSQL data directory.
 
+## ClusterxNodeExporterDown
+
+`up{job="node"} == 0`, or no `up{job="node"}` series at all, for 2 m (RV9-11).
+
+- Impact: no filesystem metrics, so `ClusterxDiskSpaceLow` cannot fire. The engine itself is unaffected.
+- Check: `docker compose --profile monitoring ps node-exporter`, its logs, and the `node` target on Prometheus' `/targets`.
+- Fix: restart node-exporter (`docker compose --profile monitoring up -d node-exporter`). Meanwhile, check disk by hand
+  (`df` on the volume host path, `clusterx_db_size_bytes`).
+
 ## Induced locally (M8 drill)
 
 See `docs/testing/evidence/m8/alerts/README.md` for the timeline and Prometheus API captures.

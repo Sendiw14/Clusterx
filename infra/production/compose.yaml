@@ -66,8 +66,10 @@ services:
       CLUSTERX_ENV: production
       CLUSTERX_LOG_LEVEL: info
       CLUSTERX_HTTP_ADDR: 0.0.0.0:8080
-      CLUSTERX_GRPC_ADDR: 0.0.0.0:9090
-      CLUSTERX_METRICS_ADDR: 0.0.0.0:9091
+      # gRPC and metrics bind only to this container's address on the workers / monitoring network (network-scoped
+      # aliases below), so web and Caddy on `edge` cannot reach them (RV9-06). HTTP stays on all networks (edge).
+      CLUSTERX_GRPC_ADDR: cp-grpc:9090
+      CLUSTERX_METRICS_ADDR: cp-metrics:9091
       CLUSTERX_DATABASE_URL_FILE: /run/secrets/database_url
       CLUSTERX_METRICS_TOKEN_FILE: /run/secrets/metrics_token
       CLUSTERX_BFF_JWKS_FILE: /run/secrets/bff_jwks
@@ -77,13 +79,39 @@ services:
       CLUSTERX_GRPC_TLS_KEY_FILE: /run/secrets/control_plane_key
       CLUSTERX_STREAM_ALLOWED_ORIGINS: https://${CLUSTERX_WEB_HOST:?set CLUSTERX_WEB_HOST}${CLUSTERX_PUBLIC_PORT_SUFFIX:-}
       CLUSTERX_MIGRATE_ON_START: "false"
-    secrets: [database_url, metrics_token, bff_jwks, control_plane_crt, control_plane_key]
-    networks: [data, edge, workers]
+      # Bounded retention pass every hour as the clusterx_retention_job login (ADR-0004, RV9-02).
+      CLUSTERX_RETENTION_DATABASE_URL_FILE: /run/secrets/retention_database_url
+      CLUSTERX_RETENTION_INTERVAL: 1h
+    secrets: [database_url, metrics_token, bff_jwks, control_plane_crt, control_plane_key, retention_database_url]
+    networks:
+      data: {}
+      edge: {}
+      workers: { aliases: [cp-grpc] }
+      monitoring: { aliases: [cp-metrics] }
     depends_on: { migrate: { condition: service_completed_successfully } }
     mem_limit: 512m
     cpus: 2
     pids_limit: 256
     <<: *hardening
+
+  # One bounded retention pass on demand (verify-local-proof.sh, or host cron as an extra schedule):
+  #   docker compose --env-file .env.production --profile retention run --rm retention
+  retention:
+    image: ${CLUSTERX_IMAGE_PREFIX:-clusterx}/control-plane:${CLUSTERX_VERSION:-local}
+    profiles: [retention]
+    command: ["retention", "run"]
+    environment:
+      CLUSTERX_ENV: production
+      CLUSTERX_DATABASE_URL_FILE: /run/secrets/database_url
+      CLUSTERX_RETENTION_DATABASE_URL_FILE: /run/secrets/retention_database_url
+      CLUSTERX_METRICS_TOKEN_FILE: /run/secrets/metrics_token
+      CLUSTERX_GRPC_ADDR: 127.0.0.1:9090
+      CLUSTERX_HTTP_ADDR: 127.0.0.1:8080
+    secrets: [database_url, retention_database_url, metrics_token]
+    networks: [data]
+    depends_on: { postgres: { condition: service_healthy } }
+    <<: *hardening
+    restart: "no"
 
   web:
     image: ${CLUSTERX_IMAGE_PREFIX:-clusterx}/web:${CLUSTERX_VERSION:-local}
@@ -124,7 +152,11 @@ services:
       - "${CLUSTERX_BIND_ADDR:-0.0.0.0}:${CLUSTERX_HTTP_REDIRECT_PORT:-80}:80"
     networks: [edge]
     depends_on: [web, control-plane]
-    cap_add: [NET_BIND_SERVICE]
+    # Nonroot (RV9-07): binding 80/443 needs no capability once the namespaced unprivileged-port floor is 0.
+    # /data/caddy and /config/caddy are 1777 in the image, so fresh volumes are writable; a volume created by an
+    # older root Caddy needs `chown -R 65532:65532` once (docs/operations/upgrades.md).
+    user: "65532:65532"
+    sysctls: { net.ipv4.ip_unprivileged_port_start: 0 }
     mem_limit: 256m
     pids_limit: 256
     <<: *hardening
@@ -176,7 +208,8 @@ services:
       - ../monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
       - promdata:/prometheus
     secrets: [metrics_token, internal_ca_crt]
-    networks: [edge, monitoring]
+    # Not on `edge` (RV9-06). prometheus_ui only exists because Docker cannot publish ports on an internal network.
+    networks: [monitoring, prometheus_ui]
     ports: ["127.0.0.1:${CLUSTERX_PROMETHEUS_PORT:-9190}:9090"]
     mem_limit: 512m
     <<: *hardening
@@ -193,7 +226,8 @@ networks:
   edge: {}                    # Caddy, web, control plane HTTP (web needs egress to GitHub OAuth)
   data: { internal: true }    # PostgreSQL, migrate, control plane: no egress, no published port
   workers: { internal: true } # control plane gRPC, workers (trusted handlers; add egress only if handlers need it)
-  monitoring: { internal: true }
+  monitoring: { internal: true } # Prometheus, node-exporter, control plane metrics listener
+  prometheus_ui: {}              # Prometheus alone: carries the 127.0.0.1 published port
 
 secrets:
   postgres_password: { file: ./secrets/postgres_password }
@@ -201,6 +235,7 @@ secrets:
   retention_db_password: { file: ./secrets/retention_db_password }
   database_url: { file: ./secrets/database_url }
   migrate_database_url: { file: ./secrets/migrate_database_url }
+  retention_database_url: { file: ./secrets/retention_database_url }
   metrics_token: { file: ./secrets/metrics_token }
   bff_jwks: { file: ./secrets/bff.jwks.json }
   bff_private_jwk: { file: ./secrets/bff-private.jwk.json }

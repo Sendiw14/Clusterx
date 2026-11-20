@@ -116,7 +116,7 @@ GitHub OAuth ◀── BFF (authorization code + PKCE)            CI/CD: GitHub 
 | # | Threat | Sev | Mitigation | Evidence | Status |
 |---|---|---|---|---|---|
 | T-P1 | **I** Secrets visible in `docker inspect`/env | M | secrets as files (`*_FILE`), 0700 directory | production proof (`deployment.md`) | M |
-| T-P2 | **E** Container breakout impact | M | nonroot UIDs (Caddy runs as root with only `NET_BIND_SERVICE`), read-only rootfs, `cap_drop: ALL`, `no-new-privileges`, mem/pids limits | `docker inspect` in proof | **P** — Caddy root + `NET_BIND_SERVICE`; PostgreSQL image not read-only |
+| T-P2 | **E** Container breakout impact | M | nonroot UIDs (Caddy too since M9-BE-02, via the unprivileged-port sysctl), read-only rootfs, `cap_drop: ALL`, `no-new-privileges`, mem/pids limits | `docker inspect` in proof | **P** — PostgreSQL image not read-only |
 | T-P3 | **S** Misconfigured production start | H | control plane config fails closed (TLS, default passwords, token length) | config tests; proof "missing secret → exit 1" | M |
 | T-P4 | **D** Host loss | H | backups + restore drill | `backup-restore.md` | **P** — no off-host automation, RPO = backup interval |
 

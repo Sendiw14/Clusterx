@@ -79,3 +79,12 @@ groups:
         annotations:
           summary: "PostgreSQL volume has {{ $value | humanizePercentage }} free."
           runbook_url: docs/operations/incident-runbook.md#clusterxdiskspacelow
+
+      # ClusterxDiskSpaceLow cannot fire without node-exporter series: alert when that target is down or missing.
+      - alert: ClusterxNodeExporterDown
+        expr: up{job="node"} == 0 or absent(up{job="node"})
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: Prometheus cannot scrape node-exporter; ClusterxDiskSpaceLow is blind.
+          runbook_url: docs/operations/incident-runbook.md#clusterxnodeexporterdown

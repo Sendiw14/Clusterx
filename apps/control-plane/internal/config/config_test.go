@@ -84,6 +84,9 @@ func TestLoadFailsClosed(t *testing.T) {
 		{"prod grpc plaintext all ifaces", env(prodBase, VarGRPCTLSCert, "<unset>", VarGRPCTLSKey, "<unset>", VarGRPCAddr, "0.0.0.0:9090"), "production requires " + VarGRPCTLSCert},
 		{"prod http plaintext", env(prodBase, VarHTTPTLSCert, "<unset>", VarHTTPTLSKey, "<unset>"), "production requires " + VarHTTPTLSCert},
 		{"prod http offloaded", env(prodBase, VarHTTPTLSCert, "<unset>", VarHTTPTLSKey, "<unset>", VarHTTPTLSOffload, "true"), ""},
+		{"prod mutation limit off", env(prodBase, VarRateMutations, "0"), VarRateMutations + "=0"},
+		{"prod mutation limit set", env(prodBase, VarRateMutations, "5"), ""},
+		{"dev mutation limit off", env(devBase, VarRateMutations, "0"), ""},
 		{"prod http loopback", env(prodBase, VarHTTPTLSCert, "<unset>", VarHTTPTLSKey, "<unset>", VarHTTPAddr, "[::1]:8080"), ""},
 	}
 	for _, c := range cases {

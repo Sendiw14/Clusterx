@@ -19,8 +19,19 @@ Internet ─▶ :443/:80 Caddy ──▶ web:3000 (Next.js BFF)        ─┐ ed
 web ──TLS (internal CA) + EdDSA assertion──▶ control-plane:8080
 workers ──gRPC + TLS (internal CA, SNI control-plane) + cxw_ credential──▶ control-plane:9090   (workers network, internal)
 control-plane ──▶ postgres:5432                                                              (data network, internal)
-prometheus ──TLS + scrape token──▶ control-plane:9091 (internal listener)                    (optional profile)
+prometheus ──TLS + scrape token──▶ cp-metrics:9091 (internal listener)            (monitoring network, internal; optional profile)
 ```
+
+The control plane binds gRPC to its address on `workers` (alias `cp-grpc`) and metrics to its address on `monitoring`
+(alias `cp-metrics`), so containers on `edge` (Caddy, web) cannot open 9090 or 9091 (RV9-06; probed in
+`verify-local-proof.sh`). Prometheus is on `monitoring` plus `prometheus_ui`, a network that only carries its
+127.0.0.1 port (Docker cannot publish ports from an internal network). Caddy answers 405 to any method other than
+GET/HEAD/POST/PUT/PATCH/DELETE/OPTIONS before proxying (RV9-04).
+
+Retention (ADR-0004, RV9-02): the control plane runs one bounded pass every hour (`CLUSTERX_RETENTION_INTERVAL=1h`)
+as the `clusterx_retention_job` login (`retention_database_url`). Expired terminal jobs (30 days), audit events and
+tombstones (90 days), log tails (7 days), idempotency keys and old sessions are deleted only while this runs. One pass on
+demand: `docker compose --env-file .env.production --profile retention run --rm retention`.
 
 | Port | Exposed | Notes |
 |---|---|---|
@@ -36,8 +47,9 @@ Startup ordering: `postgres` (healthy) → `migrate` (one-shot, must exit 0) →
 after the control plane and retry with backoff until it answers.
 
 Container hardening: every CLUSTERX container runs nonroot (UID 65532), `read_only: true`, `cap_drop: [ALL]`,
-`no-new-privileges`, memory/CPU/pids limits; `web` gets a 64 MiB tmpfs for `.next/cache`. Caddy runs as root with only
-`NET_BIND_SERVICE`; PostgreSQL uses the official image's own user switching (not read-only).
+`no-new-privileges`, memory/CPU/pids limits; `web` gets a 64 MiB tmpfs for `.next/cache`. Caddy also runs as UID 65532 with
+no capability: `net.ipv4.ip_unprivileged_port_start=0` (a per-container sysctl) lets it bind 80/443 (RV9-07).
+PostgreSQL uses the official image's own user switching (not read-only).
 
 Secrets flow: files under `infra/production/secrets/` (directory 0700, gitignored) → compose `secrets:` →
 `/run/secrets/<name>` → `*_FILE` variables. `docker inspect` shows only paths. The web image reads `CLUSTERX_*_FILE`
@@ -46,7 +58,7 @@ requested from the web lane). `.env.production` (from `.env.production.example`)
 
 | Secret file | Consumer | Real deployment source |
 |---|---|---|
-| `postgres_password`, `app_db_password`, `retention_db_password`, `database_url`, `migrate_database_url` | postgres, migrate, control plane | generated, stored in your secret manager |
+| `postgres_password`, `app_db_password`, `retention_db_password`, `database_url`, `migrate_database_url`, `retention_database_url` | postgres, migrate, control plane, retention | generated, stored in your secret manager |
 | `metrics_token` | control plane, Prometheus | generated ≥ 32 chars |
 | `bff.jwks.json` / `bff-private.jwk.json` | control plane / web | Ed25519 key pair; rotate by `kid` |
 | `web_session_key` | web | base64 of ≥ 32 random bytes |

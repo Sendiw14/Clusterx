@@ -13,7 +13,7 @@ scrape_configs:
       type: Bearer
       credentials_file: /run/secrets/metrics_token
     static_configs:
-      - targets: ["control-plane:9091"]
+      - targets: ["cp-metrics:9091"] # monitoring-network alias; certificate name stays control-plane
   - job_name: node
     static_configs:
       - targets: ["node-exporter:9100"]

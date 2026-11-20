@@ -9,7 +9,18 @@ EV=$(mkdir -p "$1" && cd "$1" && pwd); BK=$(mkdir -p "$2" && cd "$2" && pwd) # a
 . "$(dirname "$0")/../bench/env.sh"   # cd infra/compose, dc, psqlq, envval
 OPS="$ROOT/scripts/ops"
 API=http://127.0.0.1:$(envval CLUSTERX_HTTP_PORT)
-HDR=$(mktemp); trap 'rm -f "$HDR"' EXIT; chmod 600 "$HDR"
+HDR=$(mktemp); chmod 600 "$HDR"
+# The live DSN (holds the app DB password) is parked next to the other secrets, never in the evidence dir, and
+# put back on ANY exit so a failed drill does not leave the stack pointed at the restored database (RV9-09).
+ORIG=.secrets/database_url.drill-orig
+cleanup() {
+  rm -f "$HDR"
+  if [ -f "$ORIG" ]; then
+    cp "$ORIG" .secrets/database_url && rm -f "$ORIG"
+    dc up -d --no-deps --force-recreate control-plane >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
 printf 'Authorization: Bearer %s\nContent-Type: application/json\n' "$(sed -n 's/^CLUSTERX_OPERATOR_TOKEN=//p' .secrets.env)" > "$HDR"
 ts() { perl -MTime::HiRes=time -e 'printf "%.3f", time'; }
 sub() { curl -sS -H @"$HDR" -H "Idempotency-Key: drill-$1" -d "$2" "$API/api/v1/jobs"; }
@@ -50,8 +61,8 @@ dc --profile workers stop control-plane "${ALL_WORKERS[@]}" >/dev/null 2>&1
 
 NEWDB=clusterx_restored_$(date -u +%H%M%S)
 "$OPS/restore.sh" "$ARCHIVE" "$NEWDB" | tee -a "$EV/drill.txt"
-cp .secrets/database_url "$EV/.database_url.orig"; chmod 600 "$EV/.database_url.orig"
-sed "s#/clusterx?#/$NEWDB?#" "$EV/.database_url.orig" > .secrets/database_url
+(umask 077; cp .secrets/database_url "$ORIG")
+sed "s#/clusterx?#/$NEWDB?#" "$ORIG" > .secrets/database_url
 dc up -d --no-deps --force-recreate control-plane 2>/dev/null
 until [ "$(curl -s -o /dev/null -w '%{http_code}' "$API/health/ready")" = 200 ]; do sleep 0.2; done
 T_READY=$(ts); log "control_plane_ready_on_restored_db_epoch=$T_READY"
@@ -72,7 +83,7 @@ q "$NEWDB" -Atc "SELECT 'lease_expired_attempts=' || count(*) FROM job_attempts 
 log "rpo_window_s=$(echo "$T_DISASTER - $T_BACKUP" | bc) rto_service_s=$(echo "$T_READY - $T_DISASTER" | bc) rto_work_drained_s=$(echo "$T_DRAINED - $T_DISASTER" | bc)"
 
 # Switch back to the original database.
-cp "$EV/.database_url.orig" .secrets/database_url; rm -f "$EV/.database_url.orig"
+cp "$ORIG" .secrets/database_url; rm -f "$ORIG"
 dc up -d --no-deps --force-recreate control-plane 2>/dev/null
 dc --profile workers stop "${ALL_WORKERS[@]}" >/dev/null 2>&1 || true
 log "switched back to $(sed 's#.*/\([a-z_]*\)?.*#\1#' .secrets/database_url)"

@@ -18,6 +18,7 @@ tests:
       - { series: 'clusterx_attempts_finished_5m{state="failed"}', values: '10x20' }
       - { series: 'node_filesystem_avail_bytes{mountpoint="/pgdata"}', values: '50 5x12' }
       - { series: 'node_filesystem_size_bytes{mountpoint="/pgdata"}', values: '100x12' }
+      - { series: 'up{job="node"}', values: '1x20' }
     alert_rule_test:
       - eval_time: 30s
         alertname: ClusterxControlPlaneDown
@@ -91,3 +92,25 @@ tests:
         exp_alerts:
           - exp_labels: { severity: warning }
             exp_annotations: { summary: "3 attempts lost their lease or passed their hard deadline in the last 5 minutes.", runbook_url: docs/operations/incident-runbook.md#clusterxleaseexpiriesrepeated }
+  # RV9-11: node-exporter scrape failing (up == 0) and target missing entirely (absent) both alert after 2m.
+  - interval: 15s
+    input_series:
+      - { series: 'up{job="node"}', values: '1 0x12' }
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: ClusterxNodeExporterDown
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: ClusterxNodeExporterDown
+        exp_alerts:
+          - exp_labels: { severity: warning, job: node }
+            exp_annotations: { summary: "Prometheus cannot scrape node-exporter; ClusterxDiskSpaceLow is blind.", runbook_url: docs/operations/incident-runbook.md#clusterxnodeexporterdown }
+  - interval: 15s
+    input_series:
+      - { series: 'up{job="clusterx-control-plane"}', values: '1x20' }
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ClusterxNodeExporterDown
+        exp_alerts:
+          - exp_labels: { severity: warning, job: node }
+            exp_annotations: { summary: "Prometheus cannot scrape node-exporter; ClusterxDiskSpaceLow is blind.", runbook_url: docs/operations/incident-runbook.md#clusterxnodeexporterdown }
