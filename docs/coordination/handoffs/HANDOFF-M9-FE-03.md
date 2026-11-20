@@ -5,7 +5,7 @@
 - **Contract:** `api/openapi.yaml` `1.0.0-draft.7`, last changed in `c4c3eb0`, blob SHA `4eb0f6800764ce3402b41f29aa329ff260b70e2f`. Not changed. No SQL, OpenAPI or proto edits.
 - **Source:** AUDIT-M9-RV-03 (RV10-01, RV10-02, RV10-06, F-09) and an integrator addition (duplicate y-axis label).
 - **Environment:** macOS arm64 (Apple M4), Node 26.13.1, pnpm 9.15.9, PostgreSQL 18.7 first on PATH, Playwright 1.65.1 (Chromium, Firefox, WebKit).
-- **Commits:** see "Commits" at the end (filled in after the commit).
+- **Commits:** `0e9c2e3` (web code, copy, tests) and `61dc366` (bundle-size evidence, two overview screenshots, this handoff). Both carry the `Co-Authored-By: Claude Sonnet 5.5` trailer. The SHAs cannot name the commit that holds this line, so it is not self-referencing.
 
 ## Per item
 
