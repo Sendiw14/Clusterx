@@ -1,7 +1,8 @@
 /**
  * Layered topology of CLUSTERX 1.0. Static SVG, no script. Shapes follow the Execution Atlas grammar
  * (docs/design/execution-atlas.md): rounded block = service, chamfered block = worker, slotted block = store.
- * Dashed outlines mean "specified, not built yet". Dashed vertical rules are trust boundaries.
+ * Every block shown is implemented (the browser and Next.js layers are tested in a live browser E2E against the real control plane
+ * with a mock GitHub, not against real GitHub or TLS). Dashed vertical rules are trust boundaries.
  * The same facts are repeated as text in the layer list and the connections table on /architecture.
  */
 export function ArchitectureDiagram() {
@@ -11,7 +12,7 @@ export function ArchitectureDiagram() {
         <svg viewBox="0 0 1000 520" role="img" aria-describedby="arch-desc" focusable="false" id="arch-svg">
           <title>CLUSTERX topology: browser, Next.js server, Go control plane, PostgreSQL and workers</title>
           <desc id="arch-desc">
-            Left to right: the browser talks to the Next.js server over HTTPS with a session cookie. The Next.js server talks to the Go control plane REST API with a short-lived signed service assertion. Both of those layers are specified but not built yet. API clients talk to the same REST API with an API token. The Go control plane contains the REST API, the scheduler loops and the worker gRPC service, and it is the only component that connects to PostgreSQL. Three workers below connect to the gRPC service with a worker credential and never to the database. Dashed vertical lines mark trust boundaries.
+            Left to right: the browser talks to the Next.js server over HTTPS with a session cookie. The Next.js server talks to the Go control plane REST API with a short-lived signed service assertion. Both of those layers are implemented and were tested in a browser against the real control plane, with a mock GitHub standing in for sign-in. API clients talk to the same REST API with an API token. The Go control plane contains the REST API, the scheduler loops and the worker gRPC service, and it is the only component that connects to PostgreSQL. Three workers below connect to the gRPC service with a worker credential and never to the database. Dashed vertical lines mark trust boundaries.
           </desc>
           <defs>
             <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" className="ahead" /></marker>
@@ -27,17 +28,17 @@ export function ArchitectureDiagram() {
             <text x="335" y="88" className="t" textAnchor="middle">API clients</text>
             <text x="335" y="110" className="s" textAnchor="middle">curl, scripts</text>
           </g>
-          <g className="node plan dashed">
+          <g className="node">
             <rect x="20" y="200" width="160" height="110" rx="8" />
             <text x="100" y="236" className="t" textAnchor="middle">Browser</text>
             <text x="100" y="260" className="s" textAnchor="middle">console, site</text>
             <text x="100" y="284" className="s" textAnchor="middle">holds no tokens</text>
           </g>
-          <g className="node plan dashed">
+          <g className="node">
             <rect x="240" y="200" width="190" height="110" rx="8" />
             <text x="335" y="236" className="t" textAnchor="middle">Next.js server</text>
             <text x="335" y="260" className="s" textAnchor="middle">sessions, CSRF, proxy</text>
-            <text x="335" y="288" className="tag" textAnchor="middle">NOT BUILT YET</text>
+            <text x="335" y="288" className="tag" textAnchor="middle">IMPLEMENTED, TESTED</text>
           </g>
 
           <g className="node big">
@@ -71,8 +72,8 @@ export function ArchitectureDiagram() {
           <text x="810" y="488" className="tag">NO DB ACCESS</text>
 
           <g fill="none">
-            <path d="M180 255H238" markerEnd="url(#ah)" markerStart="url(#ah)" className="e dash" />
-            <path d="M430 255H498" markerEnd="url(#ah)" className="e dash" />
+            <path d="M180 255H238" markerEnd="url(#ah)" markerStart="url(#ah)" className="e" />
+            <path d="M430 255H498" markerEnd="url(#ah)" className="e" />
             <path d="M430 92H485V182H518" markerEnd="url(#ah)" className="e" />
             <path d="M790 255H848" markerEnd="url(#ah)" markerStart="url(#ah)" className="e" />
             <path d="M545 428V322" markerEnd="url(#ah)" markerStart="url(#ah)" className="e" />
@@ -89,8 +90,7 @@ export function ArchitectureDiagram() {
         </svg>
       </div>
       <ul className="atlas-legend arch-legend" aria-label="Diagram legend">
-        <li><svg viewBox="0 0 44 24" aria-hidden="true"><rect x="4" y="5" width="36" height="14" rx="3" fill="none" stroke="var(--color-ink)" strokeWidth="1.5" /></svg><span><strong>Solid outline</strong> implemented and tested in the repository</span></li>
-        <li><svg viewBox="0 0 44 24" aria-hidden="true"><rect x="4" y="5" width="36" height="14" rx="3" fill="none" stroke="var(--color-ink-2)" strokeWidth="1.5" strokeDasharray="4 3" /></svg><span><strong>Dashed outline</strong> specified, not built yet</span></li>
+        <li><svg viewBox="0 0 44 24" aria-hidden="true"><rect x="4" y="5" width="36" height="14" rx="3" fill="none" stroke="var(--color-ink)" strokeWidth="1.5" /></svg><span><strong>Solid outline</strong> implemented and tested in the repository (see the status text for what the tests did not cover)</span></li>
         <li><svg viewBox="0 0 44 24" aria-hidden="true"><polygon points="6,5 34,5 40,10 40,19 12,19 6,14" fill="none" stroke="var(--color-ink)" strokeWidth="1.5" /></svg><span><strong>Chamfered</strong> worker</span></li>
         <li><svg viewBox="0 0 44 24" aria-hidden="true"><path d="M22 2v20" stroke="var(--color-line-strong)" strokeWidth="1.5" strokeDasharray="3 3" /></svg><span><strong>Dashed rule</strong> trust boundary</span></li>
       </ul>

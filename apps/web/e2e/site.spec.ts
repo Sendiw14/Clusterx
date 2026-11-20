@@ -120,7 +120,8 @@ test.describe("architecture and changelog", () => {
     expect(await svg.locator("desc").textContent()).toContain("never to the database");
     await expect(page.getByRole("table", { name: /Connections table|Every connection/ })).toBeVisible();
     const t = await page.locator("main").innerText();
-    expect(t).toMatch(/Specified, not built/);
+    expect(t, "every layer shown is built; no layer is labelled specified-only").not.toMatch(/Specified, not built|NOT BUILT/i);
+    expect(t).toMatch(/tested in Chromium/);
     expect(t).toMatch(/Implemented, tested/);
     expect(t).toMatch(/not a high-availability design/i);
     await expect(page.locator("main").getByText("docs/architecture/adrs/0005-trust-boundaries.md")).toBeVisible();
@@ -134,8 +135,8 @@ test.describe("architecture and changelog", () => {
     const t = await page.locator("main").innerText();
     expect(t).toMatch(/No releases yet/);
     expect(t).not.toMatch(/released on|Released:/i);
-    for (const m of ["M1", "M2", "M3", "M4", "M5", "M6"]) expect(t).toContain(m);
-    expect(t).not.toMatch(/M7: |M8: /);
+    for (const m of ["M1", "M2", "M3", "M4", "M5", "M6", "M7"]) expect(t).toContain(m);
+    expect(t, "M8 is not merged").not.toMatch(/M8: /);
   });
 });
 
@@ -148,4 +149,12 @@ test("honesty: no testimonials, customer logos, uptime figures or 'live' demo la
     expect(t, r).not.toMatch(/guarantees? exactly[- ]once|provides? exactly[- ]once/i);
   }
   expect(errors).toEqual([]);
+});
+
+test("stale copy: no public page says the console or the Next.js server is unbuilt or in development", async ({ page }) => {
+  for (const r of ["/", "/architecture", "/docs", "/docs/security", "/docs/api", "/docs/quickstart", "/changelog", "/login", "/demo"]) {
+    await page.goto(r);
+    const t = await page.locator("body").innerText();
+    expect(t, r).not.toMatch(/Specified, not built|NOT BUILT YET|still in development|No session implementation|until it ships/i);
+  }
 });

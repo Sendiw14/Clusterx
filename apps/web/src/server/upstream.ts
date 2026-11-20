@@ -9,6 +9,8 @@ export interface GoResult {
   code?: string;
   reason?: string;
   expiry?: string;
+  /** `details.role` of a Go 403: the role Go authorized with (the database role). */
+  role?: string;
 }
 
 /** Headers passed back to the browser unchanged (ADR-0006 section 3, BFF-02). */
@@ -18,10 +20,11 @@ function parse(status: number, headers: Headers, body: Uint8Array): GoResult {
   const r: GoResult = { status, headers, body };
   if (status >= 400 && (headers.get("content-type") ?? "").includes("json")) {
     try {
-      const j = JSON.parse(new TextDecoder().decode(body)) as { code?: string; details?: { reason?: string; expiry?: string } };
+      const j = JSON.parse(new TextDecoder().decode(body)) as { code?: string; details?: { reason?: string; expiry?: string; role?: string } };
       r.code = j.code;
       r.reason = j.details?.reason;
       r.expiry = j.details?.expiry;
+      r.role = j.details?.role;
     } catch {
       /* not an envelope */
     }

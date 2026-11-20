@@ -23,5 +23,14 @@ export function buildCsp(opts: { nonce?: string; dev?: boolean }): string {
   ].join("; ");
 }
 
-/** Paths that get the nonce policy from `proxy.ts`. Everything else keeps the static policy from `next.config.ts`. */
-export const NONCE_PATHS = ["/app/:path*", "/login", "/auth/:path*"];
+/**
+ * First path segments that get the nonce policy from `proxy.ts` (console, sign-in, BFF auth routes). `next.config.ts` derives
+ * the static policy's exclusion from the same list, so no path gets both policies or neither (RV6B-03).
+ */
+export const NONCE_SEGMENTS = ["app", "login", "auth"] as const;
+
+/** Case-insensitive, like Next's `headers()` source matching, so a letter-case variant (`/APP`, `/Login/x`) cannot fall between the two policies. */
+export const isNoncePath = (pathname: string): boolean => new RegExp(`^/(?:${NONCE_SEGMENTS.join("|")})(?:/|$)`, "i").test(pathname);
+
+/** `headers()` source for the static policy: everything except the nonce paths. */
+export const STATIC_POLICY_SOURCE = `/((?!${NONCE_SEGMENTS.map((x) => `${x}(?:/|$)`).join("|")}).*)`;

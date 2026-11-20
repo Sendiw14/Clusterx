@@ -65,10 +65,24 @@ export interface ButtonLinkProps extends Omit<AnchorHTMLAttributes<HTMLAnchorEle
   children: ReactNode;
   /** Same-origin routes use next/link; set for GitHub and other external targets (adds the external glyph and text). */
   external?: boolean;
+  /**
+   * Plain anchor, so the click loads a new document. Required for a link from a public page into the console or /login: a
+   * client-side navigation keeps the public page's document, and with it its static `'unsafe-inline'` CSP, instead of the
+   * nonce CSP those routes are served with (RV6B-01).
+   */
+  reload?: boolean;
 }
 
-export function ButtonLink({ href, variant, size, icon, external, children, className, ...rest }: ButtonLinkProps) {
+export function ButtonLink({ href, variant, size, icon, external, reload, children, className, ...rest }: ButtonLinkProps) {
   const cls = btnClass(variant, size, className);
+  if (reload) {
+    return (
+      <a {...rest} href={href} className={cls}>
+        {icon ? <Icon name={icon} /> : null}
+        {children}
+      </a>
+    );
+  }
   if (external) {
     return (
       <a {...rest} href={href} className={cls} rel="noopener noreferrer">

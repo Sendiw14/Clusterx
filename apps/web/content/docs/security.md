@@ -36,6 +36,9 @@ Sign-in is GitHub OAuth (authorization code with PKCE and a `state` bound to the
 - **The Next.js server signs a short-lived assertion** (EdDSA, 60 seconds at most, a fixed set of claims, a fresh id per request) for every call to the control plane. The control plane verifies the signature and then re-reads the user, role and session from the database. The Next.js server decides nothing about authorization.
 - **The server-side proxy is an allowlist** of the API routes the console uses. Session operations, the stream and anything else answer 404. Request bodies are capped at 1 MiB while they are read.
 - **The console and sign-in pages use a per-request nonce Content-Security-Policy** without `'unsafe-inline'` for scripts. The public pages keep a static policy.
+- **Links from public pages into the console or sign-in page load a new document**, so those pages never run inside a public page's document and its looser policy. Every path under `/app`, `/login` and `/auth` gets the nonce policy, in any letter case.
+- **The role in the session cookie is a hint.** The control plane authorizes from the database role on every request. After a role change the Next.js server reads `GET /me` and re-seals the cookie, so the control plane stops recording a role-mismatch security event for every request after the first few that follow the change.
+- **The stream relay caps browser sockets** at 5 per session, 15 per user and 256 per process, and frees a socket as soon as the client closes or half-closes it.
 - **Rotating the web session key** is supported with an optional previous key during a window. The signing key for assertions is read once at start, so rotating it needs a restart of the web server.
 
 > [!UNVERIFIED] Not run: real GitHub, TLS between browser, web server and control plane, production mode with Secure `__Host-` cookies in a browser, idle and absolute expiry by elapsed time, Firefox and WebKit.
@@ -77,7 +80,7 @@ Other limits you should know:
 
 - Secrets must not be placed in payloads, results or logs. They are stored and shown to operators.
 - Rate limiting is implemented in the control plane: HTTP 429 `rate_limited` with `Retry-After`, per-user mutation limits and a bucket for failed authentications.
-- An independent review of the web layer (REVIEW-M6-RV-01) found no critical or high issue and three medium ones (proxy path handling, body size cap, WebSocket relay sockets). They are fixed in the M6 follow-up ticket and **pending independent re-review**. A formal STRIDE threat model, the production security and load gate (M8) and a dependency and supply-chain audit are **not done**.
+- An independent review of the web layer (REVIEW-M6-RV-01) found no critical or high issue and three medium ones (proxy path handling, body size cap, WebSocket relay sockets). A second round confirmed their fixes on the live stack and passed the M6 exit. It left release items: a public page could hand over to the console or sign-in page inside its own, looser policy; letter-case variants of `/app`, `/login` and `/auth` carried no policy; a role change left a stale role hint in the cookie; a half-closed stream client held a relay slot. All four are fixed in the M9 web hardening change and have **not had an independent re-review**. A formal STRIDE threat model, the production security and load gate (M8) and a dependency and supply-chain audit are **not done**.
 
 ## Reporting a vulnerability
 

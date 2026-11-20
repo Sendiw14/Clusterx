@@ -31,7 +31,7 @@ export function PublicHeader({ signedIn = false }: { signedIn?: boolean }) {
           {PUBLIC_NAV.map((n) => (
             <Link key={n.href} href={n.href} aria-current={isCurrent(pathname, n.href) ? "page" : undefined}>{n.label}</Link>
           ))}
-          <ButtonLink href={cta.href} size="sm" className="pub-cta" aria-current={isCurrent(pathname, cta.href) ? "page" : undefined}>{cta.label}</ButtonLink>
+          <ButtonLink reload href={cta.href} size="sm" className="pub-cta" aria-current={isCurrent(pathname, cta.href) ? "page" : undefined}>{cta.label}</ButtonLink>
         </nav>
         <Button size="sm" className="pub-menu-btn" icon="i-menu" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>Menu</Button>
       </div>
@@ -40,7 +40,8 @@ export function PublicHeader({ signedIn = false }: { signedIn?: boolean }) {
           {PUBLIC_NAV.map((n) => (
             <Link key={n.href} href={n.href} aria-current={isCurrent(pathname, n.href) ? "page" : undefined}>{n.label}</Link>
           ))}
-          <Link href={cta.href}>{cta.label}</Link>
+          {/* Plain anchors: /app and /login must arrive as a new document under the nonce CSP (RV6B-01). */}
+          <a href={cta.href}>{cta.label}</a>
         </nav>
       </Dialog>
     </header>
@@ -73,7 +74,7 @@ export function PublicFooter() {
               <li><Link href="/architecture">Architecture</Link></li>
               <li><Link href="/demo">Demo</Link></li>
               <li><Link href="/changelog">Changelog</Link></li>
-              <li><Link href="/login">Sign in</Link></li>
+              <li><a href="/login">Sign in</a></li>
             </ul>
           </nav>
           <nav aria-label="Documentation">

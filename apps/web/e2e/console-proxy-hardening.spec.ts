@@ -49,6 +49,8 @@ test.describe("RV6-01: the proxy is a positive allowlist and encoded separators 
 });
 
 test.describe("RV6-02: the 1 MiB body cap is enforced while reading", () => {
+  // Both big-body tests measure the one web server's RSS; run in parallel, one test's 256 MiB buffers show up in the other's peak (seen as a 103 to 127 MiB flake against the 96 MiB limit).
+  test.describe.configure({ mode: "serial" });
   const rssKiB = () => {
     const pid = execFileSync("lsof", ["-t", "-nP", `-iTCP:${PORT}`, "-sTCP:LISTEN"], { encoding: "utf8" }).trim().split("\n")[0];
     return Number(execFileSync("ps", ["-o", "rss=", "-p", pid!], { encoding: "utf8" }).trim());

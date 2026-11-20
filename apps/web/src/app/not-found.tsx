@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
 import { ButtonLink, PublicFooter, PublicHeader } from "@clusterx/ui";
 
 export const metadata: Metadata = { title: "Page not found", robots: { index: false } };
 
-/** GLOBAL-404: full brand shell, HTTP 404. 1.1 routes (/app/workflows*) land here in 1.0. */
-export default function NotFound() {
+/**
+ * GLOBAL-404: full brand shell, HTTP 404. 1.1 routes (/app/workflows*) land here in 1.0. Rendered per request: a prerendered
+ * 404 cannot carry the request nonce, so under the nonce CSP of /app, /login and /auth (any case) its scripts would be blocked
+ * and the page would not hydrate.
+ */
+export default async function NotFound() {
+  await connection();
   return (
     <>
       <PublicHeader />
@@ -17,7 +23,7 @@ export default function NotFound() {
           <div className="cta-row" style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", marginTop: "var(--space-5)" }}>
             <ButtonLink href="/" variant="primary">Home</ButtonLink>
             <ButtonLink href="/docs">Documentation</ButtonLink>
-            <ButtonLink href="/app">Console</ButtonLink>
+            <ButtonLink reload href="/app">Console</ButtonLink>
           </div>
           <p className="meta" style={{ marginTop: "var(--space-5)" }}>Looking for something that moved? Start at <Link href="/docs">the docs index</Link>.</p>
         </div>

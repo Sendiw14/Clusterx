@@ -1,13 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { buildCsp } from "@/lib/csp";
+import { buildCsp, isNoncePath } from "@/lib/csp";
 
 /**
  * Console, /login and /auth/*: (1) hands the requested path to the server-rendered layout so an ended session can return to
  * it after sign-in (any client-supplied `x-pathname` is overwritten, and the value is clamped again before use), and
  * (2) issues a fresh nonce CSP per request (RV6-09). The nonce goes on the request headers so Next stamps it on its own
- * scripts, and on the response as the only CSP these routes carry.
+ * scripts, and on the response as the only CSP these routes carry. Every other path passes through untouched and gets the
+ * static policy from `next.config.ts`. The matcher is deliberately broad and the decision is made here, case-insensitively
+ * (RV6B-03: a `/APP` or `/login/x` 404 used to match neither policy and carried no CSP).
  */
 export function proxy(req: NextRequest) {
+  if (!isNoncePath(req.nextUrl.pathname)) return NextResponse.next();
   const nonce = btoa(crypto.randomUUID());
   const csp = buildCsp({ nonce, dev: process.env.NODE_ENV !== "production" });
   const h = new Headers(req.headers);
@@ -18,4 +21,5 @@ export function proxy(req: NextRequest) {
   return res;
 }
 
-export const config = { matcher: ["/app/:path*", "/login", "/auth/:path*"] };
+// `bff/` is excluded on purpose: a proxy buffers request bodies, which would undo the streaming 1 MiB cap of the BFF routes (RV6-02).
+export const config = { matcher: ["/((?!_next/|bff/|fonts/|images/|icon\\.svg$).*)"] };
