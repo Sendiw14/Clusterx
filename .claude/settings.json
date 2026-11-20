@@ -1,4 +1,10 @@
+
 {
   "ultracode": true,
-  "workflowSizeGuideline": "small"
+  "workflowSizeGuideline": "small",
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  }
 }
