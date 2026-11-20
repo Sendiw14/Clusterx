@@ -11,6 +11,13 @@ const PAD = { l: 44, r: 12, t: 10, b: 24 };
 
 const fmt = (v: number, unit: string) => (unit === "s" ? (v < 90 ? `${v.toFixed(v < 10 ? 1 : 0)} s` : `${Math.round(v / 60)} min`) : String(Math.round(v)));
 
+/** Y-axis tick values. Counts get unique whole numbers (0 and 1 for a max of 1, never "1" twice); seconds keep halves. */
+export function axisTicks(max: number, unit: string): number[] {
+  if (unit === "s") return [0, max / 2, max];
+  const m = Math.max(1, Math.ceil(max));
+  return m <= 2 ? Array.from({ length: m + 1 }, (_, i) => i) : [0, Math.ceil(m / 2), m];
+}
+
 /** Break the line at null buckets: null means "no samples", never zero (GAP-OBS-02). */
 function segments(points: ChartPoint[], x: (i: number) => number, y: (v: number) => number): string[] {
   const out: string[] = [];
@@ -55,10 +62,10 @@ export function SeriesChart({ title, unit = "", series, stale, stepLabel }: { ti
         <>
           <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} data-testid="series-chart">
             <g className="grid axis">
-              {[0, 0.5, 1].map((f) => (
-                <g key={f}>
-                  <line x1={PAD.l} x2={W - PAD.r} y1={y(max * f)} y2={y(max * f)} />
-                  <text x={PAD.l - 6} y={y(max * f) + 4} textAnchor="end">{fmt(max * f, unit)}</text>
+              {axisTicks(max, unit).map((v) => (
+                <g key={v}>
+                  <line x1={PAD.l} x2={W - PAD.r} y1={y(v)} y2={y(v)} />
+                  <text x={PAD.l - 6} y={y(v) + 4} textAnchor="end">{fmt(v, unit)}</text>
                 </g>
               ))}
             </g>

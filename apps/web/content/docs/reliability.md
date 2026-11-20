@@ -26,7 +26,7 @@ This page separates three things that are easy to blur: what the design **promis
 - **No killing of a handler.** A deadline or cancellation stops the engine from accepting a result; it does not stop a goroutine that ignores its context.
 - **No unlimited retention.** Results (128 KiB at most) and attempt log tails (16 KiB at most) are size-limited. Log tails and terminal jobs are removed by a **retention pass**: log tails 7 days after an attempt finishes, terminal jobs and their history 30 days after they finish. These are proposed values, covered by tests (`TestNF03`, `TestNF04`). **Whether the pass runs depends on how you start the system.** The control plane's retention interval is off unless you set it. The production example sets it to one pass an hour, and a local proof of that example aged a job to 31 days, ran a pass and saw the job deleted (its API then answers 410). The local Compose stack runs nothing by default: it has an optional one-shot `retention` service that you run from cron. Without a scheduled pass, terminal jobs and history grow without bound. The 7 and 30 day periods are proposals.
 - **No exactly-once at the API either.** Idempotency keys are remembered for 24 hours only.
-- **No published performance numbers.** See the end of this page.
+- **No promised performance numbers.** Measured numbers from one development setup are at the end of this page; they are not capacity claims.
 
 ## Retry budgets
 

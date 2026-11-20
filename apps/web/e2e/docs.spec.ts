@@ -114,7 +114,8 @@ test.describe("API reference (generated)", () => {
     const ids = [...spec.matchAll(/operationId: (\w+)/g)].map((m) => m[1]!);
     for (const id of ids) expect(await page.locator(`section#${id}`).count(), id).toBe(1);
     await expect(page.locator("section#createJob").getByText("Served in this build")).toBeVisible();
-    await expect(page.locator("section#cancelJob").getByText(/Not served yet/)).toBeVisible();
+    await expect(page.locator("section#cancelJob").getByText("Served in this build")).toBeVisible();
+    await expect(page.getByText(/Not served yet|answers 404 not_found_route for now/)).toHaveCount(0);
     await expect(page.locator("section#createJob pre[aria-label^='Example request']").first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "Error codes and statuses" })).toBeVisible();
   });

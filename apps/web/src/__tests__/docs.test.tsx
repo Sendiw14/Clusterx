@@ -76,12 +76,24 @@ describe("API reference generation", () => {
     expect(api.operations.map((o) => o.id).sort()).toEqual([...opIds].sort());
     expect(api.operations.length).toBeGreaterThan(25);
   });
-  it("marks served operations from the spec's own statement", () => {
+  it("marks every operation served from the draft.6 statement, and the routed set in v1.go matches the spec", () => {
     expect(api.servedIds).toContain("createJob");
-    expect(api.servedIds).not.toContain("cancelJob");
-    expect(api.operations.find((o) => o.id === "cancelJob")!.served).toBe(false);
-    expect(api.operations.find((o) => o.id === "createJob")!.served).toBe(true);
+    expect(api.servedIds).toContain("cancelJob");
+    expect(api.operations.every((o) => o.served === true)).toBe(true);
+    for (const id of ["cancelJob", "retryJob", "drainWorker", "createApiToken", "openStream"]) expect(api.operations.find((o) => o.id === id)!.served, id).toBe(true);
     for (const id of EXECUTED_IN_CURL_GUIDE) expect(api.operations.some((o) => o.id === id), id).toBe(true);
+    // Truth source: the routes the control plane registers (apps/control-plane/internal/api/v1.go).
+    const go = readFileSync(path.join(ROOT, "apps", "control-plane", "internal", "api", "v1.go"), "utf8");
+    const routed = new Set<string>();
+    for (const chunk of go.split(/\n\troute\(mux, "/).slice(1)) {
+      const p = chunk.slice(0, chunk.indexOf('"'));
+      const body = chunk.slice(0, chunk.search(/\n\t(?:route\(|\})|\n\}\n/) > 0 ? chunk.search(/\n\t(?:route\(|\})|\n\}\n/) : undefined);
+      for (const m of body.matchAll(/http\.Method(\w+):/g)) routed.add(`${m[1]!.toUpperCase()} ${p}`);
+    }
+    const spec = new Set(api.operations.filter((o) => o.path.startsWith("/api/v1/")).map((o) => `${o.method} ${o.path}`));
+    expect(routed.size).toBeGreaterThan(20);
+    expect([...spec].filter((k) => !routed.has(k)), "spec operations v1.go does not route").toEqual([]);
+    expect([...routed].filter((k) => !spec.has(k)), "routes v1.go registers that the spec lacks").toEqual([]);
   });
   it("extracts request fields, responses, examples and the error catalogue", () => {
     const c = api.operations.find((o) => o.id === "createJob")!;
@@ -107,5 +119,14 @@ describe("search", () => {
     expect(search(idx, "lease zzzqqq")).toEqual([]);
     expect(search(idx, "   ")).toEqual([]);
     expect(search(idx, "createJob")[0]!.u).toBe("/docs/api#createJob");
+  });
+});
+
+describe("RV10 stale-claim guards", () => {
+  const all = DOC_SLUGS.map((s) => readFileSync(path.join(process.cwd(), "content", "docs", `${s}.md`), "utf8")).join("\n") + readFileSync(path.join(process.cwd(), "src", "content", "commands.ts"), "utf8");
+  it("no page says cancel, retry or log capture are missing, or claims a macOS clean-clone pass", () => {
+    expect(all).not.toMatch(/not served in the current build|Not served yet|log capture is not implemented|`log_tail` is empty/i);
+    expect(all).not.toMatch(/from a clean clone on macOS|works when the checkout is under|clean clone on macOS \(under/i);
+    expect(all).not.toMatch(/No published performance numbers/);
   });
 });

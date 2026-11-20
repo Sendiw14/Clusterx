@@ -24,7 +24,7 @@ ${SUBMIT_JOB}`;
 
 /** What was actually run, by whom, and what is still open. Rendered next to the snippets. */
 export const VERIFICATION = {
-  verified: "Integrator, 2026-11-18, Colima: bootstrap.sh exited 0 and left 3 live workers; POST /api/v1/jobs with hash_sha256 and fail_n_times both succeeded. Independent audit, 2026-11-20: the same from a clean clone on macOS (under $HOME) and in a Linux arm64 VM, plus a killed worker recovered.",
+  verified: "Integrator, 2026-11-18, Colima: bootstrap.sh exited 0 and left 3 live workers; POST /api/v1/jobs with hash_sha256 and fail_n_times both succeeded. Independent audit, 2026-11-20: the same from a clean clone in a Linux arm64 VM, plus a killed worker recovered. A clean clone on macOS outside $HOME failed (Colima mounts only $HOME); a macOS clean clone under $HOME has not been run.",
   curlForm: "The curl text above is the form executed in the M4 curl guide against built binaries on port 18080. Port 8080 is the port the compose file publishes.",
   open: "A Linux amd64 host has not been tried, and the console is not part of this path: it needs a GitHub OAuth app (see the Quickstart for the local mock-sign-in route).",
 } as const;

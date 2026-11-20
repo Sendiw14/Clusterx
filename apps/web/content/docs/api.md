@@ -6,7 +6,7 @@ blurb: Generated REST reference with authentication, errors, request IDs, idempo
 order: 4
 ---
 
-> [!WARNING] The contract is a **draft** and is not frozen. The version shown below is read from the OpenAPI document at build time. Names, fields and status codes can still change before 1.0, and some operations are described in the document but not served yet. Each operation says which.
+> [!WARNING] The contract is a **draft** and is not frozen. The version shown below is read from the OpenAPI document at build time. Names, fields and status codes can still change before 1.0, and which operations a recorded run or an end-to-end test exercised is stated per operation. Every operation in this version is routed by the control plane.
 
 ## Base URL and versioning
 

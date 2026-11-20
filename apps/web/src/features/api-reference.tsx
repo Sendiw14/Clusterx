@@ -90,7 +90,9 @@ export function ApiReference({ api }: { api: ApiModel }) {
     <>
       <h2 id="contract" className="doc-h">This build&apos;s contract<a className="anchor" href="#contract" aria-label="Link to section: This build's contract">#</a></h2>
       <p>Generated from <code>api/openapi.yaml</code>: <strong>{api.title}</strong>, version <code>{api.version}</code>, {api.operations.length} operations. {api.servers[0] ? <>Default server: <code>{api.servers[0]}</code>.</> : null}</p>
-      {api.servedIds ? (
+      {api.servedIds && api.servedIds.length === api.operations.length ? (
+        <div className="doc-callout"><Notice variant="info" lead="Served in this build." role="none">The document states that every operation is routed, and the control plane registers each of them (a test compares the two). Routed is not the same as exercised: the labels below say which operations a recorded run or an end-to-end test executed.</Notice></div>
+      ) : api.servedIds ? (
         <div className="doc-callout"><Notice variant="info" lead="Served in this build." role="none">The document states that these operations are routed: {api.servedIds.map((x, i) => <span key={x}>{i ? ", " : ""}<a href={`#${x}`}>{x}</a></span>)}. All other operations are described by the contract but answer <code>404 not_found_route</code> for now.</Notice></div>
       ) : (
         <div className="doc-callout"><Notice variant="warning" lead="Served status unknown." role="none">This version of the document does not say which operations are routed, so none is marked as served.</Notice></div>
