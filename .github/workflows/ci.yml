@@ -52,6 +52,33 @@ jobs:
         env:
           CLUSTERX_E2E_PG_BIN: /usr/lib/postgresql/18/bin
           CLUSTERX_E2E_PG_DIR: ${{ runner.temp }}/e2e-pg
+      - name: summarize e2e failures (public annotation; job logs need a GitHub login)
+        if: failure()
+        working-directory: apps/web
+        run: |
+          python3 - <<'PY'
+          import json, os, glob
+          out = []
+          try:
+              d = json.load(open("test-results/e2e.json"))
+              def walk(suite, path=""):
+                  for sp in suite.get("specs", []):
+                      for t in sp.get("tests", []):
+                          for r in t.get("results", []):
+                              if r.get("status") not in ("passed", "skipped"):
+                                  e = (r.get("error") or {}).get("message", "").strip().splitlines()
+                                  out.append(f"{t.get('projectName')}: {sp.get('file')} :: {sp.get('title')} [{r.get('status')}] {e[0][:160] if e else ''}")
+                  for s2 in suite.get("suites", []): walk(s2)
+              for s in d.get("suites", []): walk(s)
+              out.append(f"stats: {d.get('stats')}")
+          except Exception as ex:
+              out.append(f"no e2e.json ({ex}); e2e failed before tests ran")
+          for f in glob.glob(".e2e/*.log"):
+              out.append(f"--- tail {f}")
+              out += open(f, errors="replace").read().splitlines()[-15:]
+          msg = "%0A".join(x.replace("%", "%25").replace("\r", "") for x in out[:80])
+          print(f"::error title=e2e failures::{msg}")
+          PY
 
   go:
     runs-on: ubuntu-24.04
