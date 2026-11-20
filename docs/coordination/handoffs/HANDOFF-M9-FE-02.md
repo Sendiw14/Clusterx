@@ -50,7 +50,7 @@
 | Security: threat model and ASVS mapping exist as drafts | `docs/security/threat-model.md`, `docs/security/verification.md` |
 | Security: shared auth-failure bucket behind a proxy | AUDIT-M9-RV-01 F-13 |
 | Security: dependency scans (`govulncheck`, `pnpm audit`, `gitleaks` 0; OSV and SBOM not run; workflow never ran) | HANDOFF-M8-BE-01 "Supply-chain scans"; `docs/testing/release-gates.md`; REVIEW-M9-RV-02 C7 |
-| Security: no independent re-review of M9 web hardening or M8 example | Corrected by REVIEW-M9-RV-02 (F-19 closed for scope). **The security page still says "not had an independent re-review"; REVIEW-M9-RV-02 now exists in the main checkout but is uncommitted there, so I did not cite it as a repo file.** The integrator should change that sentence when the review is committed |
+| Security: no independent re-review of M9 web hardening or M8 example | `docs/coordination/reviews/REVIEW-M9-RV-02.md` (committed on main) closed F-19 for scope; the security page still says the M9 hardening "has not had an independent re-review". **Integrator: update that sentence on merge** (I did not cite a review that was not in my base) |
 | Security: reporting channel | `SECURITY.md`; AUDIT-M9-RV-01 §2 (private reporting only at publication, OD-19) |
 | Quickstart: recovery drill timings, stop commands | AUDIT-M9-RV-01 A7, A9; `README.md` |
 | Quickstart: console only via the E2E harness, mock OAuth | `apps/web/e2e/stack/stack.ts`, `README.md`, AUDIT-M9-RV-01 F-20 |
@@ -114,7 +114,7 @@ Real product fixes: (1) the job event timeline overflowed 320 px in Firefox beca
 
 1. `CHANGELOG.md` (repo root, outside this lane) still says in its M5 line "DB-outage and `kill -9` recovery tests" in a way RV9-03 flagged as inconsistent with the old web page; the web page now agrees with it. Check the root file separately.
 2. `docs/design/motion-and-assets.md` font rows (AUDIT F-16) were not touched (not in this ticket).
-3. When REVIEW-M9-RV-02 is committed, change the sentence in `/docs/security` that says the M9 web hardening and the M8 example have had no independent re-review (RV9 closed F-19 for scope).
+3. REVIEW-M9-RV-02 is on main: after merging, change the sentences in `/docs/security` and the changelog "Not yet in this history" list that say the M9 web hardening and the M8 example have had no independent re-review.
 4. Add the merge commit and date to the "M9 audit fixes (web lane)" changelog entry if you want it to match the other entries.
 5. CI: `pnpm --filter web e2e` now runs three browsers; the CI job needs `playwright install --with-deps firefox webkit` and takes roughly three times as long. I did not edit `.github/workflows` (not in my lane).
 6. No push, merge, publish or deploy was done. Cleanup: all harness stacks stopped, ports 55440/18180/19190/19191/19300/3100/3197/3300 verified free at the end; compose project `clusterx` was never touched.
