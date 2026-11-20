@@ -262,6 +262,9 @@ type pgCluster struct {
 func newCluster(t *testing.T) *pgCluster {
 	t.Helper()
 	if _, err := exec.LookPath("initdb"); err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatal("initdb/pg_ctl not on PATH in CI; AC-08 must not skip silently (AUDIT-M9 F-03)")
+		}
 		t.Skip("initdb/pg_ctl not on PATH; AC-08 needs a stoppable PostgreSQL 18 cluster")
 	}
 	c := &pgCluster{dir: filepath.Join(t.TempDir(), "pg"), port: freePort(t)}

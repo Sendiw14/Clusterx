@@ -37,8 +37,21 @@ jobs:
       - run: pnpm --filter web typecheck
       - run: pnpm --filter web test
       - run: pnpm --filter web build
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with: { go-version-file: go.work }
+      - name: install PostgreSQL 18 binaries (PGDG)
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-18
+          echo /usr/lib/postgresql/18/bin >> "$GITHUB_PATH"
+          /usr/lib/postgresql/18/bin/postgres --version
       - run: pnpm --filter web exec playwright install --with-deps chromium
       - run: pnpm --filter web e2e
+        env:
+          CLUSTERX_E2E_PG_BIN: /usr/lib/postgresql/18/bin
+          CLUSTERX_E2E_PG_DIR: ${{ runner.temp }}/e2e-pg
 
   go:
     runs-on: ubuntu-24.04
@@ -62,6 +75,14 @@ jobs:
           echo "3e866620c5be27664f3d2fa2d656b5f3e09b5152b42f1bedbf427b333e90021a  /tmp/protoc.zip" | sha256sum -c -
           sudo unzip -q -o /tmp/protoc.zip -d /usr/local bin/protoc 'include/*'
           ./packages/proto/generate.sh && git diff --exit-code packages/proto/gen
+      - name: install PostgreSQL 18 binaries (PGDG)
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-18
+          echo /usr/lib/postgresql/18/bin >> "$GITHUB_PATH"
+          /usr/lib/postgresql/18/bin/postgres --version
       - name: vet and race tests (all modules)
         run: |
           for m in $(go list -f '{{.Dir}}' -m); do (cd "$m" && go vet ./... && go test -race -count=1 ./...); done
