@@ -126,8 +126,13 @@ export function loadApi(): ApiModel {
   if (!isObj(root) || !isObj(root.info) || !isObj(root.paths)) throw new Error("openapi: not an OpenAPI document");
   const info = root.info;
   const description = String(info.description ?? "");
+  // From draft.6 the contract says "every operation is routed" (apps/control-plane/internal/api/v1.go registers all of them; a unit
+  // test parses that file). Older drafts listed the served subset in a sentence. The M4-era sentence stays in the changelog text,
+  // so the draft.6 statement is checked first.
+  const allRouted = /every operation is routed/i.test(description);
   const m = /serves\s+([\s\S]*?)\s+with direct API tokens/.exec(description);
-  const servedIds = m ? m[1]!.replace(/\s+and\s+/g, ",").split(",").map((x) => x.trim()).filter(Boolean) : null;
+  const listed = m ? m[1]!.replace(/\s+and\s+/g, ",").split(",").map((x) => x.trim()).filter(Boolean) : null;
+  const servedIds = allRouted ? Object.values(root.paths).flatMap((item) => (isObj(item) ? ["get", "post", "put", "patch", "delete"].flatMap((mt) => (isObj(item[mt]) && typeof (item[mt] as Json).operationId === "string" ? [(item[mt] as Json).operationId as string] : [])) : [])) : listed;
 
   const comps = isObj(root.components) ? root.components : {};
   const globalSec = Array.isArray(root.security) ? root.security.flatMap((s) => Object.keys(s as Json)) : [];

@@ -40,7 +40,7 @@ func Hash(_ context.Context, _ sdk.Job, in HashIn) (HashOut, error) {
 }
 ```
 
-The `sdk.Job` argument describes the attempt: `ID` (stable across attempts, use it as the idempotency key for side effects), `AttemptID`, `Attempt` (1-based), `MaxAttempts` (includes the first run) and `Handler`.
+The `sdk.Job` argument describes the attempt: `ID` (stable across attempts, use it as the idempotency key for side effects), `AttemptID`, `Attempt` (1-based), `MaxAttempts` (includes the first run), `Handler` and `Log`, the attempt's `*slog.Logger` (captured and bounded, see the note under Run a worker).
 
 ## Register handlers and versions
 
@@ -131,7 +131,7 @@ The reference worker, `apps/worker/cmd/clusterx-worker`, runs the three example 
 | `CLUSTERX_SHUTDOWN_TIMEOUT` | Drain grace on shutdown. |
 | `CLUSTERX_LOG_LEVEL`, `CLUSTERX_ENV` | Logging and environment. |
 
-> [!NOTE] Handler log capture is not implemented: attempt `log_tail` is empty in the current build.
+> [!NOTE] **Handler logs.** Capture shipped in M5. Log through `job.Log` and the SDK keeps the last 16 KiB of that output, with secret-like attribute keys redacted, and reports it as the attempt's `log_tail`. The control plane keeps it for 7 days. Output written any other way (for example `fmt.Println`) is not captured. Never log secrets.
 
 ## Drain, restart and keeping a host out
 

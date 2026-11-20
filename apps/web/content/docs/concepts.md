@@ -88,8 +88,6 @@ If a cancel request and a success report race, **whichever commits first wins**.
 
 A deadline or a cancel request does not stop a handler that ignores its context. It stops the engine from accepting that handler's result.
 
-> [!NOTE] The cancel and manual-retry operations are in the API contract but are not served in the current build. See the [API reference](/docs/api).
-
 ## Idempotent submission
 
 Send an `Idempotency-Key` header (1 to 128 characters from `A-Za-z0-9_.:-`) with `POST /api/v1/jobs`. The key is scoped to your principal and kept for 24 hours.

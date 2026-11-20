@@ -1,0 +1,220 @@
+{
+  "next_build_id": "ALkl-7ZKWguCwmxrQ0Fdg",
+  "polyfills": {
+    "files": 1,
+    "raw": 112594,
+    "gzip": 39373,
+    "brotli": 35158,
+    "note": "loaded only by browsers that need them (nomodule); not in firstLoad"
+  },
+  "routes": [
+    {
+      "route": "/login",
+      "group": "auth",
+      "chunks": 8,
+      "raw": 498182,
+      "gzip": 148281,
+      "brotli": 127062
+    },
+    {
+      "route": "/app",
+      "group": "console",
+      "chunks": 11,
+      "raw": 593277,
+      "gzip": 177800,
+      "brotli": 153157
+    },
+    {
+      "route": "/app/activity",
+      "group": "console",
+      "chunks": 11,
+      "raw": 593277,
+      "gzip": 177800,
+      "brotli": 153157
+    },
+    {
+      "route": "/app/jobs",
+      "group": "console",
+      "chunks": 11,
+      "raw": 593277,
+      "gzip": 177800,
+      "brotli": 153157
+    },
+    {
+      "route": "/app/jobs/[id]",
+      "group": "console",
+      "chunks": 11,
+      "raw": 593277,
+      "gzip": 177800,
+      "brotli": 153157
+    },
+    {
+      "route": "/app/jobs/new",
+      "group": "console",
+      "chunks": 11,
+      "raw": 593277,
+      "gzip": 177800,
+      "brotli": 153157
+    },
+    {
+      "route": "/app/observability",
+      "group": "console",
+      "chunks": 11,
+      "raw": 593277,
+      "gzip": 177800,
+      "brotli": 153157
+    },
+    {
+      "route": "/app/settings",
+      "group": "console",
+      "chunks": 11,
+      "raw": 593277,
+      "gzip": 177800,
+      "brotli": 153157
+    },
+    {
+      "route": "/app/settings/preferences",
+      "group": "console",
+      "chunks": 11,
+      "raw": 593277,
+      "gzip": 177800,
+      "brotli": 153157
+    },
+    {
+      "route": "/app/settings/tokens",
+      "group": "console",
+      "chunks": 11,
+      "raw": 593277,
+      "gzip": 177800,
+      "brotli": 153157
+    },
+    {
+      "route": "/app/workers",
+      "group": "console",
+      "chunks": 11,
+      "raw": 593277,
+      "gzip": 177800,
+      "brotli": 153157
+    },
+    {
+      "route": "/app/workers/[id]",
+      "group": "console",
+      "chunks": 11,
+      "raw": 593277,
+      "gzip": 177800,
+      "brotli": 153157
+    },
+    {
+      "route": "/demo",
+      "group": "demo",
+      "chunks": 10,
+      "raw": 553038,
+      "gzip": 164753,
+      "brotli": 141498
+    },
+    {
+      "route": "/docs",
+      "group": "docs",
+      "chunks": 9,
+      "raw": 505488,
+      "gzip": 151048,
+      "brotli": 129483
+    },
+    {
+      "route": "/docs/api",
+      "group": "docs",
+      "chunks": 10,
+      "raw": 506660,
+      "gzip": 151682,
+      "brotli": 130016
+    },
+    {
+      "route": "/docs/concepts",
+      "group": "docs",
+      "chunks": 10,
+      "raw": 506660,
+      "gzip": 151682,
+      "brotli": 130016
+    },
+    {
+      "route": "/docs/deployment",
+      "group": "docs",
+      "chunks": 10,
+      "raw": 506660,
+      "gzip": 151682,
+      "brotli": 130016
+    },
+    {
+      "route": "/docs/quickstart",
+      "group": "docs",
+      "chunks": 10,
+      "raw": 506660,
+      "gzip": 151682,
+      "brotli": 130016
+    },
+    {
+      "route": "/docs/reliability",
+      "group": "docs",
+      "chunks": 10,
+      "raw": 506660,
+      "gzip": 151682,
+      "brotli": 130016
+    },
+    {
+      "route": "/docs/security",
+      "group": "docs",
+      "chunks": 10,
+      "raw": 506660,
+      "gzip": 151682,
+      "brotli": 130016
+    },
+    {
+      "route": "/docs/workers",
+      "group": "docs",
+      "chunks": 10,
+      "raw": 506660,
+      "gzip": 151682,
+      "brotli": 130016
+    },
+    {
+      "route": "/_not-found",
+      "group": "not-found",
+      "chunks": 8,
+      "raw": 498182,
+      "gzip": 148281,
+      "brotli": 127062
+    },
+    {
+      "route": "/[...unmatched]",
+      "group": "not-found",
+      "chunks": 8,
+      "raw": 498182,
+      "gzip": 148281,
+      "brotli": 127062
+    },
+    {
+      "route": "/",
+      "group": "public",
+      "chunks": 9,
+      "raw": 519119,
+      "gzip": 154344,
+      "brotli": 132279
+    },
+    {
+      "route": "/architecture",
+      "group": "public",
+      "chunks": 8,
+      "raw": 498182,
+      "gzip": 148281,
+      "brotli": 127062
+    },
+    {
+      "route": "/changelog",
+      "group": "public",
+      "chunks": 8,
+      "raw": 498182,
+      "gzip": 148281,
+      "brotli": 127062
+    }
+  ]
+}

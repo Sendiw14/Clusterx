@@ -10,7 +10,7 @@ order: 6
 
 ## Local Compose reference (verified)
 
-`infra/compose/compose.yaml` is marked in its own header as **development only, not a production example**. Start it with the steps in the [Quickstart](/docs/quickstart). The integrator ran it on Colima on 2026-11-18, and the independent audit reproduced it from a clean clone on macOS under `$HOME` and on Linux arm64 (an Ubuntu VM). amd64 has not been tried. With Colima, keep the checkout under `$HOME`: Colima mounts only `$HOME` into its VM.
+`infra/compose/compose.yaml` is marked in its own header as **development only, not a production example**. Start it with the steps in the [Quickstart](/docs/quickstart). The integrator ran it on Colima on 2026-11-18. The independent audit reproduced it from a clean clone on Linux arm64 (an Ubuntu VM). On macOS the audit's clean clone outside `$HOME` failed (Colima mounts only `$HOME` into its VM); a macOS clean clone under `$HOME` has not been run. amd64 has not been tried.
 
 | Service | Role | Published port |
 | --- | --- | --- |

@@ -10,13 +10,13 @@ This quickstart starts a **local development stack**: PostgreSQL, the Go control
 
 > [!VERIFIED] On 2026-11-18 the integrator ran this flow on Colima: `./infra/compose/bootstrap.sh` exited 0 and left 3 live workers, and `POST /api/v1/jobs` with the `hash_sha256` and `fail_n_times` handlers succeeded.
 
-> [!VERIFIED] On 2026-11-20 an independent auditor repeated this flow from a clean `git clone`: on macOS with Colima it works when the checkout is under `$HOME`, and inside a Linux arm64 Ubuntu VM `bootstrap.sh` exited 0 and a job ran to `succeeded`. The auditor also killed a worker container and watched the attempts recover (step 8).
+> [!VERIFIED] On 2026-11-20 an independent auditor repeated this flow from a clean `git clone` **inside a Linux arm64 Ubuntu VM**: `bootstrap.sh` exited 0 and a job ran to `succeeded`. The auditor also killed a worker container there and watched the attempts recover (step 8). On macOS the same clean clone, made outside `$HOME`, **failed** with a bind-mount error. A clean clone on macOS under `$HOME` was **not** run by the audit; the only macOS evidence is the integrator's run above, made from a working checkout.
 
 > [!UNVERIFIED] Not run: a Linux amd64 host, and anything involving real GitHub sign-in. The commands below were run on arm64 only.
 
 ## Prerequisites
 
-- Docker with the Compose plugin (Compose V2). Verified with Colima on macOS and in a Linux arm64 VM. With Colima, keep the checkout under `$HOME`: Colima mounts only `$HOME` into its VM, and a checkout elsewhere (for example under `/private/tmp`) fails with a bind-mount error.
+- Docker with the Compose plugin (Compose V2). Run on Colima on macOS (the integrator's working checkout) and, from a clean clone, in a Linux arm64 VM. With Colima, keep the checkout under `$HOME`: Colima mounts only `$HOME` into its VM, and a clean clone outside it (under `/private/tmp`) failed with a bind-mount error in the audit.
 - A shell with `git`, `cp`, `curl` and `openssl`.
 - Free loopback ports: 8080 (REST API), 9091 (metrics) and 5432 (PostgreSQL). Change them with `CLUSTERX_HTTP_PORT`, `CLUSTERX_METRICS_PORT` and `CLUSTERX_PG_PORT` in `.env`. The compose file publishes them on 127.0.0.1 only.
 - You do not need Go installed: the images are built by Compose.
@@ -167,7 +167,7 @@ Add `-v` to delete the database volume. The auditor ran the `-v` form and the vo
 | HTTP 401 `unauthenticated` | The token is missing or wrong. Re-copy `CLUSTERX_OPERATOR_TOKEN` from `infra/compose/.secrets.env`. |
 | HTTP 403 `forbidden` | The token's role or scope does not allow the operation. Submitting jobs needs an operator token. |
 | HTTP 422 `validation_failed` | The handler or payload is invalid. `details.fields` lists each field as a JSON Pointer. Unknown fields are rejected on purpose. |
-| HTTP 404 `not_found_route` | The route is not served in this build. See the status column in the [API reference](/docs/api). |
+| HTTP 404 `not_found_route` | The path is not one the control plane routes (a typo, or a path outside `/api/v1`). Compare it with the [API reference](/docs/api). |
 | `invalid mount config … bind source path does not exist` (Colima) | The checkout is outside `$HOME`. Move it under `$HOME`. |
 | Port already in use | Another process holds 8080, 9091 or 5432. Change `CLUSTERX_HTTP_PORT`, `CLUSTERX_METRICS_PORT` or `CLUSTERX_PG_PORT` in `.env`. |
 
