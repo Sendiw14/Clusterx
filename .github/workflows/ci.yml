@@ -47,7 +47,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-18
           echo /usr/lib/postgresql/18/bin >> "$GITHUB_PATH"
           /usr/lib/postgresql/18/bin/postgres --version
-      - run: pnpm --filter web exec playwright install --with-deps chromium
+      - run: pnpm --filter web exec playwright install --with-deps chromium firefox webkit
       - run: pnpm --filter web e2e
         env:
           CLUSTERX_E2E_PG_BIN: /usr/lib/postgresql/18/bin
