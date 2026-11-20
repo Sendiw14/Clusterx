@@ -1,7 +1,7 @@
 # CLUSTERX Component Specifications
 
 - Ticket: TASK-M2-FE-01, deliverable 3. Requirement IDs: FR-WEB-04, FR-WEB-05, FR-WEB-07, NFR-A11Y-01, NFR-RESP-01, AC-21, AC-22, AC-23.
-- Scope: every item in the MASTER section 8 "Shared UI component inventory". Components are specified, not built; `packages/ui` contains tokens only in M2.
+- Scope: every item in the MASTER section 8 "Shared UI component inventory". This document is the M2 specification. The components are implemented in `packages/ui` (M3 onward); where code and this text differ, the code is what ships and this text is not yet updated.
 - Inputs: `tokens.css`, `route-inventory.md` (state IDs `S-*`, motion IDs `M-*`), `motion-and-assets.md`, `accessibility-plan.md`.
 - Status: **specified**. Prototypes in `docs/design/prototypes/` realise the components marked "P" in the index; they are static HTML, not the React components.
 

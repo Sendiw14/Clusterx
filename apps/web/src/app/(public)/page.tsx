@@ -61,7 +61,7 @@ export default function HomePage() {
           <Reveal className="pillars">
             <article><p className="no">01 / Admission</p><h3>Acknowledged means committed.</h3><p>A job gets a success response only after its transaction commits in PostgreSQL. A coordinator restart does not lose acknowledged work.</p><p className="proof">POST /jobs → 201 after commit</p></article>
             <article><p className="no">02 / Execution</p><h3>Leases and fencing.</h3><p>Every claim creates an attempt and a lease generation in one transaction. Reports from a stale attempt, generation, or revoked credential are refused.</p><p className="proof">attempt + generation + incarnation</p></article>
-            <article><p className="no">03 / Inspection</p><h3>Every attempt is on the record.</h3><p>Jobs, attempts, events and workers are read from the database over the REST API. The console that renders them live is still in development; until it ships, the API and the demo are the way in.</p><p className="proof">GET /jobs/&#123;id&#125;/attempts</p></article>
+            <article><p className="no">03 / Inspection</p><h3>Every attempt is on the record.</h3><p>Jobs, attempts, events and workers are read from the database over the REST API. The operator console renders them live. It signs in with GitHub through a server-side session, so the browser never holds an API token; the demo shows the same screens on fixture data.</p><p className="proof">GET /jobs/&#123;id&#125;/attempts</p></article>
           </Reveal>
         </div>
       </section>
@@ -70,8 +70,8 @@ export default function HomePage() {
         <div className="wrap">
           <Reveal className="sec-h"><p className="eyebrow">Architecture</p><h2 id="arch-h" className="h2">One coordinator, one database, workers that pull.</h2><p className="lede">Workers never touch the database. They ask the coordinator for work and report back over authenticated gRPC.</p></Reveal>
           <Reveal as="ol" className="arch" >
-            <li><p className="tier">Layer 1</p><h3>Browser</h3><p>Console and public site over HTTPS. Holds no API or worker tokens.</p><span className="trust">session cookie only</span><span className="stat" data-s="plan">Specified, not built</span></li>
-            <li><p className="tier">Layer 2</p><h3>Next.js server</h3><p>Human sessions and the server-side proxy. Signs short-lived service assertions.</p><span className="trust">trust boundary</span><span className="stat" data-s="plan">Specified, not built</span></li>
+            <li><p className="tier">Layer 1</p><h3>Browser</h3><p>Console and public site over HTTPS. Holds no API or worker tokens.</p><span className="trust">session cookie only</span><span className="stat" data-s="ok">Implemented, tested in Chromium</span></li>
+            <li><p className="tier">Layer 2</p><h3>Next.js server</h3><p>Human sessions and the server-side proxy. Signs short-lived service assertions.</p><span className="trust">trust boundary</span><span className="stat" data-s="ok">Implemented, tested against a mock GitHub</span></li>
             <li><p className="tier">Layer 3</p><h3>Go coordinator</h3><p>REST, gRPC, scheduler and authorization on every call.</p><span className="trust">enforces roles</span><span className="stat" data-s="ok">Implemented, tested</span></li>
             <li><p className="tier">Layer 4</p><h3>PostgreSQL</h3><p>The only authoritative store for jobs, attempts, leases and events.</p><span className="trust">single source of truth</span><span className="stat" data-s="ok">Implemented, tested</span></li>
             <li><p className="tier">Layer 5</p><h3>Workers</h3><p>Trusted, precompiled handlers. Pull work, renew leases, report results.</p><span className="trust">credential per worker</span><span className="stat" data-s="ok">Implemented, tested</span></li>

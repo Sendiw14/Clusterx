@@ -54,7 +54,7 @@ export interface ErrorInfo {
 }
 
 const ERROR_COPY: Record<string, { title: string; body: string }> = {
-  not_implemented: { title: "Not connected yet", body: "This build has no backend session, so the console cannot load data. The layout is real; the data arrives with the BFF in a later milestone." },
+  not_implemented: { title: "Not available", body: "The server reported that this operation is not implemented. Nothing was changed." },
   unavailable: { title: "The service is temporarily unavailable", body: "The control plane is not ready. Your last data stays on screen, marked stale. Try again shortly." },
   upstream_unavailable: { title: "The control plane is unreachable", body: "The console could not reach the engine. Nothing was changed." },
   upstream_auth: { title: "The console could not reach its own API", body: "This is an infrastructure fault, not a problem with your account, so you are not asked to sign in again." },

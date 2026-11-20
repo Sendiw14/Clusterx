@@ -9,17 +9,17 @@ export const metadata: Metadata = {
   description: "Topology, trust boundaries, the job and lease path, trade-offs, failure domains and the stated limits of CLUSTERX.",
 };
 
-const LAYERS = [
-  { name: "Browser", text: "Public site and console over HTTPS. Holds a session cookie only: no API tokens, no worker credentials.", trust: "session cookie only", built: false },
-  { name: "Next.js server (BFF)", text: "Human sessions, CSRF and origin checks, and a server-side proxy. Signs a short-lived, audience-bound service assertion for every upstream request. It never decides authorization.", trust: "trust boundary", built: false },
-  { name: "Go control plane", text: "Job admission, due-job promotion, transactional claims, fencing, retries, cancellation, recovery, worker registration and REST authorization on every call.", trust: "enforces roles and scopes", built: true },
-  { name: "PostgreSQL", text: "The only authoritative store for jobs, attempts, leases and events. Time for leases is the database clock.", trust: "single source of truth", built: true },
-  { name: "Workers", text: "Trusted, precompiled Go handlers. They pull work, renew leases and report over authenticated gRPC. They cannot write to the database.", trust: "credential per worker", built: true },
+const LAYERS: { name: string; text: string; trust: string; stat?: string }[] = [
+  { name: "Browser", text: "Public site and console over HTTPS. Holds a session cookie only: no API tokens, no worker credentials.", trust: "session cookie only", stat: "Implemented, tested in Chromium" },
+  { name: "Next.js server (BFF)", text: "Human sessions, CSRF and origin checks, and a server-side proxy. Signs a short-lived, audience-bound service assertion for every upstream request. It never decides authorization.", trust: "trust boundary", stat: "Implemented, tested against a mock GitHub" },
+  { name: "Go control plane", text: "Job admission, due-job promotion, transactional claims, fencing, retries, cancellation, recovery, worker registration and REST authorization on every call.", trust: "enforces roles and scopes" },
+  { name: "PostgreSQL", text: "The only authoritative store for jobs, attempts, leases and events. Time for leases is the database clock.", trust: "single source of truth" },
+  { name: "Workers", text: "Trusted, precompiled Go handlers. They pull work, renew leases and report over authenticated gRPC. They cannot write to the database.", trust: "credential per worker" },
 ];
 
 const CONNECTIONS = [
-  { from: "Browser", to: "Next.js server", proto: "HTTPS", cred: "Session cookie (server-held session)", status: "Specified, not built", src: "ADR-0005, ADR-0006" },
-  { from: "Next.js server", to: "Control plane REST", proto: "HTTP, /api/v1", cred: "Signed service assertion, 60 s at most", status: "Specified, not built", src: "ADR-0005, ADR-0006" },
+  { from: "Browser", to: "Next.js server", proto: "HTTPS", cred: "Session cookie (server-held session)", status: "Implemented, tested in Chromium; TLS and production-mode cookies not run", src: "ADR-0005, ADR-0006" },
+  { from: "Next.js server", to: "Control plane REST", proto: "HTTP, /api/v1", cred: "Signed service assertion, 60 s at most", status: "Implemented, tested against the real control plane", src: "ADR-0005, ADR-0006" },
   { from: "API client", to: "Control plane REST", proto: "HTTP, /api/v1", cred: "Scoped API token (cxt_ prefix)", status: "Implemented, tested", src: "ADR-0005, api/openapi.yaml" },
   { from: "Worker", to: "Control plane gRPC", proto: "gRPC, pull model", cred: "Worker credential (cxw_ prefix), checked on every call", status: "Implemented, tested", src: "ADR-0005, packages/proto" },
   { from: "Control plane", to: "PostgreSQL", proto: "SQL (pgx), READ COMMITTED", cred: "Least-privilege runtime role", status: "Implemented, tested", src: "ADR-0001, ADR-0004" },
@@ -50,8 +50,8 @@ const FAILURES = [
   { f: "A worker is partitioned but keeps running", w: "Its handler may still run and cause side effects. Its reports are rejected once the lease expires. This is why execution is at-least-once.", s: "Fence covered by tests" },
   { f: "The control plane restarts", w: "REST and gRPC are unavailable. Nothing uncommitted was acknowledged. Leases may expire during the outage; recovery runs on start.", s: "Restart exercised in the M4 curl guide" },
   { f: "PostgreSQL is down", w: "Readiness fails, REST writes answer 503, claims pause, scheduler loops back off. State resumes from what was committed.", s: "Outage tests not yet run" },
-  { f: "The live channel drops", w: "The design says the console shows it and reconciles from a snapshot. Live messages are hints, never data.", s: "Design only: console not built" },
-  { f: "The BFF cannot reach Go", w: "The design shows an infrastructure error with a request ID and does not ask the user to sign in again.", s: "Design only: BFF not built" },
+  { f: "The live channel drops", w: "The console reconnects with backoff, shows that the data is not live and reconciles from a snapshot. If the channel never connects it polls instead. Live messages are hints, never data.", s: "Browser E2E on the live stack: drop, reconnect and polling fallback" },
+  { f: "The Next.js server cannot reach or authenticate to Go", w: "The console shows an infrastructure error and does not ask the user to sign in again. Failed requests show a request ID.", s: "Browser E2E: unavailable state and the sign-in outcome. Not run against a real network partition" },
 ];
 
 const SOURCES = [
@@ -74,7 +74,7 @@ export default function ArchitecturePage() {
       <div className="wrap">
         <p className="eyebrow">Architecture</p>
         <h1 className="page-title" style={{ marginTop: "var(--space-4)", maxWidth: "20ch" }}>One coordinator, one database, workers that pull.</h1>
-        <p className="lede" style={{ marginTop: "var(--space-4)" }}>Where each part sits, which credential crosses each boundary, what is built and what only exists as a specification. Source files are listed at the end; every statement here traces to one.</p>
+        <p className="lede" style={{ marginTop: "var(--space-4)" }}>Where each part sits, which credential crosses each boundary, what is built and how far each part has been tested. Source files are listed at the end; every statement here traces to one.</p>
 
         <section aria-labelledby="topo-h" style={{ marginTop: "var(--space-7)" }}>
           <h2 id="topo-h" className="h2">Topology</h2>
@@ -89,7 +89,7 @@ export default function ArchitecturePage() {
               <li key={l.name}>
                 <p className="tier">Layer {i + 1}</p><h3>{l.name}</h3><p>{l.text}</p>
                 <span className="trust">{l.trust}</span>
-                <span className="stat" data-s={l.built ? "ok" : "plan"}>{l.built ? "Implemented, tested" : "Specified, not built"}</span>
+                <span className="stat" data-s="ok">{l.stat ?? "Implemented, tested"}</span>
               </li>
             ))}
           </ol>
