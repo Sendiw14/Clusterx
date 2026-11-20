@@ -23,7 +23,8 @@ for c in "${checks[@]}"; do
     echo "pnpm audit exit=$e"; [ $e -eq 0 ] || rc=1 ;;
   osv)
     # pnpm lockfile and Go modules against OSV (includes npm advisories).
-    osv-scanner scan source --recursive --format table "$ROOT" > "$OUT/osv-scanner.txt" 2>&1; e=$?
+    tree=$(mktemp -d); git -C "$ROOT" archive HEAD | tar -x -C "$tree"   # committed tree only
+    osv-scanner scan source --recursive --format table "$tree" > "$OUT/osv-scanner.txt" 2>&1; e=$?; rm -rf "$tree"
     echo "osv-scanner exit=$e"; [ $e -eq 0 ] || rc=1 ;;
   gitleaks)
     # Whole git history plus the working tree; findings are redacted in the report.
@@ -35,12 +36,13 @@ for c in "${checks[@]}"; do
     echo "gitleaks tree exit=$e"; [ $e -eq 0 ] || rc=1 ;;
   sbom)
     # SPDX SBOM of each locally built image named in CLUSTERX_SBOM_IMAGES (space separated) plus the source tree.
-    syft scan "dir:$ROOT" -q -o spdx-json="$OUT/sbom-source.spdx.json"; e=$?
+    tree=$(mktemp -d); git -C "$ROOT" archive HEAD | tar -x -C "$tree"
+    syft scan "dir:$tree" -q -o spdx-json="$OUT/sbom-source.spdx.json"; e=$?; rm -rf "$tree"
     echo "syft source exit=$e"; [ $e -eq 0 ] || rc=1
     for img in ${CLUSTERX_SBOM_IMAGES:-}; do
       f="$OUT/sbom-$(echo "$img" | tr '/:' '--').spdx.json"
       syft scan "docker:$img" -q -o spdx-json="$f"; e=$?
-      echo "syft $img exit=$e packages=$(grep -c '"SPDXID": "SPDXRef-Package' "$f" 2>/dev/null)"; [ $e -eq 0 ] || rc=1
+      echo "syft $img exit=$e packages=$(python3 -c 'import json,sys;print(len(json.load(open(sys.argv[1]))["packages"]))' "$f" 2>/dev/null)"; [ $e -eq 0 ] || rc=1
     done ;;
   *) echo "unknown check $c" >&2; rc=2 ;;
   esac
