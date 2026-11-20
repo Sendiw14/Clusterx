@@ -34,3 +34,17 @@ Rule (§3): adopt as a tested set; pin exact versions; re-verify advisories mont
 | Fonts | IBM Plex Sans/Mono, Newsreader (OFL 1.1, self-hosted) | hashes in `apps/web/public/fonts/FONTS.md` | OD-17 |
 | GitHub Actions | checkout v7.0.1 `3d3c42e5…`, setup-go v7.1.0 `d8cbb804…`, setup-node v7.1.0 `949feb24…`, pnpm/action-setup v6.1.1 `73e46992…` | pinned by SHA | |
 | Container runtime (dev) | Colima 0.10.3, Docker 29.10 CLI / 29.5.2 engine, compose plugin | — | registry CDN flaky from VM (DNS/IPv6); `--dns 1.1.1.1` set |
+
+## M8 additions (TASK-M8-BE-01, 2026-11-20)
+
+| Area | Pinned | Evidence | Notes |
+|---|---|---|---|
+| Prometheus | `quay.io/prometheus/prometheus:v3.16.0@sha256:9332054523223e2ddc18d8101799d54a4a8d823b030c53216f063a6c117773cd` | `promtool test rules` SUCCESS; alert drill | quay.io copy: Docker Hub `prom/prometheus` pulls stalled from the VM (Hub digest differs: `e0498764…`) |
+| node-exporter | `quay.io/prometheus/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0` | disk alert drill | same digest on Docker Hub; v1.13.1 (1 day old) not adopted |
+| Caddy | `public.ecr.aws/docker/library/caddy:2.11.8@sha256:4fcafa98afd1c2e642e353e3c5cf9ddbe892fcee14bc990e7ba2c5b78e51f9cf` | production proof | ECR Public mirror of the Docker official image, same index digest as Docker Hub `caddy:2.11.8`; 2.11.9 (4 days old) not adopted |
+| Node runtime image (web) | `public.ecr.aws/docker/library/node:26.13.1-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc` (same index digest as Docker Hub) | production proof | corepack is not bundled with Node 26: pnpm 9.15.9 via `npm install -g` |
+| govulncheck | v1.9.0 (`go install`) | `evidence/m8/security` | v1.10.0 (3 days old) not adopted |
+| gitleaks | v8.30.1 (`go install`) | same | |
+| osv-scanner | v2.7.0 (`go install`) | same | |
+| syft | v1.57.0 (`go install`) | same | |
+| golang.org/x/net | see go.mod (bumped for GO-2026-6860/6866, not reachable per govulncheck) | govulncheck | |
