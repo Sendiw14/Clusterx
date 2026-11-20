@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { STATIC_POLICY_SOURCE, buildCsp, isNoncePath } from "@/lib/csp";
+import { config } from "@/proxy";
 
 describe("policy selection (RV6B-03)", () => {
   // `next.config.ts` matches `headers()` sources case-insensitively; mirror that here.
@@ -16,5 +17,15 @@ describe("policy selection (RV6B-03)", () => {
   it("the nonce policy has no unsafe-inline for scripts, the static one keeps it", () => {
     expect(buildCsp({ nonce: "abc" })).toMatch(/script-src 'self' 'nonce-abc' 'strict-dynamic'(;|$)/);
     expect(buildCsp({})).toContain("script-src 'self' 'unsafe-inline'");
+  });
+});
+
+describe("proxy matcher", () => {
+  const runs = (p: string) => new RegExp(`^${config.matcher[0]}$`).test(p);
+  it("sees every page request, including letter-case variants and deep paths", () => {
+    for (const p of ["/", "/docs", "/APP", "/Login/x", "/auth/end", "/app/jobs/abc", "/nope"]) expect(runs(p), p).toBe(true);
+  });
+  it("never sees BFF routes (a proxy buffers request bodies, which would undo the streaming body cap) or static assets", () => {
+    for (const p of ["/bff/api/v1/jobs", "/bff/session", "/bff/stream", "/_next/static/chunk.js", "/fonts/a.woff2", "/images/x.png", "/icon.svg"]) expect(runs(p), p).toBe(false);
   });
 });

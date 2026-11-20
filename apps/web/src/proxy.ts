@@ -21,4 +21,5 @@ export function proxy(req: NextRequest) {
   return res;
 }
 
-export const config = { matcher: ["/((?!_next/|fonts/|images/|icon\\.svg$).*)"] };
+// `bff/` is excluded on purpose: a proxy buffers request bodies, which would undo the streaming 1 MiB cap of the BFF routes (RV6-02).
+export const config = { matcher: ["/((?!_next/|bff/|fonts/|images/|icon\\.svg$).*)"] };

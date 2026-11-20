@@ -80,3 +80,19 @@ test.describe("every link from a public page into the console or /login loads a 
     await expect.poll(() => page.evaluate(() => (window as unknown as { __doc?: number }).__doc)).toBeUndefined();
   });
 });
+
+test.describe("the 404 of the console namespace still hydrates under the nonce CSP", () => {
+  for (const p of ["/app/does-not-exist", "/APP/x", "/login/x"]) {
+    test(`${p}: 404, no CSP violation, header menu works`, async ({ page }) => {
+      const violations: string[] = [];
+      page.on("console", (m) => { if (/Content Security Policy/i.test(m.text())) violations.push(m.text().slice(0, 160)); });
+      await page.setViewportSize({ width: 390, height: 800 });
+      const res = await page.goto(p);
+      expect(res?.status()).toBe(404);
+      expect(scriptSrc(res?.headers()["content-security-policy"] ?? "")).not.toContain("'unsafe-inline'");
+      await page.getByRole("button", { name: "Menu", exact: true }).click(); // needs hydration
+      await expect(page.getByRole("dialog")).toBeVisible();
+      expect(violations).toEqual([]);
+    });
+  }
+});
