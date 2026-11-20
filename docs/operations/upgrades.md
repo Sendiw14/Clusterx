@@ -32,6 +32,28 @@ Compatibility: workers and control plane negotiate the gRPC protocol version at 
 is rejected per job, not per worker (AC-10). Mixed worker versions are allowed if they implement the same handler
 versions. The web BFF and the control plane share OpenAPI `1.0.0-draft.7`; deploy them together.
 
+## Web (Next.js) dependency upgrades
+
+`next` is pinned exactly (16.4.6). Before bumping it, check both items below against the new version
+(REVIEW-M6-RV-01 RV6-10, RV6B-04):
+
+1. **WebSocket takeover guard.** `apps/web/server.ts` sets Next's private one-shot flag `didWebSocketSetup` so Next does
+   not install its own `upgrade` listener (which ends every unknown upgrade and kills the stream relay). It throws
+   `Unsupported Next.js version: cannot take over WebSocket upgrades` at start if the flag is gone. If it throws, or the
+   flag still exists but changed meaning, the relay is broken: keep the old version. The web e2e stream specs must pass
+   on the new version before release.
+2. **Edge behaviours seen on 16.4.6** (framework router, before any BFF code; none reaches Go or bypasses the BFF
+   allowlist). Re-probe them after an upgrade and keep the edge rule below either way:
+   - An absolute-form request target (`GET http://evil.example/… HTTP/1.1`) gets a 308 to that absolute URL.
+   - `TRACE` gives 500 and logs a stack trace (`TypeError: 'TRACE' HTTP method is unsupported`), unauthenticated: log
+     noise.
+   - Overlong UTF-8 (`%C0%AE`, `%C0%AF`) and a lone `%` give 500 instead of 404, with nothing logged.
+
+   Edge rule: the TLS proxy in front of the web service should accept only origin-form request targets and the methods
+   GET/HEAD/POST/PUT/PATCH/DELETE/OPTIONS. The shipped `infra/production/Caddyfile` does not filter methods yet (code
+   read; not changed in M9-BE-01). Probe after an upgrade with raw TCP, e.g.
+   `printf 'TRACE / HTTP/1.1\r\nHost: <web host>\r\n\r\n' | openssl s_client -quiet -connect <web host>:443`.
+
 ## Rollback
 
 If step 6 or 7 fails:
