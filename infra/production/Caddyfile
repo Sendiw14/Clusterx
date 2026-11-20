@@ -15,6 +15,13 @@
 (tls_acme) {
 }
 (common) {
+	# RV6B-04 edge rule: only the methods the web and API use reach an upstream; anything else (TRACE, PROPFIND,
+	# CONNECT, ...) is answered 405 here. `handle` sorts before reverse_proxy and before the API site's other handles.
+	@badmethod not method GET HEAD POST PUT PATCH DELETE OPTIONS
+	handle @badmethod {
+		header Allow "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS"
+		respond 405
+	}
 	header {
 		-Server
 		Strict-Transport-Security "max-age=63072000; includeSubDomains"

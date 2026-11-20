@@ -26,6 +26,26 @@ for _ in $(seq 30); do st=$(c --cacert "$CA" -H @"$HDR" "https://$A:$P/api/v1/jo
 echo "status=$st"
 c --cacert "$CA" -H @"$HDR" "https://$A:$P/api/v1/workers" | python3 -c 'import json,sys; [print("worker", w.get("name"), w.get("status"), w.get("liveness")) for w in json.load(sys.stdin)["items"]]'
 dc logs worker worker-2 worker-3 2>&1 | grep -oE '"worker_name":"worker-[0-9]","env":"production","control_plane":"[^"]*","tls":[a-z]+' | sort -u
+echo; echo "== retention (RV9-02): control plane loop setting, then one on-demand pass deletes an expired job"
+docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$(dc ps -q control-plane)" | grep -E '^CLUSTERX_RETENTION_(INTERVAL|DATABASE_URL_FILE)=' | sort
+psqla() { dc exec -T postgres psql -U clusterx_admin -d clusterx -X -q -v ON_ERROR_STOP=1 "$@"; }
+# Fixture only (admin, guard trigger off for this one statement): age the finished proof job past the 30-day floor.
+psqla -c "BEGIN; ALTER TABLE jobs DISABLE TRIGGER jobs_terminal_immutable;
+  UPDATE jobs SET updated_at = now() - interval '31 days', terminal_at = now() - interval '31 days' WHERE id = '$id';
+  ALTER TABLE jobs ENABLE TRIGGER jobs_terminal_immutable; COMMIT;"
+echo "before: jobs_row=$(psqla -Atc "SELECT count(*) FROM jobs WHERE id = '$id'") tombstone=$(psqla -Atc "SELECT count(*) FROM job_tombstones WHERE job_id = '$id'")"
+dc --profile retention run --rm retention 2>/dev/null | grep -E '^(jobs_deleted|complete)='; echo "retention exit=${PIPESTATUS[0]}"
+echo "after: jobs_row=$(psqla -Atc "SELECT count(*) FROM jobs WHERE id = '$id'") tombstone=$(psqla -Atc "SELECT count(*) FROM job_tombstones WHERE job_id = '$id'")"
+c --cacert "$CA" -H @"$HDR" -o /dev/null -w "GET /api/v1/jobs/{expired id} %{http_code}\n" "https://$A:$P/api/v1/jobs/$id"
+echo; echo "== edge method allowlist (RV9-04)"
+for m in TRACE PROPFIND; do for h in "$W" "$A"; do c --cacert "$CA" -X "$m" -o /dev/null -w "$m $h %{http_code}\n" "https://$h:$P/api/v1/jobs"; done; done
+c --cacert "$CA" -X OPTIONS -o /dev/null -w "OPTIONS $A %{http_code} %{content_type} (allowed through; the control plane answers)\n" "https://$A:$P/api/v1/jobs"
+echo; echo "== internal listeners by network (RV9-06): nc -z from a container on each network"
+NCIMG=$(docker inspect -f '{{.Config.Image}}' "$(dc ps -q caddy)")
+probe() { docker run --rm --network "${COMPOSE_PROJECT_NAME}_$1" --entrypoint nc "$NCIMG" -z -w 2 "$2" "$3" >/dev/null 2>&1 && echo "$1 -> $2:$3 open" || echo "$1 -> $2:$3 closed"; }
+probe edge control-plane 8080; probe edge control-plane 9090; probe edge control-plane 9091
+probe workers control-plane 9090; probe workers control-plane 9091
+probe monitoring cp-metrics 9091; probe monitoring control-plane 9090
 echo; echo "== web over HTTPS"
 c --cacert "$CA" -o /dev/null -w 'GET / %{http_code}\n' "https://$W:$P/"
 c --cacert "$CA" -o /dev/null -w 'GET /app %{http_code} -> %{redirect_url}\n' "https://$W:$P/app"
@@ -37,4 +57,4 @@ echo; echo "== container hardening"
 for id in $(dc ps -q); do docker inspect -f '{{.Name}} user={{.Config.User}} read_only={{.HostConfig.ReadonlyRootfs}} cap_drop={{.HostConfig.CapDrop}} cap_add={{.HostConfig.CapAdd}} mem={{.HostConfig.Memory}} pids={{.HostConfig.PidsLimit}} secopt={{.HostConfig.SecurityOpt}}' "$id"; done | sort
 echo; echo "== secret-looking environment values (expect none; only *_FILE paths)"
 for id in $(dc ps -q); do n=$(docker inspect -f '{{.Name}}' "$id"); docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$id" | grep -iE 'password|token|secret|session_key|database_url|credential' | grep -vE '_FILE=/run/secrets/' | sed "s#^#$n: #"; done; echo "(end)"
-echo; echo "== networks"; for n in data workers edge; do echo "$n internal=$(docker network inspect -f '{{.Internal}}' "${COMPOSE_PROJECT_NAME}_$n")"; done
+echo; echo "== networks"; for n in data workers monitoring edge; do echo "$n internal=$(docker network inspect -f '{{.Internal}}' "${COMPOSE_PROJECT_NAME}_$n")"; done

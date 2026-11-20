@@ -50,9 +50,20 @@ versions. The web BFF and the control plane share OpenAPI `1.0.0-draft.7`; deplo
    - Overlong UTF-8 (`%C0%AE`, `%C0%AF`) and a lone `%` give 500 instead of 404, with nothing logged.
 
    Edge rule: the TLS proxy in front of the web service should accept only origin-form request targets and the methods
-   GET/HEAD/POST/PUT/PATCH/DELETE/OPTIONS. The shipped `infra/production/Caddyfile` does not filter methods yet (code
-   read; not changed in M9-BE-01). Probe after an upgrade with raw TCP, e.g.
+   GET/HEAD/POST/PUT/PATCH/DELETE/OPTIONS. The shipped `infra/production/Caddyfile` answers any other method with 405
+   before proxying (M9-BE-02, RV9-04; `verify-local-proof.sh` probes TRACE and PROPFIND). Probe after an upgrade with raw TCP, e.g.
    `printf 'TRACE / HTTP/1.1\r\nHost: <web host>\r\n\r\n' | openssl s_client -quiet -connect <web host>:443`.
+
+## Caddy volumes from a root Caddy (before M9-BE-02)
+
+Caddy now runs as UID 65532. Fresh `caddy_data`/`caddy_config` volumes are writable (the image's `/data/caddy` and
+`/config/caddy` are mode 1777), but certificates written by the old root Caddy are owned by root. Once, before
+`up` (checked locally on the M9-BE-02 proof stack, exit 0):
+
+```bash
+docker compose --env-file .env.production run --rm --no-deps --user 0 \
+  --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --entrypoint chown caddy -R 65532:65532 /data /config
+```
 
 ## Rollback
 
