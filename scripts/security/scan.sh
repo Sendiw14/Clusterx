@@ -29,7 +29,9 @@ for c in "${checks[@]}"; do
     # Whole git history plus the working tree; findings are redacted in the report.
     (cd "$ROOT" && gitleaks git --redact --no-banner --report-format json --report-path "$OUT/gitleaks-history.json" .) > "$OUT/gitleaks-history.txt" 2>&1; e=$?
     echo "gitleaks history exit=$e"; [ $e -eq 0 ] || rc=1
-    (cd "$ROOT" && gitleaks dir --redact --no-banner --report-format json --report-path "$OUT/gitleaks-tree.json" .) > "$OUT/gitleaks-tree.txt" 2>&1; e=$?
+    # Scan the committed tree only (git archive), so gitignored local secrets (.env, .next, worktrees) don't count.
+    tree=$(mktemp -d); git -C "$ROOT" archive HEAD | tar -x -C "$tree"; cp "$ROOT/.gitleaksignore" "$tree/" 2>/dev/null || true
+    (cd "$tree" && gitleaks dir --redact --no-banner --report-format json --report-path "$OUT/gitleaks-tree.json" .) > "$OUT/gitleaks-tree.txt" 2>&1; e=$?; rm -rf "$tree"
     echo "gitleaks tree exit=$e"; [ $e -eq 0 ] || rc=1 ;;
   sbom)
     # SPDX SBOM of each locally built image named in CLUSTERX_SBOM_IMAGES (space separated) plus the source tree.

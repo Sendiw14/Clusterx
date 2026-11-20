@@ -4,3 +4,6 @@
 a6d1c4eb7177fea75683541391b1e80ac92ba048:apps/control-plane/internal/config/config_test.go:generic-api-key:11
 apps/control-plane/internal/config/config_test.go:generic-api-key:11
 c8cb90188ba64607cbee4adbe60d7cc39d58f96e:apps/web/e2e/console-stream-hardening.spec.ts:generic-api-key:9
+# tree-mode fingerprints for the same RFC 6455 sample key (AUDIT-M9 F-04)
+apps/web/src/__tests__/stream-relay.test.ts:generic-api-key:96
+apps/web/e2e/console-stream-hardening.spec.ts:generic-api-key:9
