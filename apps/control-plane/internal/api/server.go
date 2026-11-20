@@ -58,7 +58,13 @@ func NewHandler(ready ReadinessCheck, log *slog.Logger, m *Metrics, v1 ...*V1) h
 // guarded by a static bearer token. An empty token disables access entirely (always 401).
 func NewMetricsHandler(gatherer prometheus.Gatherer, token string, log *slog.Logger, m *Metrics) http.Handler {
 	want := sha256.Sum256([]byte(token))
-	prom := promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{ErrorLog: slog.NewLogLogger(log.Handler(), slog.LevelError)})
+	prom := promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{
+		ErrorLog: slog.NewLogLogger(log.Handler(), slog.LevelError),
+		// One scrape at a time (others get 503) and a hard deadline: a duplicated scraper or leaked token
+		// cannot pin runtime-pool connections that claims and admission need (RV9-05).
+		MaxRequestsInFlight: 1,
+		Timeout:             10 * time.Second,
+	})
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
 		got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")

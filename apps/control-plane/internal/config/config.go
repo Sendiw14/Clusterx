@@ -312,6 +312,10 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 		return f
 	}
 	c.RateMutations = num(VarRateMutations, 20, 0, 10000)
+	if prod && c.RateMutations == 0 {
+		// 0 disables the limiter (benchmark overlay only, development env); never silently in production (RV9-08).
+		fail("%s=0 disables the mutation rate limit and is not allowed in production", VarRateMutations)
+	}
 	c.RateAuthFailures = num(VarRateAuthFailures, 60, 1, 100000)
 	c.RateLogins = num(VarRateLogins, 10, 1, 1000)
 	c.RetentionURL = secret(VarRetentionURL)

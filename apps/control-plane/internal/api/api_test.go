@@ -145,6 +145,32 @@ func TestMetricsRequiresBearer(t *testing.T) {
 	}
 }
 
+func TestMetricsBoundsConcurrentScrapes(t *testing.T) {
+	g := struct{ entered, release chan struct{} }{make(chan struct{}, 1), make(chan struct{})}
+	reg := prometheus.NewRegistry()
+	// A collector that parks inside Gather until released (stands in for a slow DB-backed ops scrape).
+	reg.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "slow"}, func() float64 {
+		g.entered <- struct{}{}
+		<-g.release
+		return 1
+	}))
+	h := api.NewMetricsHandler(reg, token, logger(nil), nil)
+	done := make(chan int)
+	go func() { done <- get(t, h, "/metrics", "Authorization", "Bearer "+token).Code }()
+	<-g.entered // first scrape is inside Gather
+	if rec := get(t, h, "/metrics", "Authorization", "Bearer "+token); rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("second concurrent scrape: want 503, got %d", rec.Code)
+	}
+	close(g.release)
+	if code := <-done; code != 200 {
+		t.Fatalf("first scrape: %d", code)
+	}
+	go func() { <-g.entered }() // slot is free again
+	if rec := get(t, h, "/metrics", "Authorization", "Bearer "+token); rec.Code != 200 {
+		t.Fatalf("scrape after release: %d", rec.Code)
+	}
+}
+
 func TestPanicIsContractError(t *testing.T) {
 	h := api.NewHandler(func(context.Context) error { panic("boom") }, logger(nil), nil)
 	rec := get(t, h, "/health/ready")

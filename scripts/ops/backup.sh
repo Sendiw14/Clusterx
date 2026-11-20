@@ -12,6 +12,7 @@ umask 077
 out=$(mkdir -p "$1" && cd "$1" && pwd)
 ts=$(date -u +%Y%m%dT%H%M%SZ)
 f="$out/clusterx-$DB-$ts.dump"
+trap 'rm -f "$f.partial" "$f.toc"' EXIT # no half-written archive is left behind; the TOC is only used for the count
 t0=$(now_ms)
 pgx pg_dump -U "$ADMIN" -d "$DB" -Fc -Z 6 > "$f.partial"
 pgx pg_restore --list < "$f.partial" > "$f.toc"
