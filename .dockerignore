@@ -7,3 +7,7 @@ docs
 *.env
 .env*
 !.env.example
+infra/production/secrets
+infra/compose/.secrets
+infra/compose/.secrets.env
+**/.next

@@ -1,0 +1,8 @@
+clusterx-m8-control-plane-1             5      7.9     13.4       12.1
+clusterx-m8-postgres-1                  5     19.4     28.2       64.4
+clusterx-m8-worker-1                    4      3.6      4.9        7.8
+container                         samples cpu_mean  cpu_max mem_max_MiB
+clusterx-m8-control-plane-1      cpu_s=   0.98 avg_cores= 0.11 mem_peak_MiB=   13.4 mem_now_MiB=   12.0
+clusterx-m8-postgres-1           cpu_s=   2.32 avg_cores= 0.26 mem_peak_MiB=  155.9 mem_now_MiB=  149.5
+clusterx-m8-worker-1             cpu_s=   0.28 avg_cores= 0.03 mem_peak_MiB=    8.7 mem_now_MiB=    7.6
+lock samples=9 with_waiters=0 max_ungranted_locks=0 max_backends=5

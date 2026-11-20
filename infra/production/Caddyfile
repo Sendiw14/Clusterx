@@ -1,0 +1,54 @@
+# CLUSTERX public TLS edge (M8). Two sites: the console (Next.js web/BFF) and the direct API (Go control plane).
+# Upstream to the control plane is TLS too, verified against the internal CA (tls_server_name control-plane).
+# CLUSTERX_TLS_MODE=files uses ./secrets/site.{crt,key} (local self-signed proof); =acme lets Caddy obtain public
+# certificates (requires a real domain, ports 80/443 reachable, owner approval — OD-04: not exercised).
+{
+	admin off
+	servers {
+		protocols h1 h2
+	}
+}
+
+(tls_files) {
+	tls /run/secrets/site_crt /run/secrets/site_key
+}
+(tls_acme) {
+}
+(common) {
+	header {
+		-Server
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+	}
+	request_body {
+		max_size 1MB
+	}
+	log {
+		output stdout
+		format json
+	}
+}
+
+{$CLUSTERX_WEB_HOST} {
+	import tls_{$CLUSTERX_TLS_MODE}
+	import common
+	encode zstd gzip
+	reverse_proxy web:3000
+}
+
+{$CLUSTERX_API_HOST} {
+	import tls_{$CLUSTERX_TLS_MODE}
+	import common
+	# Only the public API surface; /metrics is on the control plane's internal listener (9091), never proxied.
+	@public path /api/v1/* /health/live /health/ready
+	handle @public {
+		reverse_proxy https://control-plane:8080 {
+			transport http {
+				tls_trust_pool file /run/secrets/internal_ca_crt
+				tls_server_name control-plane
+			}
+		}
+	}
+	handle {
+		respond 404
+	}
+}

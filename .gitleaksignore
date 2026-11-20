@@ -1,0 +1,6 @@
+# gitleaks false positives, triaged in TASK-M8-BE-01 (docs/security/verification.md):
+# RFC 6455 sample Sec-WebSocket-Key in web tests; a fixed test-only metrics token in config_test.go.
+4fd7dff782892da9caa62edff825129f99d00163:apps/web/src/__tests__/stream-relay.test.ts:generic-api-key:96
+a6d1c4eb7177fea75683541391b1e80ac92ba048:apps/control-plane/internal/config/config_test.go:generic-api-key:11
+apps/control-plane/internal/config/config_test.go:generic-api-key:11
+c8cb90188ba64607cbee4adbe60d7cc39d58f96e:apps/web/e2e/console-stream-hardening.spec.ts:generic-api-key:9

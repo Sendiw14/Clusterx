@@ -1,0 +1,223 @@
+# CLUSTERX production example (M8, MASTER_PROMPT §12). Reference shape for ONE Linux host: Caddy TLS reverse proxy
+# (web + direct API), Next.js web/BFF, one Go control plane, PostgreSQL on a private network with no published port,
+# N trusted workers over gRPC+TLS, optional private Prometheus. Verified only locally with a self-signed CA
+# (docs/operations/deployment.md); no real host has been provisioned (OD-04).
+#
+#   cp .env.production.example .env.production   # fill hostnames; no credentials go in this file
+#   ./setup-local-proof.sh                        # LOCAL PROOF ONLY: self-signed CA + generated secrets
+#   docker compose --env-file .env.production up -d --wait
+#
+# Secrets are files under ./secrets/ (gitignored, 0600 on the host), mounted at /run/secrets/<name> and read through
+# *_FILE variables. TLS: Caddy terminates public TLS; every internal hop to the control plane is TLS too (internal CA).
+name: ${COMPOSE_PROJECT_NAME:-clusterx-prod}
+
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:18.7-bookworm@sha256:ece55f7868da684e400f82f1030a050718adbdd65c23aa500c486f6e2950dc0f
+    environment:
+      POSTGRES_DB: clusterx
+      POSTGRES_USER: clusterx_admin
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password, app_db_password, retention_db_password]
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ../compose/initdb:/docker-entrypoint-initdb.d:ro
+    networks: [data]
+    # No `ports:` — the database is reachable only on the internal `data` network.
+    shm_size: 256m
+    mem_limit: 1g
+    cpus: 2
+    pids_limit: 512
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clusterx_admin -d clusterx"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    image: ${CLUSTERX_IMAGE_PREFIX:-clusterx}/control-plane:${CLUSTERX_VERSION:-local}
+    build: { context: ../.., dockerfile: apps/control-plane/Dockerfile }
+    command: ["migrate"]
+    environment:
+      CLUSTERX_ENV: production
+      CLUSTERX_MIGRATE_DATABASE_URL_FILE: /run/secrets/migrate_database_url
+      CLUSTERX_DATABASE_URL_FILE: /run/secrets/database_url
+      CLUSTERX_METRICS_TOKEN_FILE: /run/secrets/metrics_token
+      CLUSTERX_GRPC_ADDR: 127.0.0.1:9090
+      CLUSTERX_HTTP_ADDR: 127.0.0.1:8080
+    secrets: [migrate_database_url, database_url, metrics_token]
+    networks: [data]
+    depends_on: { postgres: { condition: service_healthy } }
+    <<: *hardening
+    restart: "no"
+
+  control-plane:
+    image: ${CLUSTERX_IMAGE_PREFIX:-clusterx}/control-plane:${CLUSTERX_VERSION:-local}
+    command: ["serve"]
+    environment:
+      CLUSTERX_ENV: production
+      CLUSTERX_LOG_LEVEL: info
+      CLUSTERX_HTTP_ADDR: 0.0.0.0:8080
+      CLUSTERX_GRPC_ADDR: 0.0.0.0:9090
+      CLUSTERX_METRICS_ADDR: 0.0.0.0:9091
+      CLUSTERX_DATABASE_URL_FILE: /run/secrets/database_url
+      CLUSTERX_METRICS_TOKEN_FILE: /run/secrets/metrics_token
+      CLUSTERX_BFF_JWKS_FILE: /run/secrets/bff_jwks
+      CLUSTERX_HTTP_TLS_CERT_FILE: /run/secrets/control_plane_crt
+      CLUSTERX_HTTP_TLS_KEY_FILE: /run/secrets/control_plane_key
+      CLUSTERX_GRPC_TLS_CERT_FILE: /run/secrets/control_plane_crt
+      CLUSTERX_GRPC_TLS_KEY_FILE: /run/secrets/control_plane_key
+      CLUSTERX_STREAM_ALLOWED_ORIGINS: https://${CLUSTERX_WEB_HOST:?set CLUSTERX_WEB_HOST}${CLUSTERX_PUBLIC_PORT_SUFFIX:-}
+      CLUSTERX_MIGRATE_ON_START: "false"
+    secrets: [database_url, metrics_token, bff_jwks, control_plane_crt, control_plane_key]
+    networks: [data, edge, workers]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    mem_limit: 512m
+    cpus: 2
+    pids_limit: 256
+    <<: *hardening
+
+  web:
+    image: ${CLUSTERX_IMAGE_PREFIX:-clusterx}/web:${CLUSTERX_VERSION:-local}
+    build: { context: ../.., dockerfile: infra/production/web.Dockerfile }
+    environment:
+      CLUSTERX_ENV: production
+      CLUSTERX_APP_ORIGIN: https://${CLUSTERX_WEB_HOST}${CLUSTERX_PUBLIC_PORT_SUFFIX:-}
+      CLUSTERX_API_URL: https://control-plane:8080
+      CLUSTERX_BFF_KEY_FILE: /run/secrets/bff_private_jwk
+      CLUSTERX_WEB_SESSION_KEY_FILE: /run/secrets/web_session_key
+      CLUSTERX_GITHUB_CLIENT_ID_FILE: /run/secrets/github_client_id
+      CLUSTERX_GITHUB_CLIENT_SECRET_FILE: /run/secrets/github_client_secret
+      NODE_EXTRA_CA_CERTS: /run/secrets/internal_ca_crt
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    secrets: [bff_private_jwk, web_session_key, github_client_id, github_client_secret, internal_ca_crt]
+    networks: [edge]
+    tmpfs: ["/app/apps/web/.next/cache:size=64m,uid=65532,gid=65532"]
+    depends_on: [control-plane]
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 256
+    <<: *hardening
+
+  caddy:
+    image: public.ecr.aws/docker/library/caddy:2.11.8@sha256:4fcafa98afd1c2e642e353e3c5cf9ddbe892fcee14bc990e7ba2c5b78e51f9cf
+    environment:
+      CLUSTERX_WEB_HOST: ${CLUSTERX_WEB_HOST}
+      CLUSTERX_API_HOST: ${CLUSTERX_API_HOST:?set CLUSTERX_API_HOST}
+      CLUSTERX_TLS_MODE: ${CLUSTERX_TLS_MODE:-files} # files = certificates from ./secrets (local proof); acme = public CA
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    secrets: [site_crt, site_key, internal_ca_crt]
+    ports:
+      - "${CLUSTERX_BIND_ADDR:-0.0.0.0}:${CLUSTERX_HTTPS_PORT:-443}:443"
+      - "${CLUSTERX_BIND_ADDR:-0.0.0.0}:${CLUSTERX_HTTP_REDIRECT_PORT:-80}:80"
+    networks: [edge]
+    depends_on: [web, control-plane]
+    cap_add: [NET_BIND_SERVICE]
+    mem_limit: 256m
+    pids_limit: 256
+    <<: *hardening
+
+  worker: &worker
+    image: ${CLUSTERX_IMAGE_PREFIX:-clusterx}/worker:${CLUSTERX_VERSION:-local}
+    build: { context: ../.., dockerfile: apps/worker/Dockerfile }
+    environment: &worker-env
+      CLUSTERX_ENV: production
+      CLUSTERX_WORKER_CONTROL_PLANE_ADDR: control-plane:9090
+      CLUSTERX_WORKER_TLS_CA_FILE: /run/secrets/internal_ca_crt
+      CLUSTERX_WORKER_TLS_SERVER_NAME: control-plane
+      CLUSTERX_WORKER_CAPACITY: "4"
+      CLUSTERX_WORKER_NAME: worker-1
+      CLUSTERX_WORKER_CREDENTIAL_FILE: /run/secrets/worker_credential_1
+    secrets: [internal_ca_crt, worker_credential_1]
+    networks: [workers]
+    depends_on: [control-plane]
+    mem_limit: 256m
+    cpus: 1
+    pids_limit: 128
+    stop_grace_period: 40s # > worker CLUSTERX_SHUTDOWN_TIMEOUT (30 s): let the drain finish before SIGKILL
+    <<: *hardening
+  worker-2:
+    <<: *worker
+    build: !reset null
+    environment:
+      <<: *worker-env
+      CLUSTERX_WORKER_NAME: worker-2
+      CLUSTERX_WORKER_CREDENTIAL_FILE: /run/secrets/worker_credential_2
+    secrets: [internal_ca_crt, worker_credential_2]
+  worker-3:
+    <<: *worker
+    build: !reset null
+    environment:
+      <<: *worker-env
+      CLUSTERX_WORKER_NAME: worker-3
+      CLUSTERX_WORKER_CREDENTIAL_FILE: /run/secrets/worker_credential_3
+    secrets: [internal_ca_crt, worker_credential_3]
+
+  # Optional private monitoring: --profile monitoring. Reach it through an SSH tunnel to 127.0.0.1:9190.
+  prometheus:
+    image: quay.io/prometheus/prometheus:v3.16.0@sha256:9332054523223e2ddc18d8101799d54a4a8d823b030c53216f063a6c117773cd
+    profiles: [monitoring]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus",
+              "--storage.tsdb.retention.time=15d", "--storage.tsdb.retention.size=1GB"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - promdata:/prometheus
+    secrets: [metrics_token, internal_ca_crt]
+    networks: [edge, monitoring]
+    ports: ["127.0.0.1:${CLUSTERX_PROMETHEUS_PORT:-9190}:9090"]
+    mem_limit: 512m
+    <<: *hardening
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
+    profiles: [monitoring]
+    command: ["--collector.disable-defaults", "--collector.filesystem"]
+    volumes: ["pgdata:/pgdata:ro"]
+    networks: [monitoring]
+    mem_limit: 64m
+    <<: *hardening
+
+networks:
+  edge: {}                    # Caddy, web, control plane HTTP (web needs egress to GitHub OAuth)
+  data: { internal: true }    # PostgreSQL, migrate, control plane: no egress, no published port
+  workers: { internal: true } # control plane gRPC, workers (trusted handlers; add egress only if handlers need it)
+  monitoring: { internal: true }
+
+secrets:
+  postgres_password: { file: ./secrets/postgres_password }
+  app_db_password: { file: ./secrets/app_db_password }
+  retention_db_password: { file: ./secrets/retention_db_password }
+  database_url: { file: ./secrets/database_url }
+  migrate_database_url: { file: ./secrets/migrate_database_url }
+  metrics_token: { file: ./secrets/metrics_token }
+  bff_jwks: { file: ./secrets/bff.jwks.json }
+  bff_private_jwk: { file: ./secrets/bff-private.jwk.json }
+  web_session_key: { file: ./secrets/web_session_key }
+  github_client_id: { file: ./secrets/github_client_id }
+  github_client_secret: { file: ./secrets/github_client_secret }
+  control_plane_crt: { file: ./secrets/control-plane.crt }
+  control_plane_key: { file: ./secrets/control-plane.key }
+  internal_ca_crt: { file: ./secrets/internal-ca.crt }
+  site_crt: { file: ./secrets/site.crt }
+  site_key: { file: ./secrets/site.key }
+  worker_credential_1: { file: ./secrets/worker_credential_1 }
+  worker_credential_2: { file: ./secrets/worker_credential_2 }
+  worker_credential_3: { file: ./secrets/worker_credential_3 }
+
+volumes:
+  pgdata:
+  promdata:
+  caddy_data:
+  caddy_config:

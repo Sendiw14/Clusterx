@@ -1,0 +1,74 @@
+# promtool test rules alerts_test.yml — run with the pinned Prometheus image (docs/operations/incident-runbook.md):
+#   docker run --rm --entrypoint promtool -v "$PWD:/w:ro" -w /w quay.io/prometheus/prometheus:v3.16.0@sha256:9332054523223e2ddc18d8101799d54a4a8d823b030c53216f063a6c117773cd test rules alerts_test.yml
+rule_files: [alerts.yml]
+evaluation_interval: 15s
+tests:
+  - interval: 15s
+    input_series:
+      - { series: 'up{job="clusterx-control-plane"}', values: '1 0x12' }
+      - { series: 'clusterx_db_up', values: '1 0x12' }
+      - { series: 'clusterx_queue_oldest_age_seconds', values: '0 400x20' }
+      - { series: 'clusterx_jobs_unschedulable', values: '0 2x30' }
+      - { series: 'clusterx_workers_recently_lost', values: '0 1x12' }
+      - { series: 'clusterx_workers{state="live"}', values: '0x20' }
+      - { series: 'clusterx_jobs{status="queued"}', values: '5x20' }
+      - { series: 'clusterx_attempts_finished_5m{state="lease_expired"}', values: '3x20' }
+      - { series: 'clusterx_attempts_finished_5m{state="succeeded"}', values: '10x20' }
+      - { series: 'clusterx_attempts_finished_5m{state="failed"}', values: '10x20' }
+      - { series: 'node_filesystem_avail_bytes{mountpoint="/pgdata"}', values: '50 5x12' }
+      - { series: 'node_filesystem_size_bytes{mountpoint="/pgdata"}', values: '100x12' }
+    alert_rule_test:
+      - eval_time: 30s
+        alertname: ClusterxControlPlaneDown
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: ClusterxControlPlaneDown
+        exp_alerts:
+          - exp_labels: { severity: critical, job: clusterx-control-plane }
+            exp_annotations: { summary: Prometheus cannot scrape the control plane., runbook_url: docs/operations/incident-runbook.md#clusterxcontrolplanedown }
+      - eval_time: 1m
+        alertname: ClusterxDatabaseUnavailable
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations: { summary: "The control plane cannot read PostgreSQL; admissions answer 503 and claims pause.", runbook_url: docs/operations/incident-runbook.md#clusterxdatabaseunavailable }
+      - eval_time: 1m
+        alertname: ClusterxQueueAgeHigh
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: ClusterxQueueAgeHigh
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations: { summary: "The oldest eligible queued job has waited 6m 40s.", runbook_url: docs/operations/incident-runbook.md#clusterxqueueagehigh }
+      - eval_time: 6m
+        alertname: ClusterxJobsUnschedulable
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations: { summary: "2 queued jobs have no live worker supporting their handler.", runbook_url: docs/operations/incident-runbook.md#clusterxjobsunschedulable }
+      - eval_time: 2m
+        alertname: ClusterxWorkerOffline
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations: { summary: "1 worker(s) stopped heartbeating without deregistering.", runbook_url: docs/operations/incident-runbook.md#clusterxworkeroffline }
+      - eval_time: 3m
+        alertname: ClusterxNoLiveWorkers
+        exp_alerts:
+          - exp_labels: { severity: critical, state: live }
+            exp_annotations: { summary: Jobs are queued and no worker is live., runbook_url: docs/operations/incident-runbook.md#clusterxworkeroffline }
+      - eval_time: 2m
+        alertname: ClusterxLeaseExpiriesRepeated
+        exp_alerts:
+          - exp_labels: { severity: warning, state: lease_expired }
+            exp_annotations: { summary: "3 attempts lost their lease in the last 5 minutes.", runbook_url: docs/operations/incident-runbook.md#clusterxleaseexpiriesrepeated }
+      - eval_time: 3m
+        alertname: ClusterxFailureRateHigh
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations: { summary: "56.52% of attempts ended unsuccessfully in the last 5 minutes.", runbook_url: docs/operations/incident-runbook.md#clusterxfailureratehigh }
+      - eval_time: 1m
+        alertname: ClusterxDiskSpaceLow
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: ClusterxDiskSpaceLow
+        exp_alerts:
+          - exp_labels: { severity: critical, mountpoint: /pgdata }
+            exp_annotations: { summary: "PostgreSQL volume has 5% free.", runbook_url: docs/operations/incident-runbook.md#clusterxdiskspacelow }

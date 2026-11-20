@@ -1,0 +1,13 @@
+== web container -> control plane over TLS (NODE_EXTRA_CA_CERTS = internal CA)
+fetch https://control-plane:8080/health/ready 200
+exit=0
+plain http status 400
+
+== web container cannot reach PostgreSQL (not on the data network)
+postgres from web: ENOTFOUND
+
+== optional monitoring profile: Prometheus scrapes the control plane over TLS
+clusterx-control-plane=up(https://control-plane:9091/metrics) node=up(http://node-exporter:9100/metrics)
+draining 0
+live 3
+stale 0

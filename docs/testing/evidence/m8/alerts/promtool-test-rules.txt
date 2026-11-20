@@ -1,0 +1,6 @@
+Processing test file: alerts_test.yml
+  SUCCESS
+
+Checking alerts.yml
+  SUCCESS: 9 rules found
+

@@ -148,6 +148,7 @@ func serve(ctx context.Context, cfg config.Config, migs []migrate.Migration, log
 	// but not audited, so a misbehaving worker credential cannot flood audit_events.
 	denials := api.NewLimiter(1, 60)
 	st.DenialAudit = func(credID string) bool { ok, _ := denials.Allow(credID); return ok }
+	reg.MustRegister(&api.OpsCollector{Snapshot: st.OpsSnapshot, Timeout: 5 * time.Second})
 	if cfg.Env == config.Production {
 		switch err := st.CheckRuntimePrivileges(ctx); {
 		case errors.Is(err, store.ErrPrivilegedRuntime):

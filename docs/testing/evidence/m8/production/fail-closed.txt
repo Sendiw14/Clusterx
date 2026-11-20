@@ -1,0 +1,15 @@
+$ docker run --rm -e CLUSTERX_ENV=production clusterx-m8p/control-plane:local serve   # nothing configured
+{"time":"2026-11-20T08:47:07.245958833Z","level":"ERROR","msg":"fatal","err":"invalid configuration: CLUSTERX_DATABASE_URL is required\nCLUSTERX_METRICS_TOKEN is required in production\nproduction requires CLUSTERX_GRPC_TLS_CERT_FILE/CLUSTERX_GRPC_TLS_KEY_FILE unless CLUSTERX_GRPC_ADDR is loopback-only\nproduction requires CLUSTERX_HTTP_TLS_CERT_FILE/CLUSTERX_HTTP_TLS_KEY_FILE, or CLUSTERX_HTTP_TLS_OFFLOADED=true behind a TLS reverse proxy, unless CLUSTERX_HTTP_ADDR is loopback-only"}
+exit=1
+
+$ ... -e CLUSTERX_DATABASE_URL_FILE=/run/secrets/database_url (file missing) -e CLUSTERX_METRICS_TOKEN_FILE=/run/secrets/metrics_token (missing) serve
+{"time":"2026-11-20T08:47:07.410978831Z","level":"ERROR","msg":"fatal","err":"invalid configuration: CLUSTERX_DATABASE_URL_FILE: cannot read \"/run/secrets/database_url\"\nCLUSTERX_METRICS_TOKEN_FILE: cannot read \"/run/secrets/metrics_token\"\nCLUSTERX_DATABASE_URL is required\nCLUSTERX_METRICS_TOKEN is required in production\nproduction requires CLUSTERX_GRPC_TLS_CERT_FILE/CLUSTERX_GRPC_TLS_KEY_FILE unless CLUSTERX_GRPC_ADDR is loopback-only\nproduction requires CLUSTERX_HTTP_TLS_CERT_FILE/CLUSTERX_HTTP_TLS_KEY_FILE, or CLUSTERX_HTTP_TLS_OFFLOADED=true behind a TLS reverse proxy, unless CLUSTERX_HTTP_ADDR is loopback-only"}
+exit=1
+
+$ ... default password, short metrics token, plaintext gRPC/HTTP on 0.0.0.0 (values are dummies)
+{"time":"2026-11-20T08:47:07.559436184Z","level":"ERROR","msg":"fatal","err":"invalid configuration: CLUSTERX_DATABASE_URL uses a default/example password; set a generated secret in production\nCLUSTERX_METRICS_TOKEN must be at least 32 characters\nproduction requires CLUSTERX_GRPC_TLS_CERT_FILE/CLUSTERX_GRPC_TLS_KEY_FILE unless CLUSTERX_GRPC_ADDR is loopback-only\nproduction requires CLUSTERX_HTTP_TLS_CERT_FILE/CLUSTERX_HTTP_TLS_KEY_FILE, or CLUSTERX_HTTP_TLS_OFFLOADED=true behind a TLS reverse proxy, unless CLUSTERX_HTTP_ADDR is loopback-only"}
+exit=1
+
+$ docker run --rm -e CLUSTERX_ENV=production -e CLUSTERX_WORKER_CONTROL_PLANE_ADDR=control-plane:9090 -e CLUSTERX_WORKER_INSECURE=true clusterx-m8p/worker:local   # worker, no credential, insecure
+{"time":"2026-11-20T08:47:07.714199363Z","level":"ERROR","msg":"fatal","err":"invalid configuration: CLUSTERX_WORKER_CREDENTIAL is required in production\nCLUSTERX_WORKER_INSECURE=true is not allowed in production unless CLUSTERX_WORKER_CONTROL_PLANE_ADDR is a loopback address"}
+exit=1

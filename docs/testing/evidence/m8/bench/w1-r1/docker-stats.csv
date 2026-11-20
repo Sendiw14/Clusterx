@@ -1,0 +1,14 @@
+1795114208,clusterx-m8-worker-1,4.37%,7.547MiB / 256MiB
+1795114208,clusterx-m8-control-plane-1,12.16%,12.13MiB / 5.773GiB
+1795114208,clusterx-m8-postgres-1,28.24%,64.32MiB / 5.773GiB
+1795114210,clusterx-m8-worker-1,4.39%,7.719MiB / 256MiB
+1795114210,clusterx-m8-control-plane-1,11.60%,11.93MiB / 5.773GiB
+1795114210,clusterx-m8-postgres-1,23.79%,64.35MiB / 5.773GiB
+1795114212,clusterx-m8-worker-1,4.93%,7.82MiB / 256MiB
+1795114212,clusterx-m8-control-plane-1,13.39%,12MiB / 5.773GiB
+1795114212,clusterx-m8-postgres-1,24.96%,64.39MiB / 5.773GiB
+1795114214,clusterx-m8-worker-1,0.66%,7.629MiB / 256MiB
+1795114214,clusterx-m8-control-plane-1,2.06%,11.99MiB / 5.773GiB
+1795114214,clusterx-m8-postgres-1,9.83%,64.39MiB / 5.773GiB
+1795114216,clusterx-m8-control-plane-1,0.44%,11.99MiB / 5.773GiB
+1795114216,clusterx-m8-postgres-1,9.97%,64.35MiB / 5.773GiB

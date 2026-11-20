@@ -1,0 +1,2 @@
+submitted=1000 accepted_201=1000 status_counts=map[201:1000] wall_s=0.323 admit_rate_per_s=3097.3 admission_ms p50=5.05 p95=6.32 p99=10.76 max=11.79
+wall_s_driver_start_to_all_terminal=5 non_terminal_left=0

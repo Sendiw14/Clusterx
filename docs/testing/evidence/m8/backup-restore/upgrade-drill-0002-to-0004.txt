@@ -1,0 +1,5 @@
+=== RUN   TestUpgradeDrill0002To0004
+    upgrade_drill_test.go:135: upgrade applied 2 migrations (0004_m5_feed_cursor_grants.sql) in 3ms
+--- PASS: TestUpgradeDrill0002To0004 (0.15s)
+PASS
+ok  	github.com/Sendiw14/Clusterx/apps/control-plane/internal/store	1.632s

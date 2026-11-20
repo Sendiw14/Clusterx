@@ -1,0 +1,66 @@
+== TLS handshake (openssl s_client, verified against the local CA)
+-- clusterx.localhost
+    Protocol  : TLSv1.3
+Verify return code: 0 (ok)
+issuer=CN = CLUSTERX local proof CA
+subject=CN = site
+-- api.clusterx.localhost
+    Protocol  : TLSv1.3
+Verify return code: 0 (ok)
+issuer=CN = CLUSTERX local proof CA
+subject=CN = site
+
+== client without the CA is refused
+curl: (60) SSL certificate problem: unable to get local issuer certificate
+curl exit=60
+
+== API over HTTPS (Caddy -> control plane over TLS, internal CA)
+GET /health/ready 200 http/2
+GET /metrics on the API host 404
+GET /api/v1/jobs without a token 401
+
+== job executed by workers over gRPC+TLS
+submitted job=01a1f846-9177-7299-b812-bbf93ae9e594
+status=succeeded attempts_used=1
+worker worker-1 active None
+worker worker-2 active None
+worker worker-3 active None
+"worker_name":"worker-1","env":"production","control_plane":"control-plane:9090","tls":true
+"worker_name":"worker-2","env":"production","control_plane":"control-plane:9090","tls":true
+"worker_name":"worker-3","env":"production","control_plane":"control-plane:9090","tls":true
+
+== web over HTTPS
+GET / 200
+GET /app 307 -> https://clusterx.localhost:18443/login
+GET /demo 200
+content-security-policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; manifest-src 'self'
+strict-transport-security: max-age=63072000; includeSubDomains
+x-frame-options: DENY
+plain HTTP :18088 -> 308 https://clusterx.localhost/
+
+== published ports
+clusterx-m8-prod-caddy-1 [443/udp, 2019/tcp, 127.0.0.1:18088->80/tcp, 127.0.0.1:18443->443/tcp]
+clusterx-m8-prod-control-plane-1 [8080/tcp, 9090-9091/tcp]
+clusterx-m8-prod-postgres-1 [5432/tcp]
+clusterx-m8-prod-web-1 [3000/tcp]
+clusterx-m8-prod-worker-1 []
+clusterx-m8-prod-worker-2-1 []
+clusterx-m8-prod-worker-3-1 []
+
+== container hardening
+/clusterx-m8-prod-caddy-1 user= read_only=true cap_drop=[ALL] cap_add=[CAP_NET_BIND_SERVICE] mem=268435456 pids=256 secopt=[no-new-privileges:true]
+/clusterx-m8-prod-control-plane-1 user=65532:65532 read_only=true cap_drop=[ALL] cap_add=[] mem=536870912 pids=256 secopt=[no-new-privileges:true]
+/clusterx-m8-prod-postgres-1 user= read_only=false cap_drop=[] cap_add=[] mem=1073741824 pids=512 secopt=[no-new-privileges:true]
+/clusterx-m8-prod-web-1 user=65532:65532 read_only=true cap_drop=[ALL] cap_add=[] mem=536870912 pids=256 secopt=[no-new-privileges:true]
+/clusterx-m8-prod-worker-1 user=65532:65532 read_only=true cap_drop=[ALL] cap_add=[] mem=268435456 pids=128 secopt=[no-new-privileges:true]
+/clusterx-m8-prod-worker-2-1 user=65532:65532 read_only=true cap_drop=[ALL] cap_add=[] mem=268435456 pids=128 secopt=[no-new-privileges:true]
+/clusterx-m8-prod-worker-3-1 user=65532:65532 read_only=true cap_drop=[ALL] cap_add=[] mem=268435456 pids=128 secopt=[no-new-privileges:true]
+
+== secret-looking environment values (expect none; only *_FILE paths)
+/clusterx-m8-prod-web-1: NODE_EXTRA_CA_CERTS=/run/secrets/internal_ca_crt
+(end)
+
+== networks
+data internal=true
+workers internal=true
+edge internal=false

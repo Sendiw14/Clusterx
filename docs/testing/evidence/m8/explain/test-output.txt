@@ -1,0 +1,7 @@
+=== RUN   TestExplainAtScale
+    explain_scale_test.go:62: seeded in 14.711s: queued=120000 terminal=150000 events=270000 idempotency=150000
+    explain_scale_test.go:129: ops snapshot (auto_explain on): 60.170166ms
+    explain_scale_test.go:157: concurrent claims (19 claimants x 10 x 8, auto_explain logging on): n=190 p50=18.233917ms p95=59.196666ms p99=63.812292ms max=97.834334ms
+--- PASS: TestExplainAtScale (15.35s)
+PASS
+ok  	github.com/Sendiw14/Clusterx/apps/control-plane/internal/store	15.834s

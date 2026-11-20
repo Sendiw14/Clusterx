@@ -7,3 +7,6 @@ node_modules/
 infra/compose/.secrets.env
 infra/compose/.secrets/
 infra/compose/.keygen.*/
+infra/production/secrets/
+infra/production/.keygen.*/
+!infra/production/.env.production.example

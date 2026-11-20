@@ -1,0 +1,24 @@
+Fetching vulnerabilities from the database...
+
+Checking the code against the vulnerabilities...
+
+The package pattern matched the following 3 root packages:
+  github.com/Sendiw14/Clusterx/apps/worker/internal/config
+  github.com/Sendiw14/Clusterx/apps/worker/internal/rpcclient
+  github.com/Sendiw14/Clusterx/apps/worker/cmd/clusterx-worker
+Govulncheck scanned the following 13 modules and the go1.27.4 standard library:
+  github.com/Sendiw14/Clusterx/apps/worker
+  ../../examples/basic-jobs
+  ../../examples/basic-jobs
+  ../../packages/proto
+  ../../packages/proto
+  ../../packages/sdk-go
+  ../../packages/sdk-go
+  golang.org/x/net@v0.62.0
+  golang.org/x/sys@v0.49.0
+  golang.org/x/text@v0.43.0
+  google.golang.org/genproto/googleapis/rpc@v0.0.0-20260817212433-ac3dfec99bb1
+  google.golang.org/grpc@v1.85.0
+  google.golang.org/protobuf@v1.36.12
+
+No vulnerabilities found.
