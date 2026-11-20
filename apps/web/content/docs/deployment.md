@@ -95,7 +95,7 @@ Migrations are forward-only, numbered files applied one transaction each, under 
 | Restore | Drilled locally | `scripts/ops/restore.sh` restores into a **new** database. On the drill stack the restored control plane was ready 0.22 s after the restore; the 12 attempts that were running at backup time became `lease_expired` and were retried. Everything committed after the backup is lost |
 | Upgrades | Migration drill run | Migrations 0002 to 0004 were applied to a populated database in a test. A rolling upgrade of a live deployment was not exercised. Rollback is a restore |
 | Coordinator restarts | Downtime by design | One control plane, so claims and reports pause. A restart was exercised on the local stacks |
-| Monitoring | Alerts drilled locally | Prometheus configuration and nine alert rules, each induced locally, with an incident runbook. **No Alertmanager is shipped**: nothing notifies anyone until you add routing |
+| Monitoring | Alerts drilled locally | Prometheus configuration and ten alert rules with an incident runbook. Nine were induced locally in M8; the node-exporter-down rule has a rule test only. **No Alertmanager is shipped**: nothing notifies anyone until you add routing |
 | RPO and RTO | **Not frozen** | Measured only on the drill stack: a 2.2 s window of lost jobs, 14.1 s until the service answered again and 71.8 s until the re-run work drained. These are not objectives |
 
 Hosting, a domain, a managed database and any external identity or monitoring service need explicit owner approval before use. None has been chosen or provisioned.

@@ -12,10 +12,11 @@ No version of CLUSTERX has been released. Nothing below is a release, a version 
 - The end-to-end suite runs in the Chromium, Firefox and WebKit engines of Playwright (not branded Chrome, Edge or Safari builds).
 - Console response, route-transition and live-update times were measured on one laptop. The numbers are proposals only: the owner has not frozen any budget.
 
-### M9: web hardening, release documentation and audit (merged 2026-11-20, up to commit 6222d0c)
+### M9: web hardening, release documentation, audit and review fixes (merged 2026-11-20)
 
 - The console-only nonce policy now covers every console path in any letter case, a role change re-seals the session cookie, and the stream relay frees a slot when a client half-closes.
 - README, SECURITY, CONTRIBUTING, CODE_OF_CONDUCT, a traceability table, a release-gate record and issue templates.
+- After an independent review of the production example: the control plane runs an hourly retention pass there, Caddy refuses unusual HTTP methods and runs as a non-root user, the gRPC and metrics listeners are scoped to their own networks, metrics scrapes are bounded, and a production configuration refuses to disable the mutation rate limit. A tenth alert rule covers a down node exporter. These were proven locally only.
 - An independent read-only audit (`AUDIT-M9-RV-01`) recommended **NO-GO for 1.0**. It found no critical defect in the engine; the blockers are evidence, documentation and CI gaps plus decisions that belong to the owner. This is a recommendation, not a release decision.
 
 ### M8: operations (merged 2026-11-20)
