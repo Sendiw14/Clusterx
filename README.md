@@ -11,7 +11,7 @@ See [`docs/product/traceability.md`](docs/product/traceability.md) for what is i
   <img src="docs/design/screenshots/m6/job-failed-1440.png" alt="Job detail for a failed job showing attempts, events timeline and retry lineage" width="49%">
 </p>
 
-Screenshots: console on a local stack with mock OAuth (`docs/design/screenshots/m6/`, captured 2026-11-19).
+Screenshots: console on a local stack with mock OAuth (`docs/design/screenshots/m6/`, captured 2026-11-19 and 2026-11-20).
 
 ## What it guarantees — and what it does not
 

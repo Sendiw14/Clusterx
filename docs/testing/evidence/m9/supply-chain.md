@@ -9,3 +9,5 @@ gitleaks history exit=0, tree exit=0; syft source exit=0 (617 packages); control
 ```
 
 Raw SBOMs not committed (regenerable). CI run of security.yml: NOT RUN (OD-11/OD-20).
+
+**Update 2026-11-20 (RV11-03):** images rebuilt from main before SBOM generation; both image SBOMs show `golang.org/x/net v0.62.0` (the release bump). control-plane 31 packages, worker 18 packages.

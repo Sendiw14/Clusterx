@@ -22,6 +22,11 @@ Unrun tests are **NOT RUN**. Nothing is **released**.
 | F-10 | `docs/testing/test-matrix.md`, README screenshots, issue templates | files | AC-28 |
 | AC-25 | full local scan: govulncheck ×5, pnpm audit, **OSV** (no issues), gitleaks history+tree, **SBOM** source 617 / control-plane 31 / worker 18 packages — all exit 0 | `docs/testing/evidence/m9/supply-chain.md` | AC-25 locally complete; CI NOT RUN |
 | chart | throughput chart duplicate y-axis tick fixed + test | web unit tests | AC-23 |
+| AUDIT-M9-RV-04 | Spot-check of all rows above: RV10-01..06 closed; AC-30/MW-06 satisfied locally; (a) team-closable blockers = **none** | `docs/coordination/reviews/AUDIT-M9-RV-04.md` | — |
+| RV11-01/02 | security + changelog copy: OSV/SBOM run locally; "closed all but CI runner hardening (RV9-10)" | text; full E2E 213×3 green | AC-28 |
+| RV11-03 | images rebuilt from main; image SBOMs show `x/net v0.62.0` | `docs/testing/evidence/m9/supply-chain.md` update | AC-25 |
+| RV11-05 | README screenshot caption dates | text | AC-28 |
+| RV11-04 | `/docs/api` "executed by" labels only cover the M4 curl guide — **open P3**, not a blocker | AUDIT-M9-RV-04 | AC-28 (minor) |
 
 ## Milestones
 
