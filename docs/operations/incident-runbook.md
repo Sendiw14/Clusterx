@@ -69,13 +69,22 @@ no live worker for 2 m.
 
 ## ClusterxLeaseExpiriesRepeated
 
-`clusterx_attempts_finished_5m{state="lease_expired"} >= 3` for 1 m.
+`sum(clusterx_attempts_finished_5m{state=~"lease_expired|deadline_exceeded"}) >= 3` for 1 m.
+
+Both outcomes count as crash-type: the lease is capped at the hard deadline, so for a job with
+`timeout_seconds <= lease_ttl` (e.g. `hash_sha256`, 30 s = default TTL) a crashed worker is recorded `deadline_exceeded`
+and the exhausted job `failure_class=timeout`, never `lease_expired` (ADR-0003 Recovery, state-machine E8). The sum also
+includes handlers that genuinely overran their timeout while heartbeating.
 
 - Causes: workers dying (see above), workers unable to renew (control-plane overload, network loss, DB lock timeouts
   answering `unavailable`), handlers blocking the renew loop, clock/timing misconfiguration (lease TTL too short for
   heartbeat interval).
 - Check: worker logs for `RenewLease` errors, control-plane logs for `unavailable`, `ClusterxWorkerOffline`.
-- Fix the cause; repeated expiries burn the attempt budget (`max_attempts`) and end jobs `failed` (`lease_expired`).
+- Tell crash from overrun: `clusterx_attempts_finished_5m` by `state`; for `deadline_exceeded` attempts compare the job's
+  `timeout_seconds` with the lease TTL. Timeout ≤ TTL plus `ClusterxWorkerOffline` or worker restarts ⇒ crash; timeout
+  well above TTL with live workers ⇒ handler overrun (raise `timeout_seconds` or fix the handler).
+- Fix the cause; repeated expiries burn the attempt budget (`max_attempts`) and end jobs `failed` (`lease_expired`, or
+  `timeout` for deadline outcomes).
 
 ## ClusterxFailureRateHigh
 

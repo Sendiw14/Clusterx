@@ -12,7 +12,8 @@ tests:
       - { series: 'clusterx_workers_recently_lost', values: '0 1x12' }
       - { series: 'clusterx_workers{state="live"}', values: '0x20' }
       - { series: 'clusterx_jobs{status="queued"}', values: '5x20' }
-      - { series: 'clusterx_attempts_finished_5m{state="lease_expired"}', values: '3x20' }
+      - { series: 'clusterx_attempts_finished_5m{state="lease_expired"}', values: '2x20' }
+      - { series: 'clusterx_attempts_finished_5m{state="deadline_exceeded"}', values: '1x20' }
       - { series: 'clusterx_attempts_finished_5m{state="succeeded"}', values: '10x20' }
       - { series: 'clusterx_attempts_finished_5m{state="failed"}', values: '10x20' }
       - { series: 'node_filesystem_avail_bytes{mountpoint="/pgdata"}', values: '50 5x12' }
@@ -57,8 +58,8 @@ tests:
       - eval_time: 2m
         alertname: ClusterxLeaseExpiriesRepeated
         exp_alerts:
-          - exp_labels: { severity: warning, state: lease_expired }
-            exp_annotations: { summary: "3 attempts lost their lease in the last 5 minutes.", runbook_url: docs/operations/incident-runbook.md#clusterxleaseexpiriesrepeated }
+          - exp_labels: { severity: warning }
+            exp_annotations: { summary: "3 attempts lost their lease or passed their hard deadline in the last 5 minutes.", runbook_url: docs/operations/incident-runbook.md#clusterxleaseexpiriesrepeated }
       - eval_time: 3m
         alertname: ClusterxFailureRateHigh
         exp_alerts:
@@ -72,3 +73,21 @@ tests:
         exp_alerts:
           - exp_labels: { severity: critical, mountpoint: /pgdata }
             exp_annotations: { summary: "PostgreSQL volume has 5% free.", runbook_url: docs/operations/incident-runbook.md#clusterxdiskspacelow }
+  # F-12: crash-type outcomes are summed; below the threshold (2) no alert, deadline_exceeded alone reaches it.
+  - interval: 15s
+    input_series:
+      - { series: 'clusterx_attempts_finished_5m{state="lease_expired"}', values: '2x20' }
+      - { series: 'clusterx_attempts_finished_5m{state="failed"}', values: '9x20' }
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ClusterxLeaseExpiriesRepeated
+        exp_alerts: []
+  - interval: 15s
+    input_series:
+      - { series: 'clusterx_attempts_finished_5m{state="deadline_exceeded"}', values: '3x20' }
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: ClusterxLeaseExpiriesRepeated
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations: { summary: "3 attempts lost their lease or passed their hard deadline in the last 5 minutes.", runbook_url: docs/operations/incident-runbook.md#clusterxleaseexpiriesrepeated }
