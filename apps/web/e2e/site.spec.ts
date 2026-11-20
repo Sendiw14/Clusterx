@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { PUBLIC_ROUTES, runAxe, watchConsole } from "./helpers";
+import { PUBLIC_ROUTES, activate, runAxe, watchConsole } from "./helpers";
 
 const WIDTHS = [320, 390, 768, 1024, 1440, 1920];
 
@@ -81,7 +81,7 @@ test("home: mobile menu opens, traps focus and returns it; Atlas diagram is repl
   await expect(page.locator(".atlas-stage")).toBeHidden();
   await expect(page.getByRole("heading", { name: "The eight steps" })).toBeVisible();
   const btn = page.getByRole("button", { name: "Menu" });
-  await btn.click();
+  await activate(page, btn);
   await expect(page.getByRole("dialog", { name: "Site menu" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(btn).toBeFocused();
@@ -135,8 +135,10 @@ test.describe("architecture and changelog", () => {
     const t = await page.locator("main").innerText();
     expect(t).toMatch(/No releases yet/);
     expect(t).not.toMatch(/released on|Released:/i);
-    for (const m of ["M1", "M2", "M3", "M4", "M5", "M6", "M7"]) expect(t).toContain(m);
-    expect(t, "M8 is not merged").not.toMatch(/M8: /);
+    for (const m of ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9"]) expect(t).toContain(m);
+    // AUDIT-M9 F-06: M8 is merged, and the page must say what was and was not run (CI never ran, reference host not run).
+    expect(t).toMatch(/never been run on GitHub/);
+    expect(t).not.toMatch(/\(M8\) are not done|M8\) are not done/);
   });
 });
 

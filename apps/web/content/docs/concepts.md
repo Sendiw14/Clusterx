@@ -38,7 +38,7 @@ Retries wait with exponential backoff and full jitter: base 2 seconds, capped at
 
 ## Leases and heartbeats
 
-A **lease** is the time-limited right to keep running an attempt. A claim sets `lease_expires_at` and increments the job's `lease_generation`. The worker must **renew** it while the handler runs, or the lease expires.
+A **lease** is the time-limited right to keep running an attempt. A claim sets `lease_expires_at` and increments the job's `lease_generation`. The worker must **renew** it while the handler runs, or the lease expires. If the hard deadline and the lease have both passed, the attempt is recorded as `deadline_exceeded`, not `lease_expired` (the deadline wins). Because a claim caps the lease at the deadline, a worker crash on a job whose timeout is not longer than the lease TTL is recorded as `deadline_exceeded`.
 
 Two signals are easy to confuse:
 
@@ -111,8 +111,8 @@ When a job ends in `failed` or `canceled`, `failure_class` says why, and `error_
 | --- | --- |
 | Retryable failures used up the budget | `retryable_exhausted` |
 | The handler reported a permanent failure | `permanent` |
-| The hard deadline passed with no budget left | `timeout` |
-| The lease expired with no budget left | `lease_expired` |
+| The hard deadline passed with no budget left (also a crash when the timeout is not longer than the lease TTL) | `timeout` |
+| The lease expired with no budget left, deadline not yet passed | `lease_expired` |
 | Canceled | `canceled_by_operator` |
 
 ## Events

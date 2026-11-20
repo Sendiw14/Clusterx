@@ -6,9 +6,9 @@ blurb: Authentication, roles, API tokens, worker trust, the demo boundary, a thr
 order: 7
 ---
 
-This page describes the design and says how much of it is built. It makes **no compliance or certification claims**, and a formal threat model has not been completed.
+This page describes the design and says how much of it is built. It makes **no compliance or certification claims**. A STRIDE threat model and an OWASP ASVS 5.0 mapping exist as drafts for review (`docs/security/threat-model.md`, `docs/security/verification.md`); neither is an assessment of a deployed system.
 
-> [!NOTE] Built and tested: API tokens with scopes, worker credentials, role checks and viewer masking on the REST API, fencing and database privilege separation, and (milestones M5 and M6) GitHub sign-in, server-held browser sessions, CSRF protection and the Next.js server that signs service assertions. Run so far only against a mock OAuth server on loopback HTTP: **real GitHub, TLS and production mode (`__Host-` secure cookies) have not been run**, and the fixes for the first independent review of the web layer are pending re-review.
+> [!NOTE] Built and tested: API tokens with scopes, worker credentials, role checks and viewer masking on the REST API, fencing and database privilege separation, and (milestones M5 and M6) GitHub sign-in, server-held browser sessions, CSRF protection and the Next.js server that signs service assertions. Run only against a mock OAuth server: **real GitHub sign-in has not been run**. TLS and production-mode settings were exercised once, in the local production example behind a self-signed certificate authority (see [Deployment](/docs/deployment)), not in a real deployment. The M9 hardening of the web layer has had no independent security re-review.
 
 ## Roles
 
@@ -41,7 +41,7 @@ Sign-in is GitHub OAuth (authorization code with PKCE and a `state` bound to the
 - **The stream relay caps browser sockets** at 5 per session, 15 per user and 256 per process, and frees a socket as soon as the client closes or half-closes it.
 - **Rotating the web session key** is supported with an optional previous key during a window. The signing key for assertions is read once at start, so rotating it needs a restart of the web server.
 
-> [!UNVERIFIED] Not run: real GitHub, TLS between browser, web server and control plane, production mode with Secure `__Host-` cookies in a browser, idle and absolute expiry by elapsed time, Firefox and WebKit.
+> [!UNVERIFIED] Not run: real GitHub; `__Host-` Secure cookies through a real sign-in; idle and absolute session expiry by elapsed time. The end-to-end suite runs in Chromium, Firefox and WebKit engines (Playwright builds) against the mock sign-in server; branded Chrome, Edge and Safari were not tested. No manual screen-reader or keyboard-only walkthrough has been done.
 
 ## API tokens (built)
 
@@ -79,9 +79,9 @@ Boundaries and their main residual risks, from `docs/security/trust-boundaries.m
 Other limits you should know:
 
 - Secrets must not be placed in payloads, results or logs. They are stored and shown to operators.
-- Rate limiting is implemented in the control plane: HTTP 429 `rate_limited` with `Retry-After`, per-user mutation limits and a bucket for failed authentications.
-- An independent review of the web layer (REVIEW-M6-RV-01) found no critical or high issue and three medium ones (proxy path handling, body size cap, WebSocket relay sockets). A second round confirmed their fixes on the live stack and passed the M6 exit. It left release items: a public page could hand over to the console or sign-in page inside its own, looser policy; letter-case variants of `/app`, `/login` and `/auth` carried no policy; a role change left a stale role hint in the cookie; a half-closed stream client held a relay slot. All four are fixed in the M9 web hardening change and have **not had an independent re-review**. A formal STRIDE threat model, the production security and load gate (M8) and a dependency and supply-chain audit are **not done**.
+- Rate limiting is implemented in the control plane: HTTP 429 `rate_limited` with `Retry-After`, per-user mutation limits and a bucket for failed authentications. Behind a reverse proxy such as the production example's Caddy, all direct API clients share one failed-authentication bucket, because there is no trusted-proxy setting yet. That makes the throttle stricter, not weaker, and a valid credential is never refused because of it.
+- An independent review of the web layer (REVIEW-M6-RV-01) found no critical or high issue and three medium ones (proxy path handling, body size cap, WebSocket relay sockets). A second round confirmed their fixes on the live stack and passed the M6 exit. It left release items: a public page could hand over to the console or sign-in page inside its own, looser policy; letter-case variants of `/app`, `/login` and `/auth` carried no policy; a role change left a stale role hint in the cookie; a half-closed stream client held a relay slot. All four are fixed in the M9 web hardening change and have **not had an independent re-review**. The M8 production example and scripts have had none either. Dependency scans were run locally: `govulncheck` and `pnpm audit` report nothing and `gitleaks` reports nothing after test fixtures were allow-listed. OSV scanning and an SBOM were **not run**, and the scan workflow has never run on GitHub.
 
 ## Reporting a vulnerability
 
-> [!UNVERIFIED] There is no published security contact or disclosure policy yet. Choosing one is an owner decision that has not been made, and this page will not invent an address. Until a policy is published, do not post vulnerability details in a public issue.
+> [!UNVERIFIED] `SECURITY.md` in the repository asks reporters to use GitHub private vulnerability reporting and not a public issue. That feature is switched on only when the repository is published, and it has not been published, so no reporting channel is live yet. This page does not invent an address. Until publication, contact the owner directly rather than posting details in a public place.
