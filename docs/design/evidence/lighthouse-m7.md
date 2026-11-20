@@ -1,5 +1,7 @@
 # Lab Web Vitals, M7 public pages (TASK-M7-FE-01, NFR-PERF-01)
 
+> **Superseded for the shipped build by `lighthouse-m9.md`** (re-measured 2026-11-20 after AUDIT-M9 F-05 restored static rendering; adds `/architecture` and three runs per cell). This file is kept as the M7 record: its pages were static then, but a later change made them dynamic until the F-05 fix.
+
 **Lab numbers only. Field data (CrUX, real-user LCP, INP, CLS) is unavailable: the site is not deployed and has no users.** Interaction to Next Paint (INP) is a field metric and was not measured; Total Blocking Time (TBT) is the lab proxy shown here.
 
 - Tool: `npx lighthouse@13.6.0` (pinned), categories performance, accessibility, best-practices, seo.

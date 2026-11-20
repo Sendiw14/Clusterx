@@ -8,7 +8,7 @@ No version of CLUSTERX has been released. Nothing below is a release, a version 
 
 - Public pages are prerendered again. A change made while hardening the console had turned every route into a per-request render; the build output and an end-to-end test now check that the public routes are static, and the Lighthouse lab figures were measured again.
 - Unmatched URLs are answered by a per-request 404, so the 404 of `/app`, `/login` and `/auth` still carries the nonce policy and hydrates.
-- This changelog and the documentation pages were corrected against the repository's evidence. They had said that M8 was not done and that kills, outages, backup and restore were not run; the retention claim now says that nothing runs retention by default.
+- This changelog and the documentation pages were corrected against the repository's evidence. They had said that M8 was not done and that kills, outages, backup and restore were not run; the retention statement now says when the pass actually runs (hourly in the production example, only if you schedule it in the local stack).
 - The end-to-end suite runs in the Chromium, Firefox and WebKit engines of Playwright (not branded Chrome, Edge or Safari builds).
 - Console response, route-transition and live-update times were measured on one laptop. The numbers are proposals only: the owner has not frozen any budget.
 
