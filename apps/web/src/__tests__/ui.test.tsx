@@ -201,7 +201,7 @@ describe("states", () => {
     expect(screen.getByRole("heading", { name: "Something went wrong on the server" })).toBeInTheDocument();
   });
   it("EmptyState has title, sentence and actions", () => {
-    render(<EmptyState title="No jobs yet" actions={<a href="/docs">Docs</a>}>Jobs appear here.</EmptyState>);
+    render(<EmptyState title="No jobs yet" actions={<a href="#docs">Docs</a>}>Jobs appear here.</EmptyState>);
     expect(screen.getByRole("heading", { name: "No jobs yet" })).toBeInTheDocument();
     expect(screen.getByText("Jobs appear here.")).toBeInTheDocument();
   });

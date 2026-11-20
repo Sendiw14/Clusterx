@@ -1,0 +1,1046 @@
+[
+  {
+    "route": "/",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/ [menu open]",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app (live operator)",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app (live operator)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app (live viewer)",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app (live viewer)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/activity (live operator)",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/activity (live operator)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/activity (live viewer)",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/activity (live viewer)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs (live operator)",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs (live operator)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs (live viewer)",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs (live viewer)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs/[id] (live operator)",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs/[id] (live operator)",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs/[id] (live operator)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs/[id] (live operator)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs/[id] (live viewer)",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs/[id] (live viewer)",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs/[id] (live viewer)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs/[id] (live viewer)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs/new (forbidden)",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs/new (live operator)",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/jobs/new (live operator)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/observability (live operator)",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/observability (live operator)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/observability (live viewer)",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/observability (live viewer)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings (live operator)",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings (live operator)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings (live viewer)",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings (live viewer)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings/preferences (live operator)",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings/preferences (live operator)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings/preferences (live viewer)",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings/preferences (live viewer)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings/tokens (forbidden)",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings/tokens (live operator)",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/settings/tokens (live operator)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/workers (live operator)",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/workers (live operator)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/workers (live viewer)",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/workers (live viewer)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/workers/[id] (live operator)",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/workers/[id] (live operator)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/workers/[id] (live viewer)",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/app/workers/[id] (live viewer)",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/architecture",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/architecture",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/architecture",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/architecture",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/changelog",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/changelog",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/changelog",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/changelog",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [operator/Config]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [operator/job detail]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [operator/Jobs]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [operator/Overview]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [operator/Recovery replay]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [operator/Workers]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [viewer/Config]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [viewer/job detail]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [viewer/Jobs]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [viewer/Overview]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [viewer/Recovery replay]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/demo [viewer/Workers]",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/api",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/api",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/api",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/api",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/concepts",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/concepts",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/concepts",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/concepts",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/concepts [search open]",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/deployment",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/deployment",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/deployment",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/deployment",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/quickstart",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/quickstart",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/quickstart",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/quickstart",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/reliability",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/reliability",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/reliability",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/reliability",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/security",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/security",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/security",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/security",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/workers",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/workers",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/workers",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/docs/workers",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/login",
+    "width": 320,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/login",
+    "width": 390,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/login",
+    "width": 1024,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "/login",
+    "width": 1440,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "create token dialog",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "jump-to dialog",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "retry confirm dialog",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  },
+  {
+    "route": "token reveal dialog",
+    "width": 1280,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "violations": []
+  }
+]

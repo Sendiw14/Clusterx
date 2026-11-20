@@ -6,15 +6,17 @@ blurb: Clean checkout to a first job and a three-worker local stack, with what w
 order: 1
 ---
 
-This quickstart starts a **local development stack**: PostgreSQL, the Go control plane and three example workers. It is not a production deployment, and the web console is not part of this compose stack (the console is built, but this guide does not run it). You work with the REST API through `curl`.
+This quickstart starts a **local development stack**: PostgreSQL, the Go control plane and three example workers. It is not a production deployment, and the web console is not part of this compose stack: the console needs a GitHub OAuth app, so the clean-checkout path works with the REST API through `curl`. To see the console without GitHub, read [Try the console without GitHub](#try-the-console-without-github) at the end.
 
 > [!VERIFIED] On 2026-11-18 the integrator ran this flow on Colima: `./infra/compose/bootstrap.sh` exited 0 and left 3 live workers, and `POST /api/v1/jobs` with the `hash_sha256` and `fail_n_times` handlers succeeded.
 
-> [!UNVERIFIED] A run from a fresh clone by someone other than the integrator, a run on a Linux host, and stopping a worker container to watch recovery have not been done. Where a step below depends on one of those, it says so.
+> [!VERIFIED] On 2026-11-20 an independent auditor repeated this flow from a clean `git clone`: on macOS with Colima it works when the checkout is under `$HOME`, and inside a Linux arm64 Ubuntu VM `bootstrap.sh` exited 0 and a job ran to `succeeded`. The auditor also killed a worker container and watched the attempts recover (step 8).
+
+> [!UNVERIFIED] Not run: a Linux amd64 host, and anything involving real GitHub sign-in. The commands below were run on arm64 only.
 
 ## Prerequisites
 
-- Docker with the Compose plugin (Compose V2). The verified run used Colima on macOS.
+- Docker with the Compose plugin (Compose V2). Verified with Colima on macOS and in a Linux arm64 VM. With Colima, keep the checkout under `$HOME`: Colima mounts only `$HOME` into its VM, and a checkout elsewhere (for example under `/private/tmp`) fails with a bind-mount error.
 - A shell with `git`, `cp`, `curl` and `openssl`.
 - Free loopback ports: 8080 (REST API), 9091 (metrics) and 5432 (PostgreSQL). Change them with `CLUSTERX_HTTP_PORT`, `CLUSTERX_METRICS_PORT` and `CLUSTERX_PG_PORT` in `.env`. The compose file publishes them on 127.0.0.1 only.
 - You do not need Go installed: the images are built by Compose.
@@ -131,15 +133,29 @@ You should see three live workers, named `worker-1`, `worker-2` and `worker-3`. 
 
 ## 8. Recovery drill
 
-> [!UNVERIFIED] The following drill has not been run against the compose stack. It describes what the state machine specifies, not something observed.
+Submit a dozen long jobs (the `sleep_ms` handler accepts up to 60,000 milliseconds, for example `{"ms":20000}`), wait until the workers hold some of them, then kill one worker container hard and read the jobs again:
 
-Submit a long job (the `sleep_ms` handler accepts up to 60,000 milliseconds), stop the worker container that took it, and read the job again. By the specification the lease stops being renewed, expires after the lease TTL (30 s by default), the attempt is recorded as `lease_expired`, the job returns to the queue after backoff and another worker claims it as attempt 2. If you restart the stopped worker later and it somehow reports for attempt 1, the report is rejected. At-least-once means the handler may have run twice.
+```sh
+docker compose -f infra/compose/compose.yaml --env-file .env kill -s SIGKILL worker-2
+```
 
-What *was* observed, in the M4 curl guide, using host binaries rather than containers: a graceful `SIGTERM` to both workers during a 20-second `sleep_ms` job made them drain, cancel the handler after the grace period and deregister; the attempt was recorded as `failed` with `worker_shutdown`; after the control plane was restarted a new worker completed the job on attempt 2.
+The lease stops being renewed and expires after the lease TTL (30 s by default). The attempts the killed worker held are closed and the jobs are retried on another worker as a new attempt. If you restart the stopped worker and it somehow reports for the old attempt, the report is rejected. At-least-once means a handler may have run twice.
 
-## Scale workers and stop the stack
+> [!VERIFIED] The independent audit ran this with 12 `sleep_ms` jobs of 20 s on three workers. Killing `worker-2` left 4 active attempts; they were closed 28 s after the kill, re-claimed on another worker, and all 12 jobs ended `succeeded` 50 s later. No job was left `running` without an active attempt. Linux arm64 VM, 2026-11-20. The exact flags above are the README's compose invocation; the auditor's flags were not recorded verbatim.
 
-> [!UNVERIFIED] Adding workers beyond three, measuring throughput, and the commands to stop and clean the stack have not been verified, so none are given here. No throughput numbers exist.
+> [!NOTE] When a job's timeout is not longer than the lease TTL, a crash is recorded as `deadline_exceeded` rather than `lease_expired` (the deadline wins). `hash_sha256` has a 30 s timeout, the same as the default lease. Both lead to a retry. See [Reliability](/docs/reliability).
+
+What was also observed in the M4 curl guide, using host binaries: a graceful `SIGTERM` to both workers during a 20-second `sleep_ms` job made them drain, cancel the handler after the grace period and deregister; the attempt was recorded as `failed` with `worker_shutdown`; after the control plane was restarted a new worker completed the job on attempt 2.
+
+## Stop the stack
+
+```sh
+docker compose -f infra/compose/compose.yaml --env-file .env --profile workers down
+```
+
+Add `-v` to delete the database volume. The auditor ran the `-v` form and the volume and network were removed.
+
+> [!UNVERIFIED] Running more than three workers is not covered by this guide. Throughput measured on a small VM for one, three and five workers is on the [Reliability](/docs/reliability) page, with its limits.
 
 ## Troubleshooting
 
@@ -152,9 +168,29 @@ What *was* observed, in the M4 curl guide, using host binaries rather than conta
 | HTTP 403 `forbidden` | The token's role or scope does not allow the operation. Submitting jobs needs an operator token. |
 | HTTP 422 `validation_failed` | The handler or payload is invalid. `details.fields` lists each field as a JSON Pointer. Unknown fields are rejected on purpose. |
 | HTTP 404 `not_found_route` | The route is not served in this build. See the status column in the [API reference](/docs/api). |
+| `invalid mount config … bind source path does not exist` (Colima) | The checkout is outside `$HOME`. Move it under `$HOME`. |
 | Port already in use | Another process holds 8080, 9091 or 5432. Change `CLUSTERX_HTTP_PORT`, `CLUSTERX_METRICS_PORT` or `CLUSTERX_PG_PORT` in `.env`. |
 
 Always quote the `request_id` from an error body when reporting a problem.
+
+## Try the console without GitHub
+
+The console signs people in with GitHub, and that needs an OAuth app that you register and that the owner has not set up (nothing in this repository fakes a login in production). There is therefore **no console in the clean-checkout path above**. The one way to see the console locally is the end-to-end test harness, which starts a throwaway stack with a **mock OAuth server** standing in for GitHub:
+
+- The real Go control plane and worker built from your checkout, two workers, and a private PostgreSQL 18 cluster on port 55440. Control plane on 18180 (gRPC 19190, metrics 19191), mock OAuth on 19300, web server on 3100. It does not touch the compose stack above.
+- Needs Node 26 with pnpm 9.15.9, Go 1.27.4, PostgreSQL 18 binaries (set `CLUSTERX_E2E_PG_BIN` if they are not at `/opt/homebrew/opt/postgresql@18/bin`) and Playwright's browsers (`pnpm --filter web exec playwright install chromium`).
+
+```sh
+pnpm install
+pnpm --filter web build
+CLUSTERX_E2E_PG_DIR=/some/empty/dir pnpm --filter web e2e
+```
+
+The users are fixed test identities (an operator, a viewer, and others that exercise denial). The harness runs the specs that drive the console in a browser: jobs, workers, tokens, live updates, errors and permissions. Then it **stops everything it started**. It is not an interactive environment you can browse afterwards. Playwright's `--headed` and `--ui` options show the browser while a spec runs; they are standard Playwright flags and this guide did not exercise them.
+
+> [!VERIFIED] The full suite passes against this harness in Chromium (211 passed, 54 skipped screenshot specs, 2026-11-20 audit run). See the changelog for the Firefox and WebKit runs.
+
+> [!UNVERIFIED] Everything here uses mock sign-in on plain HTTP on loopback. A real GitHub sign-in, TLS and production-mode cookies in a browser have not been run. The public [demo](/demo) shows the console's screens on fixture data and needs no setup.
 
 ## Next
 

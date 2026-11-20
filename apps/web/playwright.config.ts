@@ -6,8 +6,9 @@ import { MOCK_CLIENT_ID, MOCK_CLIENT_SECRET, MOCK_OAUTH_PORT } from "./e2e/stack
 const PORT = PORTS.web;
 
 /**
- * Chromium only (Firefox/WebKit are not required for the M3 foundation). Runs against a production build: `pnpm build`
- * must have run first (the package script order lint, typecheck, test, build, e2e guarantees it).
+ * Chromium, Firefox and WebKit engines (AUDIT-M9 F-08). Runs against a production build: `pnpm build` must have run first.
+ * The specs share one live stack and fixed test users (some disable or expire sessions), so the browsers must not run at the
+ * same time: the `e2e` script runs one project per invocation, each with its own fresh stack. Not Chrome/Edge/Safari branded builds.
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -20,7 +21,11 @@ export default defineConfig({
   globalTeardown: "./e2e/global-teardown.ts",
   reporter: [["list"], ["json", { outputFile: "test-results/e2e.json" }]],
   use: { baseURL: `http://localhost:${PORT}`, trace: "retain-on-failure" },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    { name: "firefox", use: { ...devices["Desktop Firefox"] } },
+    { name: "webkit", use: { ...devices["Desktop Safari"] } },
+  ],
   webServer: {
     // The production entry (`server.ts`: Next plus the /bff/stream relay), wired to the live stack that global setup starts
     // (Go control plane, PostgreSQL, mock OAuth). Plain test credentials: they exist only on this machine for this run.

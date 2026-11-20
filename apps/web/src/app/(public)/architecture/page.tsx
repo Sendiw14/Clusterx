@@ -18,7 +18,7 @@ const LAYERS: { name: string; text: string; trust: string; stat?: string }[] = [
 ];
 
 const CONNECTIONS = [
-  { from: "Browser", to: "Next.js server", proto: "HTTPS", cred: "Session cookie (server-held session)", status: "Implemented, tested in Chromium; TLS and production-mode cookies not run", src: "ADR-0005, ADR-0006" },
+  { from: "Browser", to: "Next.js server", proto: "HTTPS", cred: "Session cookie (server-held session)", status: "Implemented, tested against a mock sign-in server; real GitHub sign-in not run. TLS proven once in a local production example", src: "ADR-0005, ADR-0006" },
   { from: "Next.js server", to: "Control plane REST", proto: "HTTP, /api/v1", cred: "Signed service assertion, 60 s at most", status: "Implemented, tested against the real control plane", src: "ADR-0005, ADR-0006" },
   { from: "API client", to: "Control plane REST", proto: "HTTP, /api/v1", cred: "Scoped API token (cxt_ prefix)", status: "Implemented, tested", src: "ADR-0005, api/openapi.yaml" },
   { from: "Worker", to: "Control plane gRPC", proto: "gRPC, pull model", cred: "Worker credential (cxw_ prefix), checked on every call", status: "Implemented, tested", src: "ADR-0005, packages/proto" },
@@ -46,10 +46,10 @@ const TIMING = [
 ];
 
 const FAILURES = [
-  { f: "A worker crashes", w: "Its lease stops being renewed and expires on the database clock. The job is retried if budget remains. If the worker comes back, its late report is rejected.", s: "Covered by in-process tests; a real process kill is not yet verified" },
+  { f: "A worker crashes", w: "Its lease stops being renewed and expires on the database clock. The job is retried if budget remains. If the worker comes back, its late report is rejected.", s: "Tested, including a real SIGKILL of a worker container locally (arm64); no reference host" },
   { f: "A worker is partitioned but keeps running", w: "Its handler may still run and cause side effects. Its reports are rejected once the lease expires. This is why execution is at-least-once.", s: "Fence covered by tests" },
   { f: "The control plane restarts", w: "REST and gRPC are unavailable. Nothing uncommitted was acknowledged. Leases may expire during the outage; recovery runs on start.", s: "Restart exercised in the M4 curl guide" },
-  { f: "PostgreSQL is down", w: "Readiness fails, REST writes answer 503, claims pause, scheduler loops back off. State resumes from what was committed.", s: "Outage tests not yet run" },
+  { f: "PostgreSQL is down", w: "Readiness fails, REST writes answer 503, claims pause, scheduler loops back off. State resumes from what was committed.", s: "A chaos test and a local alert drill; no reference host" },
   { f: "The live channel drops", w: "The console reconnects with backoff, shows that the data is not live and reconciles from a snapshot. If the channel never connects it polls instead. Live messages are hints, never data.", s: "Browser E2E on the live stack: drop, reconnect and polling fallback" },
   { f: "The Next.js server cannot reach or authenticate to Go", w: "The console shows an infrastructure error and does not ask the user to sign in again. Failed requests show a request ID.", s: "Browser E2E: unavailable state and the sign-in outcome. Not run against a real network partition" },
 ];
@@ -145,7 +145,7 @@ export default function ArchitecturePage() {
             <div>
               <h3>What it costs</h3>
               <ul>
-                <li>Throughput is bounded by PostgreSQL write capacity. No numbers are published yet.</li>
+                <li>Throughput is bounded by PostgreSQL write capacity. Measured once on a small development VM (about 115 to 280 jobs per second for 1 to 5 workers, see Reliability); not a capacity claim.</li>
                 <li>One coordinator means downtime when it restarts. This is not a high-availability design.</li>
                 <li>Row-locking claims are not strict FIFO, and low priority can starve under sustained high priority load.</li>
                 <li>Fencing protects the database record, not the outside world: a handler can run twice.</li>
@@ -178,7 +178,7 @@ export default function ArchitecturePage() {
             <li>Deadlines and cancellation are cooperative. The engine cannot kill a handler that ignores its context.</li>
             <li>Results and log tails are size-limited and expire, so old information disappears by design.</li>
             <li>The public demo is illustrative and isolated, not live telemetry.</li>
-            <li>No throughput or recovery-time numbers are promised until a benchmark is published.</li>
+            <li>The throughput and recovery times on the Reliability page come from one arm64 development VM. Nothing is promised, and no objective is frozen.</li>
           </ul>
           <div style={{ marginTop: "var(--space-5)", maxWidth: "44rem" }}>
             <Notice variant="info" lead="Not in 1.0." role="none">Versioned workflow definitions are planned for a later release and are not part of this architecture. See <Link href="/docs/reliability">Reliability</Link> for what is and is not guaranteed.</Notice>

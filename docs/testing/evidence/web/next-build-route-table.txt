@@ -1,0 +1,45 @@
+# pnpm --filter web build (next 16.4.6), route table, 2026-11-20T14:06:38Z, worktree base 6222d0c + FE-02 changes
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /[...unmatched]
+├ ƒ /app
+├ ƒ /app/activity
+├ ƒ /app/jobs
+├ ƒ /app/jobs/[id]
+├ ƒ /app/jobs/new
+├ ƒ /app/observability
+├ ƒ /app/settings
+├ ƒ /app/settings/preferences
+├ ƒ /app/settings/tokens
+├ ƒ /app/workers
+├ ƒ /app/workers/[id]
+├ ○ /architecture
+├ ƒ /auth/callback
+├ ƒ /auth/end
+├ ƒ /auth/github
+├ ƒ /bff/api/v1/[...path]
+├ ƒ /bff/logout
+├ ƒ /bff/session
+├ ƒ /bff/stream
+├ ○ /changelog
+├ ○ /demo
+├ ○ /docs
+├ ○ /docs/api
+├ ○ /docs/concepts
+├ ○ /docs/deployment
+├ ○ /docs/quickstart
+├ ○ /docs/reliability
+├ ○ /docs/search-index.json
+├ ○ /docs/security
+├ ○ /docs/workers
+├ ○ /icon.svg
+└ ƒ /login
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+exit=0

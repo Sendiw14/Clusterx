@@ -1,0 +1,418 @@
+{
+  "/ mobile": {
+    "lighthouse": "13.6.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+    "runs": [
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 1092,
+        "cls": 0,
+        "tbt": 11,
+        "fcp": 1092,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      },
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 1055,
+        "cls": 0,
+        "tbt": 0,
+        "fcp": 1055,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      },
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 1055,
+        "cls": 0,
+        "tbt": 5,
+        "fcp": 1055,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      }
+    ],
+    "median": {
+      "perf": 100,
+      "a11y": 100,
+      "bp": 100,
+      "seo": 100,
+      "lcp": 1055,
+      "cls": 0,
+      "tbt": 5,
+      "fcp": 1055
+    }
+  },
+  "/ desktop": {
+    "lighthouse": "13.6.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+    "runs": [
+      {
+        "perf": 99,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 899,
+        "cls": 0.001,
+        "tbt": 0,
+        "fcp": 285,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      },
+      {
+        "perf": 99,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 897,
+        "cls": 0.001,
+        "tbt": 0,
+        "fcp": 285,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      },
+      {
+        "perf": 99,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 900,
+        "cls": 0.001,
+        "tbt": 0,
+        "fcp": 286,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      }
+    ],
+    "median": {
+      "perf": 99,
+      "a11y": 100,
+      "bp": 100,
+      "seo": 100,
+      "lcp": 899,
+      "cls": 0.001,
+      "tbt": 0,
+      "fcp": 285
+    }
+  },
+  "/docs mobile": {
+    "lighthouse": "13.6.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+    "runs": [
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 755,
+        "cls": 0,
+        "tbt": 0,
+        "fcp": 755,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      },
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 755,
+        "cls": 0,
+        "tbt": 7,
+        "fcp": 755,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      },
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 755,
+        "cls": 0,
+        "tbt": 5,
+        "fcp": 755,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      }
+    ],
+    "median": {
+      "perf": 100,
+      "a11y": 100,
+      "bp": 100,
+      "seo": 100,
+      "lcp": 755,
+      "cls": 0,
+      "tbt": 5,
+      "fcp": 755
+    }
+  },
+  "/docs desktop": {
+    "lighthouse": "13.6.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+    "runs": [
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 205,
+        "cls": 0,
+        "tbt": 0,
+        "fcp": 205,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      },
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 205,
+        "cls": 0,
+        "tbt": 0,
+        "fcp": 205,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      },
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 204,
+        "cls": 0,
+        "tbt": 0,
+        "fcp": 204,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      }
+    ],
+    "median": {
+      "perf": 100,
+      "a11y": 100,
+      "bp": 100,
+      "seo": 100,
+      "lcp": 205,
+      "cls": 0,
+      "tbt": 0,
+      "fcp": 205
+    }
+  },
+  "/demo mobile": {
+    "lighthouse": "13.6.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+    "runs": [
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 905,
+        "cls": 0,
+        "tbt": 6,
+        "fcp": 905,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      },
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 906,
+        "cls": 0,
+        "tbt": 6,
+        "fcp": 906,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      },
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 905,
+        "cls": 0,
+        "tbt": 6,
+        "fcp": 905,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      }
+    ],
+    "median": {
+      "perf": 100,
+      "a11y": 100,
+      "bp": 100,
+      "seo": 100,
+      "lcp": 905,
+      "cls": 0,
+      "tbt": 6,
+      "fcp": 905
+    }
+  },
+  "/demo desktop": {
+    "lighthouse": "13.6.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+    "runs": [
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 245,
+        "cls": 0.021,
+        "tbt": 0,
+        "fcp": 245,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      },
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 245,
+        "cls": 0.021,
+        "tbt": 0,
+        "fcp": 245,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      },
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 245,
+        "cls": 0.021,
+        "tbt": 0,
+        "fcp": 245,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      }
+    ],
+    "median": {
+      "perf": 100,
+      "a11y": 100,
+      "bp": 100,
+      "seo": 100,
+      "lcp": 245,
+      "cls": 0.021,
+      "tbt": 0,
+      "fcp": 245
+    }
+  },
+  "/architecture mobile": {
+    "lighthouse": "13.6.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+    "runs": [
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 1053,
+        "cls": 0,
+        "tbt": 5,
+        "fcp": 1053,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      },
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 1057,
+        "cls": 0,
+        "tbt": 0,
+        "fcp": 1057,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      },
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 1059,
+        "cls": 0,
+        "tbt": 8,
+        "fcp": 1059,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      }
+    ],
+    "median": {
+      "perf": 100,
+      "a11y": 100,
+      "bp": 100,
+      "seo": 100,
+      "lcp": 1057,
+      "cls": 0,
+      "tbt": 5,
+      "fcp": 1057
+    }
+  },
+  "/architecture desktop": {
+    "lighthouse": "13.6.0",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+    "runs": [
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 284,
+        "cls": 0,
+        "tbt": 0,
+        "fcp": 284,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      },
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 286,
+        "cls": 0,
+        "tbt": 0,
+        "fcp": 286,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      },
+      {
+        "perf": 100,
+        "a11y": 100,
+        "bp": 100,
+        "seo": 100,
+        "lcp": 286,
+        "cls": 0,
+        "tbt": 0,
+        "fcp": 286,
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+        "lh": "13.6.0"
+      }
+    ],
+    "median": {
+      "perf": 100,
+      "a11y": 100,
+      "bp": 100,
+      "seo": 100,
+      "lcp": 286,
+      "cls": 0,
+      "tbt": 0,
+      "fcp": 286
+    }
+  }
+}

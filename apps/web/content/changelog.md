@@ -4,6 +4,32 @@ No version of CLUSTERX has been released. Nothing below is a release, a version 
 
 > [!NOTE] The tag `contract-m1-draft.4` marks an internal contract snapshot. It is not a release.
 
+### M9 audit fixes (web lane)
+
+- Public pages are prerendered again. A change made while hardening the console had turned every route into a per-request render; the build output and an end-to-end test now check that the public routes are static, and the Lighthouse lab figures were measured again.
+- Unmatched URLs are answered by a per-request 404, so the 404 of `/app`, `/login` and `/auth` still carries the nonce policy and hydrates.
+- This changelog and the documentation pages were corrected against the repository's evidence. They had said that M8 was not done and that kills, outages, backup and restore were not run; the retention statement now says when the pass actually runs (hourly in the production example, only if you schedule it in the local stack).
+- The end-to-end suite runs in the Chromium, Firefox and WebKit engines of Playwright (not branded Chrome, Edge or Safari builds).
+- Console response, route-transition and live-update times were measured on one laptop. The numbers are proposals only: the owner has not frozen any budget.
+
+### M9: web hardening, release documentation, audit and review fixes (merged 2026-11-20)
+
+- The console-only nonce policy now covers every console path in any letter case, a role change re-seals the session cookie, and the stream relay frees a slot when a client half-closes.
+- README, SECURITY, CONTRIBUTING, CODE_OF_CONDUCT, a traceability table, a release-gate record and issue templates.
+- After an independent review of the production example: the control plane runs an hourly retention pass there, Caddy refuses unusual HTTP methods and runs as a non-root user, the gRPC and metrics listeners are scoped to their own networks, metrics scrapes are bounded, and a production configuration refuses to disable the mutation rate limit. A tenth alert rule covers a down node exporter. These were proven locally only.
+- An independent read-only audit (`AUDIT-M9-RV-01`) recommended **NO-GO for 1.0**. It found no critical defect in the engine; the blockers are evidence, documentation and CI gaps plus decisions that belong to the owner. This is a recommendation, not a release decision.
+
+### M8: operations (merged 2026-11-20)
+
+All of it was run **locally only** (macOS with a Colima VM, arm64). No reference host, public domain, real GitHub sign-in or amd64 machine was used.
+
+- Monitoring: Prometheus configuration, nine alert rules with an incident runbook, and extra `clusterx_*` metrics on the internal metrics listener. Each alert was induced locally. No Alertmanager is shipped, so nothing sends notifications until you wire one up.
+- A backup and restore drill (`pg_dump` archive, restore into a new database) and a 0002 to 0004 migration drill. Recovery point and recovery time were measured on the drill stack and are not frozen objectives.
+- Benchmarks with 1, 3 and 5 workers and a 1,000-job exact reconciliation, measured on a small development VM. They are not capacity claims. See [Reliability](/docs/reliability).
+- A production example (`infra/production`): Caddy TLS, TLS between the web server and control plane and between workers and control plane, secrets as files, no published database port. It was proven on one machine with a self-signed certificate authority.
+- A threat model and an OWASP ASVS 5.0 mapping, both drafts for review, and supply-chain scan scripts.
+- Continuous-integration workflows exist for tests and security scans. **They have never been run on GitHub**: the repository has not been pushed.
+
 ### M6 review fixes (merged 2026-11-20, commit 936bd59)
 
 - The server-side proxy accepts only an allowlist of the API routes the console uses, request bodies are capped at 1 MiB while they are read, and the stream relay releases its sockets and reserves its slot before it dials.
@@ -55,7 +81,9 @@ None. There is no released version to migrate from, so there are no upgrade step
 
 ## Not yet in this history
 
-- Real GitHub sign-in, TLS and production-mode cookies have not been run; the web console has only been tested against a mock OAuth server.
-- The release items the second review round left open (the console and sign-in pages loaded from a public page under the looser policy, no CSP on letter-case variants of `/app`, `/login` and `/auth`, a stale role hint in the session cookie, a half-closed stream client holding a slot) are fixed in the M9 web hardening change. That change has had no independent re-review yet.
-- Production deployment, backup and restore, and benchmarks (M8) are not done.
+- Real GitHub sign-in has not been run; the web console has only been tested against a mock OAuth server. The same is true of production-mode cookies in a browser.
+- The production example has not been run on a real host, with a public domain or on amd64.
+- The GitHub Actions workflows (continuous integration and supply-chain scans) have never run. OSV scanning and an SBOM have not been run locally either.
+- There is no independent security re-review of the M9 web hardening change or of the M8 production example, and no manual screen-reader or keyboard-only walkthrough has been done.
+- Service objectives, recovery point and time objectives and console performance budgets are not frozen.
 - Workflow definitions are not part of 1.0.

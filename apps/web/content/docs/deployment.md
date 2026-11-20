@@ -1,16 +1,16 @@
 ---
 title: Deployment
-lead: What the local Compose stack contains and how it is hardened, and what a single-VM production setup will need. Production is not yet verified.
-description: CLUSTERX local Docker Compose reference, database roles and secrets, and the production single-VM plan clearly marked not yet verified.
-blurb: Local Compose stack, database roles, secrets and configuration. The production section is marked not yet verified.
+lead: What the local Compose stack contains and how it is hardened, and the single-VM production example that was proven only on one local machine.
+description: CLUSTERX local Docker Compose reference, database roles and secrets, backup, restore and alert drills, and a production example verified locally only.
+blurb: Local Compose stack, database roles, secrets and configuration, plus a production example that has only been proven locally.
 order: 6
 ---
 
-> [!UNVERIFIED] **Only the local Compose stack has been run.** Everything under "Production on a single VM" is a plan for milestone M8 and has not been exercised. No TLS setup, backup, restore, upgrade or recovery-time figure on this page has been tested.
+> [!UNVERIFIED] **No production host exists, and production is not yet verified.** The production example, the backup and restore drill, the alert drills and the TLS setup were run on one developer machine (macOS with a Colima VM, arm64), with a self-signed certificate authority. A reference Linux amd64 host, a public domain and certificate, and real GitHub sign-in were **not run**. Nothing on this page is a measured capacity or a recovery guarantee.
 
 ## Local Compose reference (verified)
 
-`infra/compose/compose.yaml` is marked in its own header as **development only, not a production example**. Start it with the steps in the [Quickstart](/docs/quickstart). The integrator ran it on Colima on 2026-11-18.
+`infra/compose/compose.yaml` is marked in its own header as **development only, not a production example**. Start it with the steps in the [Quickstart](/docs/quickstart). The integrator ran it on Colima on 2026-11-18, and the independent audit reproduced it from a clean clone on macOS under `$HOME` and on Linux arm64 (an Ubuntu VM). amd64 has not been tried. With Colima, keep the checkout under `$HOME`: Colima mounts only `$HOME` into its VM.
 
 | Service | Role | Published port |
 | --- | --- | --- |
@@ -20,7 +20,7 @@ order: 6
 | `worker`, `worker-2`, `worker-3` | The reference worker running the three example handlers, one credential each, capacity 4 | none |
 | `retention` | Optional, profile `retention`: one bounded retention pass as the `clusterx_retention_job` login, then exits. Run it from cron: `docker compose --env-file ../../.env --profile retention run --rm retention` | none |
 
-Every published port is bound to loopback. The web console is **not** part of this stack.
+Every published port is bound to loopback. The web console is **not** part of this stack: it needs a GitHub OAuth app. To try the console locally without GitHub, the repository's end-to-end harness starts the Go control plane, PostgreSQL, workers and a mock sign-in server. See the [Quickstart](/docs/quickstart).
 
 Container hardening already present in the compose file: read-only root filesystems, all Linux capabilities dropped, `no-new-privileges`, and for the workers a process limit of 128 and a memory limit of 256 MB.
 
@@ -60,9 +60,9 @@ The Next.js server fails closed: production is the default, and anything missing
 | `CLUSTERX_WEB_SESSION_KEY_PREVIOUS` | Optional. The old session key, accepted for reading during a rotation window and never used to seal |
 | `CLUSTERX_GITHUB_CLIENT_ID`, `CLUSTERX_GITHUB_CLIENT_SECRET` | The GitHub OAuth application |
 
-The server is started with `node server.ts` (it hosts the live-update WebSocket relay, which a plain `next start` cannot). OAuth endpoint overrides exist only outside production.
+The server is started with `node server.ts` (it hosts the live-update WebSocket relay, which a plain `next start` cannot). OAuth endpoint overrides exist only outside production. The server reads these as plain variables; the production example's wrapper script `infra/production/web-entry.mjs` turns `CLUSTERX_*_FILE` secret files into them.
 
-> [!UNVERIFIED] Production mode (TLS, `__Host-` secure cookies, real GitHub) has not been run.
+> [!UNVERIFIED] Production mode with real GitHub has not been run. The production example ran behind a local self-signed TLS proxy, with `/app` redirecting to `/login`; a real sign-in was not part of it.
 
 ## Database roles
 
@@ -77,26 +77,29 @@ Migrations are forward-only, numbered files applied one transaction each, under 
 
 > [!VERIFIED] Migrations applying (`applied=2`), the superuser refusal and the least-privilege role were executed in the M4 curl guide. Deleting and truncating through the runtime role is covered by backend tests.
 
-## Production on a single VM (M8, not yet verified)
+## Production example on a single VM (verified locally only)
 
-> [!UNVERIFIED] Nothing in this section has been run. It records the intended shape so the gaps are visible.
+`infra/production/` is a Compose example for one Linux host: Caddy terminates TLS and is the only service that publishes ports; the web server, control plane, three workers and PostgreSQL sit on internal networks. The full description and the evidence are in `docs/operations/deployment.md` and `docs/testing/evidence/m8/production/` in the repository.
 
-**Shape.** One Linux VM runs the control plane, PostgreSQL, the web application and the workers behind a TLS reverse proxy. Local demonstration and production configuration are kept separate, and the public demo uses no production data.
+> [!VERIFIED] On 2026-11-20 the example was started on a developer machine (macOS, Colima, arm64) with generated secrets and a self-signed certificate authority, then checked: TLS 1.3 on both host names, a job run by three workers over gRPC with TLS, the web server reaching the control plane over TLS, PostgreSQL not reachable from the web container, containers running as a non-root user with a read-only root filesystem and no Linux capabilities, no secret values in the environment, and the configuration refusing to start when secrets or TLS are missing (exit status 1).
 
-| Topic | Intent | Status |
+> [!UNVERIFIED] Not run: a real host, an amd64 machine, public DNS and ACME certificates, a firewall, workers on a separate host, a rolling restart, real GitHub sign-in. The web image is 1.43 GB because it carries the whole build; a pruned image is not built.
+
+| Topic | State | What exists |
 | --- | --- | --- |
-| TLS | Terminate TLS at a reverse proxy; workers use TLS to a non-loopback control plane (`CLUSTERX_WORKER_TLS_CA_FILE`) | Not yet verified |
-| Secrets | Generated per environment, never in the repository, rotated by creating a new credential and revoking the old one | Not yet verified |
-| Networking | Only the proxy is public; PostgreSQL, gRPC and metrics stay private | Not yet verified |
-| Backups | Logical or physical backups kept for 14 days (proposed) | Not yet verified |
-| Restore | A tested restore into a fresh database | Not yet verified |
-| Upgrades | Expand, backfill, contract across releases; no destructive change in the release that stops using a column | Specified; never run |
-| Coordinator restarts | Downtime: there is one control plane, so claims and reports pause | Restart exercised locally in the M4 guide |
-| RPO and RTO | **Not set.** They are to be frozen after measurements | Not yet verified |
-| Monitoring | Prometheus metrics endpoint exists; dashboards and alerts do not | Not yet verified |
+| TLS | Verified locally, self-signed CA | Caddy for browsers and API clients; TLS from the web server and from workers to the control plane (`CLUSTERX_WORKER_TLS_CA_FILE`) |
+| Secrets | Verified locally | Files under `infra/production/secrets/` mounted as `/run/secrets/*`; generated per environment, never in the repository; rotate by creating a new credential and revoking the old one |
+| Networking | Verified locally | Only Caddy publishes ports; PostgreSQL, gRPC and metrics stay on internal networks |
+| Retention | Verified locally | The control plane runs one bounded retention pass an hour (`CLUSTERX_RETENTION_INTERVAL=1h`) as a separate database login. A local proof aged a job to 31 days, ran a pass and the job was deleted (API answer 410). Without that setting (the local Compose stack by default) nothing deletes anything and history grows without bound; its optional `retention` service is for cron. The 7 and 30 day periods are proposals |
+| Backups | Drilled locally | `scripts/ops/backup.sh` writes a `pg_dump` archive with a checksum; on the drill stack it took 0.26 s. Keeping archives for 14 days is a proposal, not a tested policy |
+| Restore | Drilled locally | `scripts/ops/restore.sh` restores into a **new** database. On the drill stack the restored control plane was ready 0.22 s after the restore; the 12 attempts that were running at backup time became `lease_expired` and were retried. Everything committed after the backup is lost |
+| Upgrades | Migration drill run | Migrations 0002 to 0004 were applied to a populated database in a test. A rolling upgrade of a live deployment was not exercised. Rollback is a restore |
+| Coordinator restarts | Downtime by design | One control plane, so claims and reports pause. A restart was exercised on the local stacks |
+| Monitoring | Alerts drilled locally | Prometheus configuration and ten alert rules with an incident runbook. Nine were induced locally in M8; the node-exporter-down rule has a rule test only. **No Alertmanager is shipped**: nothing notifies anyone until you add routing |
+| RPO and RTO | **Not frozen** | Measured only on the drill stack: a 2.2 s window of lost jobs, 14.1 s until the service answered again and 71.8 s until the re-run work drained. These are not objectives |
 
 Hosting, a domain, a managed database and any external identity or monitoring service need explicit owner approval before use. None has been chosen or provisioned.
 
 ## Incidents
 
-There is no incident runbook yet. When something goes wrong, collect the `request_id` from the error body, the job `id` and its `events`, and the control plane and worker logs. The logs are written so that no credential appears in them: the M4 guide searched its logs for secret and token markers and found none.
+`docs/operations/incident-runbook.md` has one section per alert rule, each with the impact, what to check and how to fix it. The alerts were induced locally; none has fired on a real deployment. For any problem, collect the `request_id` from the error body, the job `id` and its `events`, and the control plane and worker logs. The logs are written so that no credential appears in them: the M4 guide searched its logs for secret and token markers and found none.

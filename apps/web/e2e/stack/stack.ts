@@ -113,7 +113,7 @@ export async function startStack(): Promise<void> {
   spawnLogged("control-plane", join(BIN_DIR, "clusterx-control-plane"), ["serve"], goEnv({
     CLUSTERX_HTTP_ADDR: `127.0.0.1:${PORTS.http}`, CLUSTERX_GRPC_ADDR: `127.0.0.1:${PORTS.grpc}`, CLUSTERX_METRICS_ADDR: `127.0.0.1:${PORTS.metrics}`, CLUSTERX_METRICS_TOKEN: "e2e-metrics-token-not-a-secret-0000",
     // Parallel specs sign in a lot; the dedicated rate-limit user still hits the real mutation limit.
-    CLUSTERX_RATE_LOGINS_PER_MINUTE: "600", CLUSTERX_RATE_AUTH_FAILURES_PER_MINUTE: "600", CLUSTERX_RATE_MUTATIONS_PER_SECOND: "20",
+    CLUSTERX_RATE_LOGINS_PER_MINUTE: "600", CLUSTERX_RATE_AUTH_FAILURES_PER_MINUTE: "600", CLUSTERX_RATE_MUTATIONS_PER_SECOND: process.env.CLUSTERX_E2E_RATE_MUTATIONS ?? "20",
   }));
   await waitFor("control plane ready", async () => (await fetch(`${API_URL}/health/ready`)).ok);
 

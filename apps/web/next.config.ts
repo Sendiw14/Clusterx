@@ -4,7 +4,7 @@ import { STATIC_POLICY_SOURCE, buildCsp } from "./src/lib/csp";
 
 const isDev = process.env.NODE_ENV !== "production";
 
-/** Public pages are statically rendered, so they keep a static policy. The console, /login and /auth (any letter case, any depth) get a per-request nonce policy from `src/proxy.ts` instead (no second CSP header here). */
+/** Public pages are prerendered (`○` in the `next build` route table; e2e/static-public.spec.ts guards it) so they keep a static policy, which needs `'unsafe-inline'` for Next's inline bootstrap. The console, /login and /auth (any letter case, any depth) get a per-request nonce policy from `src/proxy.ts` instead (no second CSP header here). Unmatched URLs render per request via `app/[...unmatched]/page.tsx`, so their 404 can carry that nonce. */
 
 const baseHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
