@@ -37,7 +37,8 @@ docs/                product, architecture/ADRs, design, security, testing, oper
 
 ## Local quickstart (engine)
 
-Verified on macOS arm64 with Colima (Docker 29). Linux and a clean third-party checkout are **not yet verified**.
+Verified from a clean clone on macOS arm64 with Colima (Docker 29) and on Linux arm64 (Ubuntu VM). amd64 is **not yet verified**.
+With Colima, keep the checkout under `$HOME` — Colima mounts only `$HOME` into its VM.
 
 ```bash
 cp .env.example .env   # fill the three empty values, e.g. with: openssl rand -hex 24
@@ -60,7 +61,8 @@ Stop with `docker compose -f infra/compose/compose.yaml --env-file .env --profil
 
 The **operator console** needs a GitHub OAuth app and the BFF keys (see
 [`docs/operations/deployment.md`](docs/operations/deployment.md)); it is end-to-end tested against a local mock
-OAuth server, **not yet against real GitHub**.
+OAuth server, **not yet against real GitHub**. To try the console locally without GitHub, use the E2E harness
+(`CLUSTERX_E2E_PG_DIR=<dir> pnpm --filter web e2e`), which starts Go, PostgreSQL, workers and a mock OAuth server.
 
 ## Development
 

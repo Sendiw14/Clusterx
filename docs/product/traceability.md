@@ -1,47 +1,95 @@
 # CLUSTERX — Traceability Matrix
 
 Vocabulary (§0): `proposed → specified → approved → implemented → integrated → tested → verified → released`.
-A status is recorded only with evidence. Unrun tests are **NOT RUN**.
+Unrun tests are **NOT RUN**. Nothing is **released**.
 
-Master revision: R2 · adopted 2026-11-17 (OD-01).
-**Contract freeze candidate (M1):** `api/openapi.yaml` `1.0.0-draft.4`, `worker.proto`, `0001_init.sql` at merge `c48b62f` (backend `182566e`). Status **approved and FROZEN 2026-11-18 (OD-12)**, local tag `contract-m1-draft.4`. Changes now require a change request (§1.3 step 6).
+- Master: R2 (OD-01). Contract: OpenAPI `1.0.0-draft.7`, migrations 0001–0004, tag `contract-m6-draft.7`.
+- Status as of 2026-11-20, main after the M9 audit fixes. Source of the AC/MW table: independent audit
+  `docs/coordination/reviews/AUDIT-M9-RV-01.md` (re-ran gates on `8fa9e09`), updated by the integrator only
+  where a later commit changed the evidence (marked *post-audit*).
+- All evidence is from the dev laptop / Colima VM. **GitHub CI has never run** (OD-11/OD-20: stay local).
 
-## M1 evidence (main `2ea9d0b`, 2026-11-18, dev laptop, not CI)
+## Post-audit changes (integrator, not yet independently re-audited)
 
-| Check | Command | Result |
+| Finding | Change | Evidence |
 |---|---|---|
-| DDL | `psql -v ON_ERROR_STOP=1 --single-transaction -f apps/control-plane/migrations/0001_init.sql` (fresh PG 18.7) | exit 0 |
-| Go vet | `go vet ./...` (Go 1.27.4) | exit 0 |
-| Race PoC | `go test -race -count=3 ./poc/...` | exit 0 (`ok … 30.410s`; 19 tests × 3) |
-| Proto | `protoc --descriptor_set_out=/dev/null clusterx/worker/v1/worker.proto` | exit 0 |
-| OpenAPI | `npx @redocly/cli@2.79.0 lint api/openapi.yaml` | exit 0, 5 expected warnings |
-| Mutation | author 21 runs (20 killed, M4 equivalent); reviewer R2: M1–M5, M11 + 7 author + 11 own | per REVIEW-M1-RV-01 R2 |
-| Independent review | REVIEW-M1-RV-01 rounds 1–2 (Opus high, read-only) | **M1 exit PASS**, 0 P0/P1 open |
-| CI | — | **NOT RUN** (no CI yet; M3) |
+| F-01 | This file reconciled | — |
+| F-02/F-03 | `ci.yml`: PG 18 (PGDG) + Go in web job; PG 18 on PATH in go job; AC-08 fails instead of skipping when `CI` is set | local: `CI=1` without initdb → FAIL with guard message; with PG 18 → ok. CI itself NOT RUN |
+| F-04 | gitleaks tree scan covers committed tree only; RFC 6455 test key ignored | `scripts/security/scan.sh <dir> gitleaks` → history 0, tree 0 |
+| F-10 | `docs/testing/release-gates.md` added | — |
+| F-11/F-17/F-20 | README (`$HOME` note, Linux arm64 verified, console-via-harness), CHANGELOG CI wording | — |
 
-## Requirement status
+## Milestones
 
-| ID | Status | Evidence | Next gate |
+| Milestone | Status | Independent review |
+|---|---|---|
+| M0 discovery, M1 architecture | approved (OD-01, OD-12) | REVIEW-M1-RV-01 PASS |
+| M2 design | implemented (prototypes) | none (visual/a11y review via M3–M7 axe only) |
+| M3 foundation | integrated | — |
+| M4 engine, M5 reliability/security | integrated, tested | REVIEW-M5-RV-01 PASS (round 2 + RV5R fixes) |
+| M6 console | integrated, tested (mock OAuth) | REVIEW-M6-RV-01 PASS (round 2) |
+| M7 public site | integrated, tested | none (F-19) |
+| M8 operations | integrated, drills run locally | none (F-19) |
+| M9 release | in progress — audit NO-GO | AUDIT-M9-RV-01 |
+
+## Requirement groups (FR/NFR)
+
+| IDs | Status | Main evidence |
+|---|---|---|
+| FR-ENG-01..24 | tested (Go -race suites, PoC, chaos) | AC-01..AC-11 rows below; retention/upgrade drills |
+| FR-API-01..04 | tested | OpenAPI draft.7 lint, `TestAC13_RouteMatrix`, generated client |
+| FR-SEC-01..11 | tested locally; real OAuth NOT RUN | AC-13, threat model, ASVS map; OD-03 |
+| FR-RT-01 | tested | AC-16 |
+| FR-DEMO-01 | tested | AC-14 |
+| FR-WEB-01..09 | tested (Chromium) | AC-15, AC-21, AC-23 |
+| NFR-A11Y-01 | partial | axe 0; manual SR/keyboard NOT RUN (F-07) |
+| NFR-PERF-01..03 | partial / FAIL | AC-19, AC-24 (F-05, F-09), OD-06 |
+| NFR-SCALE-01 | tested on dev VM | AC-18, AC-19 |
+| NFR-OBS-01, NFR-OPS-01/02 | tested locally | M8 drills; AC-26/27 |
+| NFR-DEP-01 | verified locally | dependency-matrix.md |
+| NFR-DOC-01, NFR-REL-01 | open | AC-28, AC-30 |
+
+## Acceptance and workflow criteria (from AUDIT-M9-RV-01)
+
+| ID | Status | Evidence (path / command) | Gap |
 |---|---|---|---|
-| FR-ENG-02/03 states + transitions | specified, reviewed | state-machine.md, ADR-0002 | M4 impl |
-| FR-ENG-04 atomic claim | specified; PoC tested | AC-02 PoC tests | M4 |
-| FR-ENG-10/15/16 lease, recovery, fencing | specified; PoC tested (fence clauses, mutant-killed) | fence_test.go, ADR-0003 | M5 |
-| FR-ENG-11 retry budget | specified; PoC tested (no hidden 4th) | TestBudgetExhaustedNoHiddenAttempt | M5 |
-| FR-ENG-13 cancel precedence | specified; PoC tested (forced both orders) | AC-06 tests | M5 |
-| FR-ENG-17 idempotency | specified | ADR-0004, DDL | **PoC NOT RUN** — M4 |
-| FR-ENG-01, 05–09, 12, 14, 18–24 | specified | ADRs, DDL, proto, OpenAPI | M4/M5 |
-| FR-API-01..04 | specified (OpenAPI draft.4 lint-valid) | api/openapi.yaml | M3 codegen (TS client NOT RUN) |
-| FR-SEC-01..05, 11 | specified, reviewed | ADR-0005/0006, permissions.md, trust-boundaries.md | M5; token authority SQL-tested only |
-| FR-SEC-06..10 | specified | requirements.md | RC |
-| FR-RT-01 | specified (hints + snapshot) | OpenAPI `/stream`, ADR-0006 | M6 (RT gaps deferred) |
-| FR-WEB-01..09, FR-DEMO-01 | specified | route-inventory.md (24 routes), consumer-requirements.md | M2 design |
-| NFR-* | specified | requirements.md | per release |
-| AC-02, AC-03, AC-06, AC-09 (DB layer) | **tested at PoC level** — not service-level | PoC under `-race` | re-test in M4/M5 against real services |
-| AC-05 | tested at PoC level (budget) | — | jitter/backoff M5 |
-| Other AC | specified | MASTER §11 | NOT RUN |
-| MW-01 | met | tasks/*, one owner per ticket | ongoing |
-| MW-02 | partial | contract drafts; generated client NOT RUN | M3 |
-| MW-03 | met | 2 worktrees, merged without shared-file conflict; reviewer ≠ author | ongoing |
-| MW-04 | partial | session-log.md | owner `/effort`, `/status` |
-| MW-05 | met | reviewer read-only, no self-approval | ongoing |
-| MW-08 | met | OWNER_DECISIONS.md; no push/deploy/spend | ongoing |
+| AC-01 | verified | `TestAC01_AckOnlyAfterCommitAndRestart` PASS (G2/G3). Compose: 201 only after commit; delayed job survived `restart control-plane` and succeeded (A8) | Durability settings are image defaults; documented `synchronous_commit` not re-checked |
+| AC-02 | verified | `TestAC02_ConcurrentClaimantsSingleJob/ManyJobs`, `TestAC02_TwentyFourGRPCClaimants`, `TestAC02_FailpointsLeaveNoPartialWrites`, `TestAC02_SchemaRejectsSecondActiveAttempt` PASS `-race` (G2) | — |
+| AC-03 | verified | `TestAC03_StaleSuccessRejectedAfterExpiryAndReclaim`, `TestAC03_StaleReportVsRecoveryConcurrent` PASS (G2) | Not shown in the compose demo (north-star) |
+| AC-04 | verified | `TestAC04_KillDashNineWorkerProcess`, `TestAC04_WorkerLostMidJobRecovers` PASS. Compose SIGKILL of worker-2: 4 attempts `lease_expired` after 28 s, retried, 12/12 succeeded, invariants 0/0 (A7, `<S>/vm-drill3.log`) | Crash classification when timeout ≤ lease TTL (F-12) |
+| AC-05 | verified | `TestAC05_BudgetExactlyThree` PASS. Backoff/jitter tests in `internal/store/engine_test.go`, `internal/config/config_test.go` (G2) | — |
+| AC-06 | verified | `TestAC06_ConcurrentCancelVsSuccess`, `_ForcedOrderings`, `_RESTCancelVersusSuccess`, `_CancelThenSuccess`, `_SuccessThenCancel` PASS (G2) | — |
+| AC-07 | verified | `TestAC07_Idempotency` PASS. Live compose: same key 200, different body 409 `idempotency_conflict` (A6) | Expiry path is covered only by the Go test |
+| AC-08 | verified (local) / FAIL in CI config | `TestAC08_DatabaseOutageMidRun` PASS with `initdb` on PATH (G3). M8 alert drill (PG stop → 503) | CI would silently skip it (F-03) |
+| AC-09 | verified | `TestAC09_ClaimDenials`, `_FenceDenials`, `_ReportFenceDenials`, `_GRPCIdentityMatrix`, `TestRV5_RegisterRechecksRevokedCredential` PASS (G2) | — |
+| AC-10 | verified | `TestAC10_PriorityDueUnschedulable` PASS. Delayed priority-9 job not run before `run_after` (A8) | — |
+| AC-11 | verified | `TestAC11_RESTDrain`, `TestAC11_WorkerSIGTERM` PASS (G2). Compose `stop_grace_period: 40s` | — |
+| AC-12 | tested-partial | 413 at 64 KiB (`internal/api/v1_test.go:179-180`), SDK result cap (`packages/sdk-go/sdk_test.go:95`), compose nonroot/RO/cap_drop/pids/mem. No shell/URL handlers exist | No fuzz or adversarial suite (F-21) |
+| AC-13 | tested-partial | `TestAC13_RouteMatrix`, `TestM5_*` session/stream tests (G2). E2E `console-auth`, `console-security`, `console-session-hardening`, `console-csp*`, `console-role-refresh` PASS (G8, mock OAuth) | Real GitHub OAuth NOT RUN (OD-03). RV6B not independently re-reviewed (F-19) |
+| AC-14 | verified | E2E `demo-isolation.spec.ts` PASS (G8) | — |
+| AC-15 | verified (mock OAuth) | E2E `console-jobs`, `console-workers`, `console-states`, `console-tokens` PASS on the live Go+PG stack (G8) | Real IdP (OD-03) |
+| AC-16 | verified | E2E `console-stream*.spec.ts` PASS (G8). `TestM5_HubOrderingOverflowAndGap`, `TestM5_StreamSessionExpiry` PASS (G2) | — |
+| AC-17 | tested-partial | `TestUpgradeDrill0002To0004` PASS (G3). Backup/restore drill `docs/testing/evidence/m8/backup-restore/drill.txt` (M8, not re-run): RPO window 2.2 s, RTO 14.1 s | Dev VM only. Production volume NOT RUN. RPO/RTO not frozen (OD-06) |
+| AC-18 | verified (in-process) / tested-partial (compose) | `TestAC18_ThousandJobsThreeWorkers` PASS (G3). M8 bench `docs/testing/evidence/m8/bench/` (1000 → 900/100, 1100 attempts, ×3) not re-run | Scripted compose bench not re-run by the auditor |
+| AC-19 | tested-partial | `docs/testing/benchmarks.md` (1/3/5 workers ×3, p50/p95/p99, DB contention) | Dev Colima VM, not the reference host (OD-04). Not re-run. Not frozen (OD-06) |
+| AC-20 | tested-partial | `pnpm contract:lint` 0, `pnpm sdk:check` 0, `packages/proto/generate.sh` no diff, Go protocol/SDK tests PASS (G2, G4–G6) | **"in CI" NOT RUN.** `ci.yml` web job broken (F-02) |
+| AC-21 | tested-partial | E2E `routes.spec`, `site.spec` link checker, `console-*` keyboard paths PASS (G8). Build has 24 routes | Chromium only (F-08). Manual keyboard walkthrough NOT RUN |
+| AC-22 | FAIL (NOT RUN manual) | axe 0 serious/critical (`docs/design/evidence/axe-m6.md`, `axe-m7.md`, regenerated identical in G8). Reduced-motion and 320 px reflow specs PASS | Manual NVDA/VoiceOver, 200/400 % zoom, forced-colors NOT RUN (F-07) |
+| AC-23 | tested-partial | `docs/design/screenshots/{m6,m7}/*`, overflow at 320/390/768/1024/1440/1920. Topology list alternative tested | Screenshots not human-approved. 360 missing. Chromium only |
+| AC-24 | FAIL | `docs/design/evidence/lighthouse-m7.md` (3 pages, lab, static build) | Public pages are now dynamic (F-05), so the evidence is stale. Console budgets NOT RUN (F-09) |
+| AC-25 | FAIL | Threat model and ASVS map (`docs/security/*`). govulncheck ×5 clean (G10). pnpm audit 0. gitleaks history 0 | **gitleaks tree exit 1** (F-04). OSV and SBOM NOT RUN. CI never ran |
+| AC-26 | tested-partial | **Clean clone on Linux arm64** (Colima Ubuntu VM): `bootstrap.sh` 0, README job 201, 3 live workers, SIGKILL recovery, coordinator restart, README stop `down -v` 0 (A4–A9) | macOS checkout outside `$HOME` fails (F-11). amd64 NOT RUN. Console not in the path (F-20, OD-03) |
+| AC-27 | blocked-by-owner | M8 local production proof `docs/testing/evidence/m8/production/*` (TLS 1.3, internal CA, fail-closed, nonroot) and alert drills (not re-run) | Reference host, DNS/ACME, firewall (OD-04) |
+| AC-28 | FAIL | README, CHANGELOG, web docs compared with code | traceability pointer (F-01), web changelog/deployment stale (F-06), CI wording (F-17), "public pages static" claim (F-05), no CI results |
+| AC-29 | verified | Build route table has no `/app/workflows*`. E2E `site.spec` honesty/stale-copy specs PASS. Copy states workflows and HA are not in 1.0 | — |
+| AC-30 | FAIL | `docs/product/traceability.md` stops at M1 | Fold this table and the FR/NFR rows in (F-01) |
+| MW-01 | verified (partial) | `docs/coordination/tasks/TASK-M1…M9-*.md`, one owner each | Integrator commit `8fa9e09` (README/SECURITY/CHANGELOG) has no ticket. TASK-M9-RV-01 not in the repo |
+| MW-02 | verified | Contract unchanged since `1.0.0-draft.7` (`ed2dc61`). `sdk:check` and proto regen give no diff. Cross-lane E2E PASS (G5, G6, G8) | — |
+| MW-03 | tested-partial | Lanes merged via separate worktrees. HANDOFF-M8 flags root files (`.github/workflows/security.yml`, `.gitignore`, `.gitleaksignore`) for integrator review | No recorded integrator review of those shared files |
+| MW-04 | verified (as UNVERIFIED-documented) | `docs/product/session-log.md:7-13`, OD-05 PARTIAL | Effort and Ultracode never observed (owner `/effort`, `/status`) |
+| MW-05 | tested-partial | Separate reviewers for M1, M5, M6 and this audit. No self-approval found | No independent review for M7, M8 or the M9 RV6B fixes (F-19) |
+| MW-06 | FAIL | This file is the first reconciliation since M1 | Integrate into traceability.md (F-01) |
+| MW-07 | NOT RUN (n/a) | No token/agent-count records. None fabricated | Record only if the platform exposes it |
+| MW-08 | verified | `OWNER_DECISIONS.md` OD-11/OD-20 (no push). No deploy or spend observed. The `clusterx` project untouched | — |
+
+Note: MASTER §11 also lists MW-01..MW-05 with different wording. They map to §1.4 as follows: §11 MW-01 → MW-01, §11 MW-02 → MW-02, §11 MW-03 → MW-03 + MW-05, §11 MW-04 → MW-04, §11 MW-05 → MW-08.
